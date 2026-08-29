@@ -344,13 +344,13 @@
 /* ── Diff view ─────────────────────────────────────────────────────────── */
 
 .diffAdd {
-  background: var(--dsw-alias-state-success-secondary, rgba(70, 190, 120, 0.18));
-  color: var(--dsw-alias-state-success-primary, #46be78);
+  background: var(--dsw-alias-state-success-secondary, rgba(70, 190, 120, 0.25));
+  color: var(--dsw-alias-state-success-primary, #1a7a3a);
 }
 
 .diffRemove {
-  background: var(--dsw-alias-state-error-secondary, rgba(230, 90, 90, 0.18));
-  color: var(--dsw-alias-state-error-primary, #e65a5a);
+  background: var(--dsw-alias-state-error-secondary, rgba(230, 90, 90, 0.25));
+  color: var(--dsw-alias-state-error-primary, #b83030);
 }
 
 .fileViewerDiffBadge {
