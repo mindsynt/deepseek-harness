@@ -61,7 +61,10 @@ export function apply(ctx: Context): void {
   ctx.effect(() => {
     const disposers = [
       ctx.remote.$on('settings/document-updated', () => { void mirror.load() }),
-      ctx.on('connection/reset', () => { void mirror.load() }),
+      ctx.on('connection/reset', () => {
+        mirror.activate()
+        void mirror.load()
+      }),
     ]
     // The first connection also emits connection/reset, so startup normally
     // costs two reads (budgeted in startup-rpc-budget.e2e.ts). The in-flight

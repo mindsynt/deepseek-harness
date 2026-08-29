@@ -68,10 +68,15 @@ export class HostConnectionService extends Service implements HostConnectionHand
    */
   constructor(
     ctx: Context,
-    private readonly trustedHosts: readonly string[],
+    private readonly trustedHostsPrivate: readonly string[],
     private readonly browserAuth: BrowserAuth,
   ) {
     super(ctx, 'connection')
+  }
+
+  /** Deployment authorities this server accepts beyond loopback. */
+  get trustedHosts(): readonly string[] {
+    return this.trustedHostsPrivate
   }
 
   /** Generic channel registry scoped to the Context reading this service. */

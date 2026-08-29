@@ -41,6 +41,7 @@ async function setup(): Promise<{
     },
   }
   ctx.reflect.provide('typertGateway', gateway)
+  ctx.provide('connection', { trustedHosts: [] })
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber
   return { ctx, gateway, fiber }

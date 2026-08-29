@@ -27,6 +27,12 @@ export type RemoteEventId = Branded<'RemoteEventId'>
 export interface RemoteEventHostInfo {
   /** Host account home used only to abbreviate displayed filesystem paths. */
   readonly home: string
+  /**
+   * Whether this deployment is configured for non-loopback access (has
+   * `trustedHosts` configured). The browser uses this to decide whether
+   * settings are available on non-loopback connections.
+   */
+  readonly isTrusted?: boolean
 }
 
 /** Opening item that binds later HTTP results to this active event stream. */

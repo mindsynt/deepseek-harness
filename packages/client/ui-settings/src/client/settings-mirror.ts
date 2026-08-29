@@ -78,6 +78,11 @@ export interface SettingsDescribeFace {
    * @param view - the namespace view a settings write answered with.
    */
   acceptView(view: SettingsNamespaceView): void
+  /**
+   * Transition from memory to host persistence when the connection becomes
+   * trusted. Idempotent: a host-mode mirror ignores this call.
+   */
+  activate(): void
 }
 
 /**
@@ -90,6 +95,7 @@ export class SettingsDescribeMirror implements SettingsDescribeFace {
   private inFlight: Promise<void> | undefined
   private rerun = false
   private generation = 0
+  private persistence: 'host' | 'memory'
 
   /**
    * @param api - settings wire face.
@@ -97,13 +103,26 @@ export class SettingsDescribeMirror implements SettingsDescribeFace {
    */
   constructor(
     private readonly api: SettingsFace,
-    private readonly persistence: 'host' | 'memory' = 'host',
+    persistence: 'host' | 'memory' = 'host',
   ) {
+    this.persistence = persistence
     this.store = createSnapshotStore<SettingsMirrorSnapshot>({
       status: persistence === 'host' ? 'idle' : 'unavailable',
       view: undefined,
       error: null,
     })
+  }
+
+  /**
+   * Transition from memory to host persistence when the connection becomes
+   * trusted (e.g. after a generation with `isTrusted` is established). Moves
+   * the store to `idle` so the next `ensure` or `load` reads from the Host.
+   * Idempotent: a host-mode mirror ignores this call.
+   */
+  activate(): void {
+    if (this.persistence === 'host') return
+    this.persistence = 'host'
+    this.store.set({ status: 'idle', view: undefined, error: null })
   }
 
   /** @returns the current sync snapshot (stable reference until the next change). */

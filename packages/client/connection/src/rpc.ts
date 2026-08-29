@@ -189,6 +189,14 @@ export interface HostConnectionHandle {
   readonly rpc: HostConnectionRpc
   /** Exact Fetch routes for streaming or browser-native responses. */
   readonly fetch: HostConnectionFetch
+  /**
+   * Deployment authorities this server accepts beyond loopback: exact
+   * `host:port`, or port-less `host` matching any port. Read by the Remote
+   * event assembly to publish whether this deployment is configured for
+   * non-loopback access, so the browser can decide whether settings are
+   * available.
+   */
+  readonly trustedHosts: readonly string[]
 
   /**
    * Compose exact Fetch routes and the shared-channel RPC interceptor.

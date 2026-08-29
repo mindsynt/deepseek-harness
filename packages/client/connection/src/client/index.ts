@@ -106,7 +106,9 @@ export interface ConnectionHandle {
   /**
    * Whether the privileged surface is reachable: the page authority is
    * loopback, the transport declares the page owns the Host
-   * ({@link ClientTransportHooks.ownsHost}), or the context is not a browser.
+   * ({@link ClientTransportHooks.ownsHost}), the context is not a browser, or
+   * the current generation's Host reports {@link ConnectionHostInfo.isTrusted}
+   * (the deployment configured `trustedHosts`).
    */
   readonly isLoopback: boolean
   /** Current Remote event generation and the Host facts carried by its opening frame. */
@@ -169,7 +171,12 @@ export function apply(ctx: Context): void {
     publishGeneration(undefined)
   }
   const handle: ConnectionHandle = {
-    isLoopback: transport?.ownsHost === true || pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
+    get isLoopback(): boolean {
+      return transport?.ownsHost === true
+        || pageLocation === undefined
+        || isLoopbackHostname(pageLocation.hostname)
+        || generation?.host.isTrusted === true
+    },
     generation: {
       getSnapshot: () => generation,
       subscribe: (listener) => {

@@ -31,12 +31,17 @@ export { API_REMOTE_FORWARDED_EVENTS } from './remote-events.ts'
 export type { ApiRemoteForwardedEvent } from './types.ts'
 
 /** Required Host service: the Gateway owns the physical Remote stream mux. */
-export const inject = ['typertGateway']
+export const inject = ['typertGateway', 'connection']
 
 /** Host plugin body registering this application's selected Cordis event source. */
 export function apply(ctx: Context): void {
+  const connection = ctx.get('connection') as import('@deepseek-ai/dsh-client-connection').HostConnectionHandle
+  const isTrusted = connection.trustedHosts.length > 0
   ctx.effect(
-    () => ctx.typertGateway.registerRemoteEvents(remoteEventSource(ctx), { home: homedir() }),
+    () => ctx.typertGateway.registerRemoteEvents(remoteEventSource(ctx), {
+      home: homedir(),
+      ...isTrusted && { isTrusted },
+    }),
     'api-remotes: forwarded Cordis event source',
   )
 }

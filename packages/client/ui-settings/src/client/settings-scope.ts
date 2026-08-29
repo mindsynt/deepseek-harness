@@ -45,13 +45,14 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
   private tail: Promise<void> = Promise.resolve()
   private writeGeneration = 0
   private disposed = false
-  private readonly unsubscribe: (() => void) | undefined
+  private unsubscribe: (() => void) | undefined
   /**
    * Revision answered by a superseded write still ahead of the mirror: the
    * mirror only folds the LATEST settlement in, so a queued successor takes
    * its fence from here first.
    */
   private pendingRevision: number | undefined
+  private persistence: 'host' | 'memory'
 
   /**
    * @param api - settings wire face (writes only; reads ride the mirror).
@@ -64,9 +65,10 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
     private readonly api: SettingsFace,
     private readonly spec: SettingsScopeSpec<T>,
     private readonly mirror: SettingsDescribeMirror,
-    private readonly persistence: 'host' | 'memory',
+    persistence: 'host' | 'memory',
     private readonly schema: SettingsSchemaService,
   ) {
+    this.persistence = persistence
     this.store = createSnapshotStore<SettingsScopeSnapshot<T>>({
       status: persistence === 'host' ? 'loading' : 'unavailable',
       value: undefined,
@@ -80,6 +82,27 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
       this.unsubscribe = mirror.subscribe(() => { this.derive() })
       this.derive()
     }
+  }
+
+  /**
+   * Transition from memory to host persistence when the connection becomes
+   * trusted. Subscribes to the mirror and derives the initial snapshot.
+   * Idempotent: a host-mode scope ignores this call.
+   */
+  activate(): void {
+    if (this.persistence === 'host') return
+    this.persistence = 'host'
+    this.store.set({
+      status: 'loading',
+      value: undefined,
+      base: undefined,
+      user: undefined,
+      revision: undefined,
+      writable: false,
+      mode: 'host',
+    })
+    this.unsubscribe = this.mirror.subscribe(() => { this.derive() })
+    this.derive()
   }
 
   /** @returns the current sync snapshot (stable reference until the next change). */
@@ -293,6 +316,10 @@ export class SettingsScopeBinder extends Service {
     )
     ctx.effect(() => {
       void this.mirror.ensure()
+      const onReset = (): void => {
+        controller.activate()
+      }
+      ctx.on('connection/reset', onReset)
       return async () => {
         await controller.dispose()
       }
