@@ -1,0 +1,30 @@
+[Unit]
+Description=DSH Web GUI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jinchan
+Group=jinchan
+WorkingDirectory=/home/jinchan/deepseek-harness
+Environment=NODE_ENV=production
+Environment=HOME=/home/jinchan
+
+# 核心命令：--trusted-host 允许 FRP/nginx 反代后设置页正常加载
+# 将 <your-frp-domain> 替换为实际域名
+ExecStart=/home/jinchan/.nvm/versions/node/v24.18.0/bin/pnpm dsh web --no-open --trusted-host <your-frp-domain>
+
+Restart=on-failure
+RestartSec=5
+
+# 安全加固
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/jinchan/deepseek-harness
+ReadWritePaths=/home/jinchan/.dsh
+
+[Install]
+WantedBy=multi-user.target
