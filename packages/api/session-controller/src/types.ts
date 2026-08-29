@@ -368,10 +368,10 @@ export interface SessionOpenWorkspacePathRequest {
   readonly path: string
 }
 
-/** Confirmation that the Host handed a workspace path to its native opener. */
-export interface SessionOpenWorkspacePathValue {
-  readonly opened: true
-}
+/** Native opener confirmation or file content fallback for headless Hosts. */
+export type SessionOpenWorkspacePathValue =
+  | { readonly opened: true }
+  | { readonly opened: false; readonly content: string; readonly path: string }
 
 /** Client-minted prompt identity used to reconcile optimistic and durable messages. */
 export type SessionRequestId = Branded<'session-request-id'>

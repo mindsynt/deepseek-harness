@@ -38,7 +38,7 @@ export interface ToolCallOwnerProps {
   /** Host account home; POSIX home-rooted summaries display as `~`. */
   home?: string | undefined
   /** Open a Tool argument path through the Host. */
-  openFile: (path: string) => void
+  openFile: (path: string, original?: string) => void
   /** Inspect this call in the trajectory view when available. */
   inspect?: (() => void) | undefined
 }

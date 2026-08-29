@@ -6,9 +6,9 @@ import { useEffect } from 'react'
 import type {
   AssistantMessageNode, ChatNode, ChatNodeOwnerProps, ChatNodeViewProps, ChatSnapshot,
   ChatViewSlotProps, CommandNode, CompactionSummaryNode, ContextMessageNode, ConversationNode,
-  LegacyConversationSlice, ModelRetryNode, RunningToolCall, SelectionTarget, SteeringMessageNode,
-  ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode, UseChatNodeTurnData,
-  TranscriptViewMode, UserMessageNode,
+  FileOpenResult, LegacyConversationSlice, ModelRetryNode, RunningToolCall, SelectionTarget,
+  SteeringMessageNode, ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode,
+  UseChatNodeTurnData, TranscriptViewMode, UserMessageNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
   SessionListState, SessionSnapshot,
@@ -218,7 +218,7 @@ function makeHarness(
   const session = makeSessionSource({ ...sessionInit, ...sessionOverrides })
   const chatSource = makeChatSource(chatSlice, initialChat ?? chatSnapshot)
   const openDetails = vi.fn<(t: SelectionTarget) => void>()
-  const openFile = vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined)
+  const openFile = vi.fn<(path: string) => Promise<FileOpenResult>>().mockResolvedValue({ opened: true, path: '' })
   const loadOlder = vi.fn()
   const openView = vi.fn<(view: string, focus: string) => void>()
   // In-memory scroll memory matching the apply.ts per-session map contract.
@@ -1842,9 +1842,9 @@ describe('ChatView', () => {
   })
 
   it('shows a Host open refusal with the reason and retries the same path', async () => {
-    const openFile = vi.fn<(path: string) => Promise<void>>()
+    const openFile = vi.fn<(path: string) => Promise<FileOpenResult>>()
       .mockRejectedValueOnce(new Error('xdg-open is not available'))
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ opened: true, path: 'src/a.ts' })
     const h = makeHarness({ nodes: [toolResult(3, 'a')] })
     h.props.openFile = openFile
     render(<h.ChatView {...h.props} />)
@@ -1863,7 +1863,7 @@ describe('ChatView', () => {
   })
 
   it('keeps a non-Error Host refusal visible and dismisses it on cancel', async () => {
-    const openFile = vi.fn<(path: string) => Promise<void>>()
+    const openFile = vi.fn<(path: string) => Promise<FileOpenResult>>()
       .mockRejectedValueOnce('permission denied')
     const h = makeHarness({ nodes: [toolResult(3, 'a')] })
     h.props.openFile = openFile
@@ -1878,7 +1878,7 @@ describe('ChatView', () => {
   })
 
   it('substitutes the unknown-open copy when the Host refusal has no text', async () => {
-    const openFile = vi.fn<(path: string) => Promise<void>>()
+    const openFile = vi.fn<(path: string) => Promise<FileOpenResult>>()
       .mockRejectedValueOnce(new Error(''))
     const h = makeHarness({ nodes: [toolResult(3, 'a')] })
     h.props.openFile = openFile
@@ -1890,7 +1890,7 @@ describe('ChatView', () => {
   })
 
   it('names a workspace-folder Host refusal as a folder', async () => {
-    const openFile = vi.fn<(path: string) => Promise<void>>()
+    const openFile = vi.fn<(path: string) => Promise<FileOpenResult>>()
       .mockRejectedValueOnce(new Error(''))
     const h = makeHarness({ nodes: [toolResult(3, 'a')] })
     h.props.openFile = openFile
@@ -1903,9 +1903,9 @@ describe('ChatView', () => {
 
   it('ignores a Host refusal that settles after the dialog is dismissed', async () => {
     let rejectRetry!: (error: unknown) => void
-    const openFile = vi.fn<(path: string) => Promise<void>>()
+    const openFile = vi.fn<(path: string) => Promise<FileOpenResult>>()
       .mockRejectedValueOnce(new Error('first refusal'))
-      .mockImplementationOnce(() => new Promise<void>((_resolve, reject) => {
+      .mockImplementationOnce(() => new Promise<FileOpenResult>((_resolve, reject) => {
         rejectRetry = reject
       }))
     const h = makeHarness({ nodes: [toolResult(3, 'a')] })
@@ -1924,10 +1924,10 @@ describe('ChatView', () => {
 
   it('ignores a Host open that succeeds after the dialog is dismissed', async () => {
     let resolveRetry!: () => void
-    const openFile = vi.fn<(path: string) => Promise<void>>()
+    const openFile = vi.fn<(path: string) => Promise<FileOpenResult>>()
       .mockRejectedValueOnce(new Error('first refusal'))
-      .mockImplementationOnce(() => new Promise<void>((resolve) => {
-        resolveRetry = () => { resolve() }
+      .mockImplementationOnce(() => new Promise<FileOpenResult>((resolve) => {
+        resolveRetry = () => { resolve({ opened: true, path: 'src/a.ts' }) }
       }))
     const h = makeHarness({ nodes: [toolResult(3, 'a')] })
     h.props.openFile = openFile

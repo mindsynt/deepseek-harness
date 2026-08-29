@@ -17,6 +17,13 @@ import type { ChatSnapshot, CommandNode, CompactionSummaryNode, ToolCallBlock } 
 import type { TurnProcessSpec } from './turn-process.ts'
 import type { TranscriptViewMode } from '../../chat-settings.ts'
 
+/** Result of a workspace file-open operation through the Chat view. */
+export interface FileOpenResult {
+  readonly opened: boolean
+  readonly content?: string | undefined
+  readonly path: string
+}
+
 /** Selector hook over the current Conversation binding's Chat target. */
 export type UseChat = SnapshotSelectorHook<ChatSnapshot>
 
@@ -24,7 +31,7 @@ export type UseChat = SnapshotSelectorHook<ChatSnapshot>
 export interface TurnTailOwnerProps {
   turn: TurnLocation
   seq: number
-  openFile: (path: string) => void
+  openFile: (path: string, original?: string) => void
 }
 
 /** Owner currency of finalized-assistant actions. */
@@ -63,7 +70,7 @@ export interface ChatNodeTurnDataInjected {
 export interface ChatNodeOwnerProps {
   selectedCallId?: ToolCallId | undefined
   cwd?: string | undefined
-  openFile: (path: string) => void
+  openFile: (path: string, original?: string) => void
   inspectCall: (callId: ToolCallId) => void
   forkAt: (seq: number) => void
   renderMessageImages: RenderMessageImages
@@ -116,7 +123,7 @@ export interface ChatViewInjected {
     transcriptView: SnapshotStore<TranscriptViewMode>
   }
   openDetails: (target: SelectionTarget) => void
-  openFile: (path: string) => Promise<void>
+  openFile: (path: string) => Promise<FileOpenResult>
   loadOlder: () => void
   loadImage: MessageImageLoader
   chatScroll: {

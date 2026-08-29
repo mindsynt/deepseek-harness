@@ -26,7 +26,7 @@ import {
 } from '../src/client/ProducedFiles.tsx'
 import {
   basename, deliverablesDefinition, producedFileMentions, producedForClosing, selectProducedFiles,
-  type DeliverablesTurnData,
+  type DeliverablesTurnData, type ProducedPath,
 } from '../src/client/turn-deliverables.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as applyInvariant } from '../src/invariant.ts'
@@ -34,6 +34,11 @@ import { en, zh } from '../src/client/locales.ts'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 
 const originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+
+/** Convert legacy string paths to the current ProducedPath shape. */
+function pp(paths: readonly string[]): ProducedPath[] {
+  return paths.map(path => ({ seq: 0, path }))
+}
 
 afterEach(() => {
   cleanup()
@@ -425,7 +430,7 @@ describe('ProducedFiles row', () => {
   })
 
   it('keeps one measured line, updates on resize, and opens a file or the workspace folder', () => {
-    const paths = ['deep/a.html', 'b.css', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts']
+    const paths = pp(['deep/a.html', 'b.css', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts'])
     const openFile = vi.fn<(path: string) => void>()
     let available = 226
     let resize: ResizeObserverCallback | undefined
@@ -502,9 +507,9 @@ describe('ProducedFiles row', () => {
   it('keeps the folder action absent without overflow or a local native opener', () => {
     const openFile = vi.fn<(path: string) => void>()
     const view = render(
-      <ProducedFiles matched={['a.md']} openFile={openFile} {...capability(true)} t={t} />,
+      <ProducedFiles matched={pp(['a.md'])} openFile={openFile} {...capability(true)} t={t} />,
     )
-    const overflowing = ['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md']
+    const overflowing = pp(['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md'])
     expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
     for (const unavailable of [capability(false), capability(true, false), capability(undefined)]) {
       view.rerender(<ProducedFiles matched={overflowing} openFile={openFile} {...unavailable} t={t} />)
@@ -515,7 +520,7 @@ describe('ProducedFiles row', () => {
   it('uses singular English copy when exactly one file is hidden', () => {
     const view = render(
       <ProducedFiles
-        matched={['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md']}
+        matched={pp(['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md'])}
         openFile={() => {}}
         {...capability(false)}
         t={makeTranslate(en)}
@@ -533,7 +538,7 @@ describe('producedFileMentions resolver', () => {
   it('resolves exact paths and unique basenames; ambiguity and unknowns stay unresolved', () => {
     const opened: string[] = []
     const resolver = producedFileMentions(
-      ['out/index.html', 'a/style.css', 'b/style.css'],
+      pp(['out/index.html', 'a/style.css', 'b/style.css']),
       (path) => { opened.push(path) },
       label,
     )

@@ -77,8 +77,9 @@ export class SettingsDocumentStore {
       if (result.value.opened) {
         // Native editor opened the file — nothing to show in the browser.
       } else {
+        const { content } = result.value
         this.store.update((state) => {
-          state.content = result.value.content
+          state.content = content
           state.viewing = true
         })
       }

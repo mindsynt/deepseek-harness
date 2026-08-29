@@ -110,7 +110,8 @@
     "react": "^18.2.0"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:^"
+    "@deepseek-ai/schemastery": "workspace:^",
+    "diff": "^9.0.0"
   },
   "files": [
     "lib/index.js",

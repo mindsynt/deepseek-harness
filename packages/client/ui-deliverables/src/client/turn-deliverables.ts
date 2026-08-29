@@ -8,9 +8,11 @@ import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
 
-interface ProducedPath {
+export interface ProducedPath {
   readonly seq: number
   readonly path: string
+  /** Content written by the `write` tool; available for diff display. */
+  readonly written?: string | undefined
 }
 
 /** Immutable produced-file facts published against one Turn. */
@@ -27,18 +29,19 @@ declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
 
 interface DeliverablesState extends DeliverablesTurnData {
   readonly turn: number
-  readonly calls: ReadonlyMap<string, string | null>
+  readonly calls: ReadonlyMap<string, { path: string; written?: string } | null>
 }
 
 /**
- * Extract the path from a supported first-party mutation call. Session
- * `tool/call` events are root calls; Code Dispatch children do not enter this
- * Definition independently.
+ * Extract the path and written content from a supported first-party mutation
+ * call. Session `tool/call` events are root calls; Code Dispatch children do
+ * not enter this Definition independently.
  * @param name - wire tool name.
  * @param argsRaw - model-produced JSON arguments.
- * @returns the mutation path, or null when the call is not a supported mutation.
+ * @returns the mutation path and optional written content, or null when the
+ * call is not a supported mutation.
  */
-function mutationPath(name: string, argsRaw: string): string | null {
+function mutationArgs(name: string, argsRaw: string): { path: string; written?: string } | null {
   let args: unknown
   try {
     args = JSON.parse(argsRaw) as unknown
@@ -47,12 +50,19 @@ function mutationPath(name: string, argsRaw: string): string | null {
   }
   if (!isRecord(args)) return null
   switch (name) {
-    case 'write':
-      return typeof args.content === 'string' ? pathValue(args.file_path) : null
-    case 'edit':
-      return validEditArgs(args) ? pathValue(args.file_path) : null
-    case 'str_replace_editor':
-      return editorMutationPath(args)
+    case 'write': {
+      const path = pathValue(args.file_path)
+      if (path === null) return null
+      return typeof args.content === 'string' ? { path, written: args.content } : { path }
+    }
+    case 'edit': {
+      const path = pathValue(args.file_path)
+      return path !== null && validEditArgs(args) ? { path } : null
+    }
+    case 'str_replace_editor': {
+      const path = editorMutationPath(args)
+      return path !== null ? { path } : null
+    }
     default:
       return null
   }
@@ -122,14 +132,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function producedForClosing(
   data: Readonly<DeliverablesTurnData> | undefined,
   seq = Number.POSITIVE_INFINITY,
-): readonly string[] {
+): readonly ProducedPath[] {
   if (data === undefined) return []
-  const paths: string[] = []
+  const paths: ProducedPath[] = []
   const seen = new Set<string>()
   for (const produced of data.produced) {
     if (produced.seq > seq || seen.has(produced.path)) continue
     seen.add(produced.path)
-    paths.push(produced.path)
+    paths.push(produced)
   }
   return paths
 }
@@ -137,9 +147,9 @@ export function producedForClosing(
 /**
  * Claim the turn-tail chain only when its closing turn produced files.
  * @param owner - Turn-tail owner currency for the closing assistant.
- * @returns Produced paths as the component's match, or null to decline before mount.
+ * @returns Produced paths with optional written content, or null to decline before mount.
  */
-export function selectProducedFiles(owner: TurnTailOwnerProps): readonly string[] | null {
+export function selectProducedFiles(owner: TurnTailOwnerProps): readonly ProducedPath[] | null {
   const paths = producedForClosing(owner.turn.data.get('deliverables'), owner.seq)
   return paths.length === 0 ? null : paths
 }
@@ -164,7 +174,7 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
       const calls = new Map(context.state.calls)
       calls.set(
         String(match.event.data.callId),
-        mutationPath(match.event.data.name, match.event.data.arguments),
+        mutationArgs(match.event.data.name, match.event.data.arguments),
       )
       return { ...context.state, calls }
     }
@@ -172,10 +182,10 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
     const result = match.event.data.message.content[0]
     if (result.isError === true) return context.state
     const callId = String(match.event.data.message.source.callId)
-    const path = context.state.calls.get(callId)
-    return path === null || path === undefined
+    const args = context.state.calls.get(callId)
+    return args === null || args === undefined
       ? context.state
-      : { ...context.state, produced: [...context.state.produced, { seq: match.event.seq, path }] }
+      : { ...context.state, produced: [...context.state.produced, { seq: match.event.seq, ...args }] }
   },
   buildLocationData: (context, scope) => scope !== 'turn' || context.state === undefined
     ? null
@@ -210,15 +220,20 @@ export function basename(path: string): string {
  * the same disambiguator the row's chips carry.
  */
 export function producedFileMentions(
-  paths: readonly string[],
-  openFile: (path: string) => void,
+  paths: readonly ProducedPath[],
+  openFile: (path: string, original?: string) => void,
   label: (path: string) => string,
 ): MarkdownFileMentions {
+  const pathList = paths.map(p => p.path)
+  const writtenByPath = new Map<string, string | undefined>()
+  for (const p of paths) {
+    if (p.written !== undefined) writtenByPath.set(p.path, p.written)
+  }
   return {
     resolve(value) {
-      const path = paths.includes(value) ? value : onlyPathWithBasename(paths, value)
+      const path = pathList.includes(value) ? value : onlyPathWithBasename(pathList, value)
       if (path === undefined) return undefined
-      return { open: () => { openFile(path) }, label: label(path), title: path }
+      return { open: () => { openFile(path, writtenByPath.get(path)) }, label: label(path), title: path }
     },
   }
 }

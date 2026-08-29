@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { basename } from './turn-deliverables.ts'
+import { basename, type ProducedPath } from './turn-deliverables.ts'
 import type { NS } from './locales.ts'
 import css from './ProducedFiles.module.css'
 
@@ -53,7 +53,7 @@ export interface ProducedFilesInjected {
 
 /** Matched paths plus the opener, locale, and injected Host capability. */
 export type ProducedFilesProps = Pick<TurnTailOwnerProps, 'openFile'> & {
-  matched: readonly string[]
+  matched: readonly ProducedPath[]
 } & PropsLocale<typeof NS> & InjectFace<ProducedFilesInjected>
 
 function moreLabel(t: ProducedFilesProps['t'], count: number): string {
@@ -76,6 +76,14 @@ export function ProducedFiles({
   const rowRef = useRef<HTMLDivElement>(null)
   const chipProbes = useRef<Array<HTMLButtonElement | null>>([])
   const moreProbe = useRef<HTMLSpanElement>(null)
+  // Index written content by path for the click handler.
+  const writtenByPath = useMemo(() => {
+    const map = new Map<string, string | undefined>()
+    for (const p of paths) {
+      if (p.written !== undefined) map.set(p.path, p.written)
+    }
+    return map
+  }, [paths])
 
   useLayoutEffect(() => {
     const row = rowRef.current
@@ -112,18 +120,18 @@ export function ProducedFiles({
     <div className={css.root}>
       <span className={css.label}>{t('produced.label')}</span>
       <div ref={rowRef} className={css.row} data-produced-files-row>
-        {shown.map(path => (
+        {shown.map(produced => (
           <button
-            key={path}
+            key={produced.path}
             type="button"
             className={css.file}
             // The full path is the disambiguator when two turns produce files
             // that share a basename; the chip itself stays short.
-            title={path}
-            aria-label={t('produced.open', { name: path })}
-            onClick={() => { openFile(path) }}
+            title={produced.path}
+            aria-label={t('produced.open', { name: produced.path })}
+            onClick={() => { openFile(produced.path, writtenByPath.get(produced.path)) }}
           >
-            {basename(path)}
+            {basename(produced.path)}
           </button>
         ))}
         {hidden > 0 && <span className={css.more}>{moreLabel(t, hidden)}</span>}
@@ -134,15 +142,15 @@ export function ProducedFiles({
         </button>
       )}
       <div className={css.measure} aria-hidden="true">
-        {paths.slice(0, limit).map((path, index) => (
+        {paths.slice(0, limit).map((produced, index) => (
           <button
-            key={path}
+            key={produced.path}
             ref={(node) => { chipProbes.current[index] = node }}
             type="button"
             tabIndex={-1}
             className={`${css.file} ${css.probe}`}
           >
-            {basename(path)}
+            {basename(produced.path)}
           </button>
         ))}
         <span ref={moreProbe} className={`${css.more} ${css.probe}`} />

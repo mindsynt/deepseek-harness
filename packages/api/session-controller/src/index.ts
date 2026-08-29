@@ -1,5 +1,6 @@
 /** Session Remote owner: cold reads, explicit Agent commands, and live control state. */
 
+import { readFile, stat } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { errorChain } from '@deepseek-ai/dsh-llm'
@@ -277,6 +278,41 @@ export class SessionController extends TypertRemoteService {
         message: 'session.openWorkspacePath requires a non-empty path',
         details: {},
       })
+    }
+    if (!this.canOpenPath()) {
+      signal.throwIfAborted()
+      try {
+        const info = await stat(request.path)
+        if (!info.isFile()) {
+          throw new TypertRemoteFailure({
+            code: 'internal',
+            message: 'path open failed: path is not a regular file',
+            details: {},
+          })
+        }
+        // Reject files larger than 1 MiB to avoid ballooning the RPC response.
+        if (info.size > 1_048_576) {
+          throw new TypertRemoteFailure({
+            code: 'internal',
+            message: 'path open failed: file is too large to display inline',
+            details: {},
+          })
+        }
+        const content = await readFile(request.path, 'utf8')
+        return { opened: false, content, path: request.path }
+      } catch (error: unknown) {
+        if (error instanceof TypertRemoteFailure) throw error
+        if (signal.aborted) {
+          throw new TypertRemoteFailure({
+            code: 'cancelled', message: 'path open was aborted', details: {},
+          })
+        }
+        throw new TypertRemoteFailure({
+          code: 'internal',
+          message: `path open failed: ${error instanceof Error ? error.message : String(error)}`,
+          details: {},
+        })
+      }
     }
     signal.throwIfAborted()
     try {
