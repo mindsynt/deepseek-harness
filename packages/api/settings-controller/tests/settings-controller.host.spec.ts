@@ -66,12 +66,12 @@ class LiteralRefusingSettings extends MemorySettings {
 
 async function boot(
   provider: typeof MemorySettings = MemorySettings,
-  options: { doc?: Record<string, unknown>; base?: { preference: 'light' | 'dark' } } = {},
+  options: { doc?: Record<string, unknown>; base?: { preference: 'light' | 'dark' }; nativeOpen?: boolean } = {},
 ): Promise<{ controller: SettingsController; ctx: Context }> {
   const ctx = new Context()
   await ctx.plugin(provider, options.doc === undefined ? {} : { doc: options.doc })
   ctx.settings.register(NS, Profile, options.base === undefined ? {} : { base: options.base })
-  await ctx.plugin(SettingsController)
+  await ctx.plugin(SettingsController, options.nativeOpen === true ? { nativeOpen: true } : {})
   return { controller: ctx.settingsController, ctx }
 }
 
@@ -93,7 +93,7 @@ describe('the settings Remote namespace a configuration page calls', () => {
 
   it('reports the actionable configuration error while no settings provider is mounted', async () => {
     const ctx = new Context()
-    await ctx.plugin(SettingsController)
+    await ctx.plugin(SettingsController, { nativeOpen: true })
     const calls: Array<() => unknown> = [
       () => ctx.settingsController.describe(),
       () => ctx.settingsController.update('ui-test', {}, undefined),
@@ -254,7 +254,7 @@ describe('the settings Remote namespace a configuration page calls', () => {
     await ctx.plugin(DocumentSettings)
     const prepare = vi.spyOn(ctx.settings, 'prepareDocument').mockResolvedValue('/tmp/settings.yaml')
     const openTextFile = vi.fn((_path: string, _signal: AbortSignal) => Promise.resolve())
-    const controller = new SettingsController(ctx, {}, { openTextFile })
+    const controller = new SettingsController(ctx, { nativeOpen: true }, { openTextFile })
     const signal = new AbortController().signal
 
     await expect(controller.openSettingsDocument(signal)).resolves.toEqual({ opened: true })
@@ -263,12 +263,12 @@ describe('the settings Remote namespace a configuration page calls', () => {
   })
 
   it('preserves settings-document absence, failure, and cancellation', async () => {
-    const absent = await boot()
+    const absent = await boot(MemorySettings, { nativeOpen: true })
     const missingDocument = absent.controller.openSettingsDocument(new AbortController().signal)
     await expect(missingDocument).rejects.toMatchObject({ failure: { code: 'internal' } })
     await expect(missingDocument).rejects.toThrow('no local document')
 
-    const failed = await boot(DocumentSettings)
+    const failed = await boot(DocumentSettings, { nativeOpen: true })
     vi.spyOn(failed.ctx.settings, 'prepareDocument').mockRejectedValue(new Error('read failed'))
     const failedRead = failed.controller.openSettingsDocument(new AbortController().signal)
     await expect(failedRead).rejects.toMatchObject({ failure: { code: 'internal' } })
@@ -289,7 +289,7 @@ describe('the settings Remote namespace a configuration page calls', () => {
     const prepared = Promise.withResolvers<string | undefined>()
     vi.spyOn(ctx.settings, 'prepareDocument').mockReturnValue(prepared.promise)
     const openTextFile = vi.fn((_path: string, _signal: AbortSignal) => Promise.resolve())
-    const controller = new SettingsController(ctx, {}, { openTextFile })
+    const controller = new SettingsController(ctx, { nativeOpen: true }, { openTextFile })
     const abort = new AbortController()
 
     const opening = controller.openSettingsDocument(abort.signal)
@@ -304,7 +304,7 @@ describe('the settings Remote namespace a configuration page calls', () => {
     const ctx = new Context()
     await ctx.plugin(DocumentSettings)
     vi.spyOn(ctx.settings, 'prepareDocument').mockResolvedValue('/tmp/settings.yaml')
-    const controller = new SettingsController(ctx, {}, {
+    const controller = new SettingsController(ctx, { nativeOpen: true }, {
       openTextFile: () => Promise.reject(new Error('no default editor')),
     })
 
@@ -322,7 +322,7 @@ describe('the settings Remote namespace a configuration page calls', () => {
       prepareAbort.abort(new Error('cancelled'))
       throw new Error('preparation stopped')
     })
-    const preparingController = new SettingsController(preparing)
+    const preparingController = new SettingsController(preparing, { nativeOpen: true })
     await expect(preparingController.openSettingsDocument(prepareAbort.signal))
       .rejects.toMatchObject({ failure: { code: 'cancelled' } })
 
@@ -330,7 +330,7 @@ describe('the settings Remote namespace a configuration page calls', () => {
     await opening.plugin(DocumentSettings)
     vi.spyOn(opening.settings, 'prepareDocument').mockResolvedValue('/tmp/settings.yaml')
     const openAbort = new AbortController()
-    const openingController = new SettingsController(opening, {}, {
+    const openingController = new SettingsController(opening, { nativeOpen: true }, {
       openTextFile: async () => {
         openAbort.abort(new Error('cancelled'))
         throw new Error('opening stopped')

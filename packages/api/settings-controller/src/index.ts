@@ -198,6 +198,9 @@ export class SettingsController extends TypertRemoteService {
    */
   @Remote
   async openSettingsDocument(signal: AbortSignal): Promise<SettingsDocumentOpenValue> {
+    if (!this.canOpenPath()) {
+      throw internal('native path opener is unavailable on this host')
+    }
     const settings = this.provider()
     if (isAborted(signal)) throw cancelled('settings document open was aborted')
     let path: string | undefined
