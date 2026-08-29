@@ -14,3 +14,26 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.content {
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 24px;
+  background: var(--dsw-color-surface);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

@@ -46,6 +46,13 @@ export function SettingsDocumentAction({ controller, useSnapshot, t }: SettingsD
       >
         {t('openDocument')}
       </Button>
+      {state.viewing && state.content !== null && (
+        <div className={css.modal} onClick={() => { controller.close() }}>
+          <pre className={css.content} onClick={(e) => { e.stopPropagation() }}>
+            {state.content}
+          </pre>
+        </div>
+      )}
     </div>
   )
 }

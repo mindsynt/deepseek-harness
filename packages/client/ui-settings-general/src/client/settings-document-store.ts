@@ -12,6 +12,10 @@ export interface SettingsDocumentState {
   opening: boolean
   /** Last metadata/native-open diagnostic; UI exposes only localized copy. */
   error: string | null
+  /** File content returned when the native opener is unavailable (headless host). */
+  content: string | null
+  /** Whether the content modal is currently visible. */
+  viewing: boolean
 }
 
 function messageOf(error: unknown): string {
@@ -22,7 +26,7 @@ function messageOf(error: unknown): string {
 export class SettingsDocumentStore {
   /** uSES-safe state source shared by the registered header action. */
   readonly store: SnapshotStore<SettingsDocumentState> = createSnapshotStore({
-    status: 'idle', opening: false, error: null,
+    status: 'idle', opening: false, error: null, content: null, viewing: false,
   })
 
   private following: (() => void) | undefined
@@ -58,6 +62,11 @@ export class SettingsDocumentStore {
   async open(): Promise<void> {
     const current = this.store.getSnapshot()
     if (current.status !== 'ready' || current.opening) return
+    // If we already have content, just show the modal.
+    if (current.content !== null) {
+      this.store.update((state) => { state.viewing = true })
+      return
+    }
     this.store.update((state) => {
       state.opening = true
       state.error = null
@@ -65,11 +74,24 @@ export class SettingsDocumentStore {
     try {
       const result = await this.remote.settings.openSettingsDocument()
       if (!result.ok) throw new Error(result.error.message)
+      if (result.value.opened) {
+        // Native editor opened the file — nothing to show in the browser.
+      } else {
+        this.store.update((state) => {
+          state.content = result.value.content
+          state.viewing = true
+        })
+      }
     } catch (error) {
       this.store.update((state) => { state.error = messageOf(error) })
     } finally {
       this.store.update((state) => { state.opening = false })
     }
+  }
+
+  /** Close the content viewer. */
+  close(): void {
+    this.store.update((state) => { state.viewing = false })
   }
 
   /** Stop following the mirror. */

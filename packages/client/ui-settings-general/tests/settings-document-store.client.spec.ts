@@ -28,7 +28,7 @@ describe('SettingsDocumentStore', () => {
     const controller = derivedDocumentStore({ settings: { describe, openSettingsDocument: openDocument } })
     await controller.load()
     expect(controller.store.getSnapshot()).toEqual({
-      status: 'ready', opening: false, error: null,
+      status: 'ready', opening: false, error: null, content: null, viewing: false,
     })
     await controller.open()
     expect(openDocument).toHaveBeenCalledWith()

@@ -31,9 +31,9 @@ export type SettingsError = {
 }[keyof SettingsErrorDetailsMap]
 
 /** Confirmation that the settings document was handed to the native editor. */
-export interface SettingsDocumentOpenValue {
-  readonly opened: true
-}
+export type SettingsDocumentOpenValue =
+  | { readonly opened: true }
+  | { readonly opened: false; readonly content: string }
 
 /** Result of opening or revealing one locally authored Agent preset directory. */
 export type AgentPresetDirectoryOpenValue =
