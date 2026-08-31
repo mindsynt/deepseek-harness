@@ -8,7 +8,6 @@
  */
 
 import { dirname } from 'node:path'
-import { readFile } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 // Type-only: resolves the `agentPresets` Context augmentation this controller reads.
@@ -194,26 +193,6 @@ export class SettingsController extends TypertRemoteService {
    */
   @Remote
   async openSettingsDocument(signal: AbortSignal): Promise<SettingsDocumentOpenValue> {
-    if (!this.canOpenPath()) {
-      const settings = this.provider()
-      if (isAborted(signal)) throw cancelled('settings document read was aborted')
-      let path: string | undefined
-      try {
-        path = await settings.prepareDocument()
-      } catch (error: unknown) {
-        if (isAborted(signal)) throw cancelled('settings document preparation was aborted')
-        throw internal(`settings document preparation failed: ${messageOf(error)}`)
-      }
-      if (path === undefined) {
-        throw internal('settings provider has no local document to open')
-      }
-      try {
-        const content = await readFile(path, 'utf8')
-        return { opened: false, content }
-      } catch (error: unknown) {
-        throw internal(`settings document read failed: ${messageOf(error)}`)
-      }
-    }
     const settings = this.provider()
     if (isAborted(signal)) throw new RemoteError('gateway/cancelled', 'settings document open was aborted', {})
     let path: string | undefined

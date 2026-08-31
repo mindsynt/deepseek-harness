@@ -89,7 +89,7 @@ export class SettingsDescribeMirror implements SettingsDescribeFace {
    */
   constructor(
     private readonly ctx: ClientContext,
-    private readonly persistence: 'host' | 'memory' = 'host',
+    persistence: 'host' | 'memory' = 'host',
   ) {
     this.persistence = persistence
     this.store = createSnapshotStore<SettingsMirrorSnapshot>({
