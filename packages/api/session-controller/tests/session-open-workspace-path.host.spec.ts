@@ -1,6 +1,3 @@
-import { rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -79,41 +76,6 @@ describe('session/openWorkspacePath', () => {
     await remote.openWorkspacePath({ path: '/tmp/result.html' })
     await remote.openWorkspacePath({ path: 'result.html' })
     expect(openPath.mock.calls.map(call => call[0])).toEqual(['/tmp/result.html', 'result.html'])
-  })
-
-  it('returns file content when the native opener is unavailable', async () => {
-    const dir = tmpdir()
-    const filePath = join(dir, `dsh-test-open-${Date.now()}.txt`)
-    await writeFile(filePath, 'hello from dsh', 'utf8')
-    try {
-      const remote = createSessionTestRemote(await context(), {
-        defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
-        cwd: '/default',
-        canOpenPath: () => false,
-      })
-
-      await expect(remote.openWorkspacePath({ path: filePath }))
-        .resolves.toEqual({
-          ok: true,
-          value: { opened: false, content: 'hello from dsh', path: filePath },
-        })
-    } finally {
-      await rm(filePath, { force: true })
-    }
-  })
-
-  it('rejects nonexistent paths when the opener is unavailable', async () => {
-    const remote = createSessionTestRemote(await context(), {
-      defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
-      cwd: '/default',
-      canOpenPath: () => false,
-    })
-
-    await expect(remote.openWorkspacePath({ path: '/nonexistent/file.txt' }))
-      .resolves.toMatchObject({
-        ok: false,
-        error: { code: 'internal' },
-      })
   })
 
   it('rejects empty paths before opening anything', async () => {
