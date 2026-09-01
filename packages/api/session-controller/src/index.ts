@@ -6,6 +6,7 @@ import { errorChain } from '@deepseek-ai/dsh-llm'
 import { canOpenNativePath, openNativePath } from '@deepseek-ai/dsh-native-command'
 import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
+import { readFile } from 'node:fs/promises'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import {
   ApiSessionAgentController,
@@ -279,9 +280,23 @@ export class SessionController extends TypertRemoteService {
       )
     }
     signal.throwIfAborted()
+    if (this.canOpenPath()) {
+      try {
+        await this.openPath(request.path, signal)
+        return { opened: true }
+      } catch (error: unknown) {
+        if (signal.aborted) throw new RemoteError('gateway/cancelled', 'path open was aborted', {})
+        throw new RemoteError(
+          'gateway/internal',
+          `path open failed: ${error instanceof Error ? error.message : String(error)}`,
+          {},
+        )
+      }
+    }
+    // Headless Host: return the file content so the UI can display it inline.
     try {
-      await this.openPath(request.path, signal)
-      return { opened: true }
+      const content = await readFile(request.path, 'utf8')
+      return { opened: false, content, path: request.path }
     } catch (error: unknown) {
       if (signal.aborted) throw new RemoteError('gateway/cancelled', 'path open was aborted', {})
       throw new RemoteError(
