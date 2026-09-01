@@ -126,6 +126,7 @@ export function apply(ctx: Context): void {
             return { opened: false, content: result.value.content, path: resolved }
           },
           loadOlder: () => { void session.loadOlder() },
+          loadThrough: seq => session.loadThrough(seq),
           loadImage: Object.assign(
             (attachment: ImageAttachmentRef) => ctx.uiConversation.imageUrl(sessionId, attachment),
             { peek: (attachment: ImageAttachmentRef) => ctx.uiConversation.peekImageUrl(sessionId, attachment) },
