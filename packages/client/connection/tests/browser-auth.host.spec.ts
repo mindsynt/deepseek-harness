@@ -122,22 +122,15 @@ describe('BrowserAuth', () => {
     const restarted = await createAuth(store)
     expect(new URL(restarted.authenticatedUrl('http://127.0.0.1:3080')).searchParams.get('token'))
       .not.toBe(new URL(login.launchUrl).searchParams.get('token'))
-    expect(restarted.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(true)
+    expect(restarted.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(false)
     const staleUrl = new URL(login.launchUrl)
-    const redirected = response()
+    const staleTokenDenied = response()
     expect(restarted.authorizeIndex(request(
       `${staleUrl.pathname}${staleUrl.search}`,
       '127.0.0.1:3080',
       { cookie: login.cookie },
-    ), redirected.value)).toBe(false)
-    expect(redirected.state).toEqual({
-      status: 303,
-      headers: {
-        'cache-control': 'no-store',
-        'location': '/',
-        'referrer-policy': 'no-referrer',
-      },
-    })
+    ), staleTokenDenied.value)).toBe(false)
+    expect(staleTokenDenied.state.status).toBe(401)
   })
 
   it('accepts the cookie for index serving and gives every unauthenticated request one response', async () => {

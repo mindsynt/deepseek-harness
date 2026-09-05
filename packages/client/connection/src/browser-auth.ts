@@ -18,6 +18,7 @@ const COOKIE_PAYLOAD_VERSION = 1
 const STORED_SECRET_VERSION = 1
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]*$/
 const PROCESS_LAUNCH_TOKENS = new WeakMap<object, string>()
+const PROCESS_SECRETS = new WeakMap<object, Buffer>()
 
 interface StoredSecretPayload {
   readonly version: typeof STORED_SECRET_VERSION
@@ -158,7 +159,10 @@ function decodeCookie(value: string, secret: Buffer): BrowserCookiePayload | und
   return decoded as unknown as BrowserCookiePayload
 }
 
-async function initializeSecret(credentials: CredentialProvider): Promise<Buffer> {
+async function initializeSecret(
+  credentials: CredentialProvider,
+  processOwner: object,
+): Promise<Buffer> {
   const generated: StoredSecretPayload = {
     version: STORED_SECRET_VERSION,
     secret: encodeBase64Url(randomBytes(SECRET_BYTES)),
@@ -166,7 +170,7 @@ async function initializeSecret(credentials: CredentialProvider): Promise<Buffer
   const record = await credentials.modifyRecord(AUTH_RECORD_KEY, (current) => {
     if (current !== undefined) {
       storedSecret(current)
-      return Promise.resolve(undefined)
+      if (PROCESS_SECRETS.has(processOwner)) return Promise.resolve(undefined)
     }
     return Promise.resolve({ kind: 'grant', payload: generated })
   })
@@ -174,6 +178,7 @@ async function initializeSecret(credentials: CredentialProvider): Promise<Buffer
   if (secret === undefined) {
     throw new Error('client-connection: browser-session credential record was not created')
   }
+  PROCESS_SECRETS.set(processOwner, secret)
   return secret
 }
 
@@ -212,7 +217,7 @@ export class BrowserAuth {
     credentials: CredentialProvider,
     maxAgeDays: number,
   ): Promise<BrowserAuth> {
-    return new BrowserAuth(processOwner, await initializeSecret(credentials), maxAgeDays)
+    return new BrowserAuth(processOwner, await initializeSecret(credentials, processOwner), maxAgeDays)
   }
 
   /**
