@@ -72,8 +72,19 @@ function safeIndex(value: number, label: string): number {
 
 function snapshotChunk(chunk: StreamChunk): StreamChunk {
   const snapshot = snapshotJsonValue(chunk)
-  if (snapshot === undefined) throw new TypeError('Assistant stream chunk must be losslessly JSON-serializable')
-  return snapshot
+  if (snapshot !== undefined) return snapshot
+  // snapshotJsonValue is stricter than JSON: it rejects -0 and own
+  // properties set to undefined — values that JSON.stringify then
+  // JSON.parse normalizes away. A chunk that reached the accumulator
+  // through a JSON round-trip (wire or storage) can carry these edge
+  // cases. Fall back to a JSON clone; JSON.stringify throws on BigInt
+  // and cycles, so the original rejection still fires for truly
+  // non-JSON values.
+  try {
+    return JSON.parse(JSON.stringify(chunk)) as StreamChunk
+  } catch {
+    throw new TypeError('Assistant stream chunk must be losslessly JSON-serializable')
+  }
 }
 
 function safeGap(previous: number, next: number): number | undefined {

@@ -139,7 +139,7 @@ describe('AssistantStreamAccumulator', () => {
     })).toThrow(/safe integer/)
     expect(() => accumulator.push({
       time: 1,
-      chunk: { type: 'future', callback: () => undefined } as never,
+      chunk: { type: 'finish', reason: { kind: 'stop' }, big: BigInt(1) } as never,
     })).toThrow(/JSON-serializable/)
     expect(() => accumulator.push({
       time: 1,
@@ -216,10 +216,16 @@ describe('AssistantStreamAccumulator', () => {
     [{ type: 'chunk', time: 0.5, chunk: { type: 'finish', reason: { kind: 'stop' } } }, /safe integer/],
     [{ type: 'chunk', time: 1, chunk: null }, /lossless JSON object/],
     [{ type: 'chunk', time: 1, chunk: [] }, /lossless JSON object/],
-    [{ type: 'chunk', time: 1, chunk: { type: 'future', bad: undefined } }, /lossless JSON object/],
     [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['a'], extra: true }, /exactly/],
     [{ type: 'chunk', time: 1, chunk: { type: 'finish', reason: { kind: 'stop' } }, extra: true }, /exactly/],
   ])('rejects malformed compact record %#', (record, message) => {
     expect(() => expandAssistantStream([record] as never)).toThrow(message)
   })
+  it('rejects a chunk record whose chunk contains a non-JSON value', () => {
+    const chunk: Record<string, unknown> = { type: 'finish', reason: { kind: 'stop' } }
+    chunk.bad = BigInt(1)
+    expect(() => expandAssistantStream([{ type: 'chunk' as const, time: 1, chunk }] as never))
+      .toThrow(/lossless JSON/)
+  })
+
 })
