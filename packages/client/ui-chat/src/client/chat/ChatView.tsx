@@ -2,13 +2,12 @@
 // otherwise this view owns it. Each row subscribes to one stable node key.
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
-import { diffLines } from 'diff'
 import type {
   ConversationTimelineSnapshot, RenderMessageImages,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ChatViewSlotProps } from '../contract/slots.ts'
+import type { ChatViewSlotProps, OpenFileOptions } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { PendingSteeringBubble, PendingSubmissionBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
@@ -130,11 +129,6 @@ function openFailureMessage(error: unknown, fallback: string): string {
   return message === '' ? fallback : message
 }
 
-/** ProducedFiles opens the session workspace as `.`. */
-function isFolderOpenPath(path: string): boolean {
-  return path === '.'
-}
-
 /**
  * Prompt-RPC identities already rendered by durable material: user/steering
  * node sources plus queue occurrences. A submission echo whose identity
@@ -247,31 +241,24 @@ export function ChatView({
   const openError = useSession(s => s.openError)
   const hasMore = useSession(s => s.hasMore)
   const loadingOlder = useSession(s => s.loadingOlder)
-  const selectedCallId = useStore(s => s.selection?.callId)
   const compactTranscript = useTranscriptView(mode => mode === 'compact')
   const inspectCall = useCallback((callId: string) => {
     openView('trajectory', callId)
   }, [openView])
   const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
-  const [fileContentView, setFileContentView] = useState<{ path: string; content: string; original?: string } | null>(null)
   // Close/retry must ignore a settlement that started before the latest
   // gesture; otherwise a cancelled in-flight refusal reopens the dialog.
   const fileOpenRequest = useRef(0)
 
-  const requestOpenFile = useCallback((path: string, original?: string) => {
+  const requestOpenFile = useCallback((path: string, options?: OpenFileOptions) => {
     const id = ++fileOpenRequest.current
     setFileOpenBusy(true)
-    void openFile(path).then(
-      (result) => {
+    void (options === undefined ? openFile(path) : openFile(path, options)).then(
+      () => {
         if (id !== fileOpenRequest.current) return
         setFileOpenError(null)
         setFileOpenBusy(false)
-        if (!result.opened) {
-          const view: { path: string; content: string; original?: string } = { path: result.path, content: result.content ?? '' }
-          if (original !== undefined) view.original = original
-          setFileContentView(view)
-        }
       },
       (error: unknown) => {
         if (id !== fileOpenRequest.current) return
@@ -279,7 +266,7 @@ export function ChatView({
           path,
           message: openFailureMessage(
             error,
-            t(isFolderOpenPath(path) ? 'fileOpen.folderUnknown' : 'fileOpen.unknown'),
+            t('fileOpen.unknown'),
           ),
         })
         setFileOpenBusy(false)
@@ -291,11 +278,6 @@ export function ChatView({
     fileOpenRequest.current += 1
     setFileOpenError(null)
     setFileOpenBusy(false)
-  }, [])
-
-  const closeFileContentView = useCallback(() => {
-    fileOpenRequest.current += 1
-    setFileContentView(null)
   }, [])
 
   const pendingSteering = useMemo(
@@ -807,7 +789,6 @@ export function ChatView({
             compactTranscript={compactTranscript}
             useStore={useStore}
             actions={actions}
-            selectedCallId={selectedCallId}
             cwd={cwd}
             openFile={requestOpenFile}
             inspectCall={inspectCall}
@@ -860,20 +841,10 @@ export function ChatView({
       </div>
       {fileOpenError !== null && (
         <FileOpenErrorDialog
-          path={fileOpenError.path}
           message={fileOpenError.message}
           busy={fileOpenBusy}
           onClose={closeFileOpenError}
           onRetry={() => { requestOpenFile(fileOpenError.path) }}
-          t={t}
-        />
-      )}
-      {fileContentView !== null && (
-        <FileContentViewDialog
-          path={fileContentView.path}
-          content={fileContentView.content}
-          original={fileContentView.original}
-          onClose={closeFileContentView}
           t={t}
         />
       )}
@@ -883,9 +854,8 @@ export function ChatView({
 
 /** In-page Host open-path refusal: the wire reason plus a retry of the same path. */
 function FileOpenErrorDialog({
-  path, message, busy, onClose, onRetry, t,
+  message, busy, onClose, onRetry, t,
 }: {
-  path: string
   message: string
   busy: boolean
   onClose: () => void
@@ -897,7 +867,7 @@ function FileOpenErrorDialog({
       open
       onClose={onClose}
       closeLabel={t('close')}
-      title={t(isFolderOpenPath(path) ? 'fileOpen.folderTitle' : 'fileOpen.title')}
+      title={t('fileOpen.title')}
       description={message}
       footer={(
         <>
@@ -906,66 +876,5 @@ function FileOpenErrorDialog({
         </>
       )}
     />
-  )
-}
-
-/** In-page file content viewer for headless Hosts that return file content inline. */
-function FileContentViewDialog({
-  path, content, original, onClose, t,
-}: {
-  path: string
-  content: string
-  original?: string | undefined
-  onClose: () => void
-  t: ChatViewSlotProps['t']
-}) {
-  const name = path.split('/').pop() ?? path
-  const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
-  const showDiff = original !== undefined
-
-  return (
-    <Modal
-      open
-      headless
-      onClose={onClose}
-      title={path}
-      className={css.fileViewer ?? ''}
-    >
-      <div className={css.fileViewerHeader}>
-        <div className={css.fileViewerTab}>
-          <span className={css.fileViewerTabIcon} aria-hidden="true" />
-          <span className={css.fileViewerTabName}>{name}</span>
-          {showDiff && <span className={css.fileViewerDiffBadge}>{t('fileOpen.diff')}</span>}
-        </div>
-        <button type="button" className={css.fileViewerClose} aria-label={t('close')} onClick={onClose}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
-      {dir !== '' && <div className={css.fileViewerBreadcrumb}>{dir}/</div>}
-      <div className={css.fileViewerBody}>
-        {showDiff
-          ? <DiffView oldStr="" newStr={content} />
-          : <pre className={css.fileViewerCode}>{content}</pre>}
-      </div>
-    </Modal>
-  )
-}
-
-/** Unified-diff view: green for additions, red for deletions. */
-function DiffView({ oldStr, newStr }: { oldStr: string; newStr: string }) {
-  const hunks = useMemo(() => diffLines(oldStr, newStr), [oldStr, newStr])
-  return (
-    <pre className={css.fileViewerCode}>
-      {hunks.map((change, i) => (
-        <span
-          key={i}
-          className={change.added ? css.diffAdd : change.removed ? css.diffRemove : undefined}
-        >
-          {change.value}
-        </span>
-      ))}
-    </pre>
   )
 }

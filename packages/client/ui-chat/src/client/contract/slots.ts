@@ -3,7 +3,7 @@ import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type {
   CommandNode, CompactionSummaryNode, ConversationLocationDataStore, ConversationTurnDataMap,
-  MessageImageLoader, MessageImagesOwnerProps, RenderMessageImages, ToolCallBlock, TurnLocation,
+  MessageImageLoader, MessageImagesOwnerProps, RenderMessageImages, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   InjectFace, KeyedSnapshotSelectorHook, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
@@ -13,20 +13,13 @@ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { createChatStore } from '../stores.ts'
-import type { ToolCallId, SelectionTarget } from './store.ts'
+import type { ToolCallId } from './store.ts'
 import type { ChatConversationViewNode, ChatNode, ChatNodeKind } from './chat-nodes.ts'
 import type {
   ChatNodeProcessSource, ChatNodeSource, ChatSnapshot, ChatTurnProcessPresentation,
 } from './snapshot.ts'
 import type { TurnProcessSpec } from './turn-process.ts'
 import type { TranscriptViewMode } from '../../chat-settings.ts'
-
-/** Result of a workspace file-open operation through the Chat view. */
-export interface FileOpenResult {
-  readonly opened: boolean
-  readonly content?: string | undefined
-  readonly path: string
-}
 
 /** Selector hook over the current Conversation binding's Chat target. */
 export type UseChat = SnapshotSelectorHook<ChatSnapshot>
@@ -37,11 +30,17 @@ export type UseChatNode = KeyedSnapshotSelectorHook<ChatConversationViewNode | u
 /** Per-key selector hook over one Chat Node's Turn-process presentation. */
 export type UseChatNodeProcess = KeyedSnapshotSelectorHook<ChatTurnProcessPresentation | undefined>
 
+/** Where in a file an open should land. */
+export interface OpenFileOptions {
+  /** 1-based line to reveal; absent = the file's beginning. */
+  readonly line?: number
+}
+
 /** Owner currency of the completed-Turn extension chain. */
 export interface TurnTailOwnerProps {
   turn: TurnLocation
   seq: number
-  openFile: (path: string, original?: string) => void
+  openFile: (path: string) => void
 }
 
 /** Owner currency of finalized-assistant actions. */
@@ -78,9 +77,8 @@ export interface ChatNodeTurnDataInjected {
 
 /** Stable owner currency delivered to a keyed Chat renderer. */
 export interface ChatNodeOwnerProps {
-  selectedCallId?: ToolCallId | undefined
   cwd?: string | undefined
-  openFile: (path: string, original?: string) => void
+  openFile: (path: string, options?: OpenFileOptions) => void
   inspectCall: (callId: ToolCallId) => void
   forkAt: (seq: number) => void
   /**
@@ -107,12 +105,6 @@ export interface TurnProcessOwnerProps {
 /** Full props of one keyed Chat renderer. */
 export type ChatNodeViewProps<Kind extends ChatNodeKind = ChatNodeKind> =
   PropsRuntime<'conversation.chat.node', Kind> & PropsLocale<'chat'>
-
-/** Tool block rendered in the details panel. */
-export interface DetailsToolOwnerProps {
-  block: ToolCallBlock
-  cwd?: string | undefined
-}
 
 /** Command-row owner share. */
 export interface CommandRowOwnerProps {
@@ -145,8 +137,7 @@ export interface ChatViewInjected {
     /** Resolve the stable Turn-process source for one Chat Node key. */
     chatNodeProcess: (key: string) => ChatNodeProcessSource
   }
-  openDetails: (target: SelectionTarget) => void
-  openFile: (path: string) => Promise<FileOpenResult>
+  openFile: (path: string, options?: OpenFileOptions) => Promise<void>
   loadOlder: () => void
   /** Jump loader: page history back through seq; resolves when the window covers it. */
   loadThrough: (seq: SessionSeq) => Promise<void>
@@ -169,19 +160,6 @@ export type ChatViewSlotProps =
 
 /** Full props of the durable-message image renderer. */
 export type MessageImagesProps = PropsRuntime<'conversation.message.images'> & PropsLocale<'conversation'>
-
-/** Details-panel callbacks. */
-export interface DetailsInjected {
-  closeDetails: () => void
-}
-
-/** Full details-panel props. */
-export type DetailsSlotProps =
-  PropsRuntime<'details'>
-  & PropsRenderSlots<'conversation.details.tool'>
-  & PropsStore<ChatStore>
-  & InjectFace<DetailsInjected>
-  & PropsLocale<'chat'>
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SessionStandardProps {
@@ -232,11 +210,5 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * that entry. With no entries, the standard action row remains unchanged.
      */
     'conversation.chat.assistant-actions': { kind: 'list'; scope: 'session'; owner: AssistantActionOwnerProps }
-    /**
-     * Whole details-panel body for the selected Tool call. The component receives
-     * the running or settled block and optional workspace root. A registration
-     * replaces the shipped Tool details renderer; absence uses the raw fallback.
-     */
-    'conversation.details.tool': { kind: 'single'; scope: 'session'; owner: DetailsToolOwnerProps }
   }
 }
