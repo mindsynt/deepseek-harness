@@ -333,6 +333,209 @@ describe('model list editing', () => {
     expect(mutate).not.toHaveBeenCalled()
   })
 
+  it('writes the image-input choice a model row declares', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'vision' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelImageInput} 1`), { target: { value: 'text-image' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value)
+      .toEqual([{ id: 'vision', input: ['text', 'image'] }])
+  })
+
+  it('narrows a row to text only, then back to inheritance', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'vision' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelImageInput} 1`), { target: { value: 'text' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    // An explicit text-only choice pins the list rather than inheriting the
+    // route's fallback, which is what distinguishes it from the inherit choice.
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'vision', input: ['text'] }])
+  })
+
+  it('removes the input key again when a row returns to inheritance', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'vision' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelImageInput} 1`), { target: { value: 'text-image' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelImageInput} 1`), { target: { value: 'inherit' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    // Inheritance means the key leaves the profile, not that an empty list is
+    // stored beside the row.
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'vision' }])
+  })
+
+  it('seeds and writes a custom reasoning-level map per model', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'r' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'custom' } })
+
+    // Entering the level editor starts from the documented off/high/max trio;
+    // every other level starts unchecked.
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningLevel} off`).checked).toBe(true)
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningLevel} high`).checked).toBe(true)
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningLevel} max`).checked).toBe(true)
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningLevel} low`).checked).toBe(false)
+
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoningWire} high`), { target: { value: 'xhigh' } })
+    fireEvent.click(screen.getByLabelText(`${en.modelReasoningLevel} low`))
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoningWire} low`), { target: { value: 'low' } })
+    // The seeded "off" keeps a null wire: leaving it blank sends nothing.
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningWire} off`).value).toBe('')
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value)
+      .toEqual([{ id: 'r', reasoningEfforts: { off: null, high: 'xhigh', max: 'max', low: 'low' } }])
+  })
+
+  it('removes the reasoning key when a row returns to inheritance', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'r' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'custom' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'inherit' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'r' }])
+  })
+
+  it('refuses a reasoning level beyond "off" left without a wire value', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'r' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'custom' } })
+    fireEvent.click(screen.getByLabelText(`${en.modelReasoningLevel} low`))
+
+    expect(screen.getByText(`${en.model} 1: ${en.modelEffortsLevelValue}`)).toBeTruthy()
+    expect(buttonNamed(en.apply).disabled).toBe(true)
+    expect(mutate).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoningWire} low`), { target: { value: 'low' } })
+    expect(buttonNamed(en.apply).disabled).toBe(false)
+    // Clearing the wire value back to blank invalidates the level again.
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoningWire} low`), { target: { value: '' } })
+    expect(buttonNamed(en.apply).disabled).toBe(true)
+  })
+
+  it('refuses a reasoning map that offers only "off"', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'r' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'custom' } })
+    fireEvent.click(screen.getByLabelText(`${en.modelReasoningLevel} high`))
+    fireEvent.click(screen.getByLabelText(`${en.modelReasoningLevel} max`))
+
+    expect(screen.getByText(`${en.model} 1: ${en.modelEffortsOnlyOff}`)).toBeTruthy()
+    expect(buttonNamed(en.apply).disabled).toBe(true)
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('writes reasoning as disabled for a row', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'r' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'disabled' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    // `false` is the explicit "this model does not reason" spelling; inherit
+    // would keep whatever the catalog or route says instead.
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'r', reasoningEfforts: false }])
+  })
+
+  it('reads stored capabilities and edits a level in place', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [
+            { id: 'vision', input: ['text', 'image'], reasoningEfforts: { off: null, high: 'high' } },
+            { id: 'plain', input: [] },
+          ],
+        },
+      },
+    })
+    openEditor('openai')
+
+    // The selects spell each stored value back; an empty list inherits like an
+    // absent one, so the row is not forced to re-declare it.
+    expandModel(1)
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelImageInput} 1`).value).toBe('text-image')
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelReasoning} 1`).value).toBe('custom')
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningLevel} high`).checked).toBe(true)
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningWire} high`).value).toBe('high')
+    // Row 1 stays open while row 2 opens; expanding is not exclusive.
+    expandModel(2)
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelImageInput} 2`).value).toBe('inherit')
+
+    // Editing one level keeps the rest of the stored map.
+    fireEvent.click(screen.getByLabelText(`${en.modelReasoningLevel} off`))
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value)
+      .toEqual([
+        { id: 'vision', input: ['text', 'image'], reasoningEfforts: { high: 'high' } },
+        { id: 'plain', input: [] },
+      ])
+  })
+
+  it('opens an empty level editor for a malformed stored value', async () => {
+    await mountSection({
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'broken', reasoningEfforts: 'high' }],
+        },
+      },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    // The choice names any stored value that is not false, so a value the
+    // adapter would refuse still opens the editor, with no level ticked and
+    // every wire field closed.
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelReasoning} 1`).value).toBe('custom')
+    for (const level of ['off', 'high']) {
+      expect(screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningLevel} ${level}`).checked).toBe(false)
+      expect(screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningWire} ${level}`).disabled).toBe(true)
+    }
+  })
+
   it('spells a stored capacity back the way it is typed', async () => {
     await mountSection({
       providers: {
@@ -811,6 +1014,32 @@ describe('hand-declared providers', () => {
       // The section this card was drafted over: a route another tab declared
       // meanwhile makes this a conflict rather than an overwrite.
       expectedRevision: 7,
+    })
+    expect(set).toHaveBeenCalledWith('ACME_GATEWAY_API_KEY', 'gw-key')
+  })
+
+  it('writes per-model capabilities into the created profile', async () => {
+    const { mutate, set, onClose } = mountCard()
+
+    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme-gateway' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://gateway.acme.example/v1' } })
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gw-key' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'vision' } })
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelImageInput} 1`), { target: { value: 'text-image' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'custom' } })
+    fireEvent.click(screen.getByText(en.create))
+
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(firstMutate(mutate).ops[0]?.value).toMatchObject({
+      api: 'openai-completions',
+      baseURL: 'https://gateway.acme.example/v1',
+      models: [{
+        id: 'vision',
+        input: ['text', 'image'],
+        reasoningEfforts: { off: null, high: 'high', max: 'max' },
+      }],
     })
     expect(set).toHaveBeenCalledWith('ACME_GATEWAY_API_KEY', 'gw-key')
   })

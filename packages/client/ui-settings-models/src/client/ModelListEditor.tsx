@@ -18,7 +18,9 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-api-remotes/client'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
+import {
+  formatCapacity, parseCapacity, REASONING_LEVELS,
+} from './DeepSeekModelsEditor.tsx'
 import type { ModelsOperations } from './operations.ts'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { en } from './locales.ts'
@@ -40,6 +42,38 @@ function textOf(model: ModelDraft, key: string): string {
 function numberOf(model: ModelDraft, key: string): number | undefined {
   const value = model[key]
   return typeof value === 'number' ? value : undefined
+}
+
+/** The image-input states one model row offers, mirroring the pi-ai `input` field. */
+type ImageInputChoice = 'inherit' | 'text' | 'text-image'
+
+/** The reasoning-effort states one model row offers, mirroring the pi-ai `reasoningEfforts` field. */
+type ReasoningChoice = 'inherit' | 'disabled' | 'custom'
+
+/** The image-input state a row's stored `input` spells; an absent or empty list inherits. */
+function inputChoiceOf(model: ModelDraft): ImageInputChoice {
+  const input = model['input']
+  if (!Array.isArray(input) || input.length === 0) return 'inherit'
+  return input.includes('image') ? 'text-image' : 'text'
+}
+
+/** The reasoning state a row's stored `reasoningEfforts` spells. */
+function reasoningChoiceOf(model: ModelDraft): ReasoningChoice {
+  const efforts = model['reasoningEfforts']
+  if (efforts === undefined) return 'inherit'
+  return efforts === false ? 'disabled' : 'custom'
+}
+
+/**
+ * The level to wire-value map a row's `reasoningEfforts` spells. The custom
+ * choice names any stored value that is not `false`, so a malformed value
+ * yields the empty map the editor seeds from rather than a thrown read.
+ */
+function reasoningLevelsOf(model: ModelDraft): Record<string, unknown> {
+  const efforts = model['reasoningEfforts']
+  return typeof efforts === 'object' && efforts !== null && !Array.isArray(efforts)
+    ? efforts as Record<string, unknown>
+    : {}
 }
 
 /** What an interrogation needs, taken from the live form. */
@@ -224,6 +258,37 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         Object.entries({ ...model, ...next }).filter(([key]) => !cleared.has(key)),
       )
     }))
+  }
+
+  /** Set or remove (when `undefined`) one raw field of one row. */
+  const setRaw = (index: number, key: string, value: unknown): void => {
+    onChange(models.map((model, at) => {
+      if (at !== index) return model
+      const copy = { ...model }
+      if (value === undefined) Reflect.deleteProperty(copy, key)
+      else copy[key] = value
+      return copy
+    }))
+  }
+
+  const setImageInput = (index: number, choice: ImageInputChoice): void => {
+    if (choice === 'inherit') setRaw(index, 'input', undefined)
+    else setRaw(index, 'input', choice === 'text-image' ? ['text', 'image'] : ['text'])
+  }
+
+  const setReasoning = (index: number, choice: ReasoningChoice): void => {
+    if (choice === 'inherit') {
+      setRaw(index, 'reasoningEfforts', undefined)
+      return
+    }
+    if (choice === 'disabled') {
+      setRaw(index, 'reasoningEfforts', false)
+      return
+    }
+    // Entering the level editor starts from the documented off/high/max trio
+    // so the write is serviceable instead of a valueless map the adapter would
+    // refuse; the editor's rows preserve everything else once the map exists.
+    setRaw(index, 'reasoningEfforts', { off: null, high: 'high', max: 'max' })
   }
 
   const fetchModels = async (): Promise<void> => {
@@ -433,6 +498,81 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                   />
                 </label>
+                <label className={styles['modelField']}>
+                  <span className={styles['modelFieldLabel']}>{t('modelImageInput')}</span>
+                  <select
+                    className={`${styles['input']} ${styles['selectInput']}`}
+                    value={inputChoiceOf(model)}
+                    aria-label={`${t('modelImageInput')} ${index + 1}`}
+                    disabled={disabled}
+                    onChange={(event) => { setImageInput(index, event.target.value as ImageInputChoice) }}
+                  >
+                    <option value="inherit">{t('modelImageInherit')}</option>
+                    <option value="text">{t('modelImageText')}</option>
+                    <option value="text-image">{t('modelImageTextImage')}</option>
+                  </select>
+                </label>
+                <label className={styles['modelField']}>
+                  <span className={styles['modelFieldLabel']}>{t('modelReasoning')}</span>
+                  <select
+                    className={`${styles['input']} ${styles['selectInput']}`}
+                    value={reasoningChoiceOf(model)}
+                    aria-label={`${t('modelReasoning')} ${index + 1}`}
+                    disabled={disabled}
+                    onChange={(event) => { setReasoning(index, event.target.value as ReasoningChoice) }}
+                  >
+                    <option value="inherit">{t('modelReasoningInherit')}</option>
+                    <option value="disabled">{t('modelReasoningDisabled')}</option>
+                    <option value="custom">{t('modelReasoningCustom')}</option>
+                  </select>
+                </label>
+                {reasoningChoiceOf(model) === 'custom'
+                  ? (
+                    <div className={styles['effortsEditor']}>
+                      <p className={styles['effortsHint']}>{t('modelReasoningHint')}</p>
+                      {(() => {
+                        const map = reasoningLevelsOf(model)
+                        return REASONING_LEVELS.map((level) => {
+                          const wire = map[level]
+                          const checked = wire !== undefined
+                          const toggleLevel = (checked: boolean): void => {
+                            const next = { ...map }
+                            if (checked) next[level] = null
+                            else Reflect.deleteProperty(next, level)
+                            setRaw(index, 'reasoningEfforts', next)
+                          }
+                          return (
+                            <div key={level} className={styles['effortRow']}>
+                              <label className={styles['effortCheck']}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  aria-label={`${t('modelReasoningLevel')} ${level}`}
+                                  disabled={disabled}
+                                  onChange={(event) => { toggleLevel(event.target.checked) }}
+                                />
+                                <span>{level}</span>
+                              </label>
+                              <input
+                                className={styles['input']}
+                                type="text"
+                                value={typeof wire === 'string' ? wire : ''}
+                                placeholder={level === 'off' ? t('modelReasoningOffPlaceholder') : t('modelReasoningWirePlaceholder')}
+                                aria-label={`${t('modelReasoningWire')} ${level}`}
+                                disabled={disabled || !checked}
+                                onChange={(event) => {
+                                  const next = { ...map }
+                                  next[level] = event.target.value === '' ? null : event.target.value
+                                  setRaw(index, 'reasoningEfforts', next)
+                                }}
+                              />
+                            </div>
+                          )
+                        })
+                      })()}
+                    </div>
+                  )
+                  : null}
               </div>
             )
             : null}

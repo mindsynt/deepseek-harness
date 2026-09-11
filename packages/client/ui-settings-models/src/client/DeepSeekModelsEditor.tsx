@@ -68,13 +68,24 @@ export function formatCapacity(value: number): string {
   return String(value)
 }
 
+/**
+ * Every pi-ai thinking level the reasoning-level editor offers, in pi-ai's
+ * canonical escalation order. The list mirrors `THINKING_LEVELS` in
+ * `packages/llm/llm-pi-ai/src/catalog.ts`; a level added there that this list
+ * misses is preserved by the structurally open drafts and refused only when a
+ * write names it, so the form's offer never silently narrows a stored profile.
+ */
+export const REASONING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+
 /** A localized validation failure for one user-owned model array. */
 export interface DeepSeekModelsValidationFailure {
   /** Zero-based model position. */
   index: number
   /** Message key owned by the Models settings section. */
   key: 'modelIdRequired' | 'modelIdDuplicate' | 'modelNameInvalid' | 'modelContextInvalid'
-  | 'modelMaxTokensInvalid'
+  | 'modelMaxTokensInvalid' | 'modelInputInvalid' | 'modelEffortsInvalid'
+  | 'modelEffortsUnknownLevel' | 'modelEffortsOffValue' | 'modelEffortsLevelValue'
+  | 'modelEffortsOnlyOff'
 }
 
 /** Convert a schema-validated catalog value into records without dropping hidden fields. */
@@ -117,6 +128,41 @@ export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidation
     if (maxTokens !== undefined
       && (typeof maxTokens !== 'number' || !Number.isInteger(maxTokens) || maxTokens <= 0)) {
       return { index, key: 'modelMaxTokensInvalid' }
+    }
+    // The two per-model capabilities the editor cards offer beyond the
+    // capacities. The form only ever writes `input` as `[text]` or
+    // `[text, image]`, but a hand-written settings.yaml may hold any list the
+    // adapter's schema accepts, so the checks match the schema rather than the
+    // form's own two spellings.
+    const input = model['input']
+    if (input !== undefined
+      && (!Array.isArray(input) || !input.every(modality => modality === 'text' || modality === 'image'))) {
+      return { index, key: 'modelInputInvalid' }
+    }
+    const efforts = model['reasoningEfforts']
+    if (efforts !== undefined && efforts !== false) {
+      // A map of levels to their wire spellings; `false` already returned.
+      if (typeof efforts !== 'object' || efforts === null || Array.isArray(efforts)) {
+        return { index, key: 'modelEffortsInvalid' }
+      }
+      let offersThinkingLevel = false
+      for (const [level, wire] of Object.entries(efforts)) {
+        if (!(REASONING_LEVELS as readonly string[]).includes(level)) {
+          return { index, key: 'modelEffortsUnknownLevel' }
+        }
+        if (level === 'off') {
+          // A null value sends nothing, which is the documented "off" idiom; an
+          // empty string is refused by the adapter's own resolution.
+          if (wire !== null && (typeof wire !== 'string' || wire.length === 0)) {
+            return { index, key: 'modelEffortsOffValue' }
+          }
+        } else if (typeof wire !== 'string' || wire.length === 0) {
+          return { index, key: 'modelEffortsLevelValue' }
+        } else {
+          offersThinkingLevel = true
+        }
+      }
+      if (!offersThinkingLevel) return { index, key: 'modelEffortsOnlyOff' }
     }
   }
   return undefined

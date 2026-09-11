@@ -40,7 +40,7 @@
           - textbox "显示名称 1":
             - /placeholder: 显示名称
             - text: Private Preview
-          - button "容量 1" [expanded]:
+          - button "高级 1" [expanded]:
             - img
           - button "删除模型 1":
             - img
