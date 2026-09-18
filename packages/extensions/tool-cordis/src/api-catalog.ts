@@ -3990,6 +3990,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     description: 'A workflow run started — the script\'s meta block validated, the body about to execute. Paired with Events[\'workflow/end\'].',
     parameters: [{ name: 'info', description: 'the run\'s identity snapshot (id + meta).' }],
   },
+  {
+    name: 'workspace/branch-changed',
+    mode: 'emit',
+    signature: '\'workspace/branch-changed\'(change: WorkspaceBranchView): void',
+    summary: 'A Workspace\'s checked-out git branch changed on disk.',
+    description: 'A Workspace\'s checked-out git branch changed on disk.',
+    parameters: [{ name: 'change', description: 'Workspace identity and its new branch, absent when the path is no longer a checkout.' }],
+  },
 ]
 
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */

@@ -1,7 +1,9 @@
 /** Host Workspace Remote owner: explicit commands and reconnect-safe state. */
 
 import { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { WorkspaceBranchWatch } from './branch-watch.ts'
 import { readWorkspaceBranch } from './branches.ts'
 import { WorkspaceCommands } from './commands.ts'
 import { DirectoryPickerController } from './directory-picker.ts'
@@ -33,18 +35,45 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** Settled-write window, in milliseconds, before a replaced `HEAD` is read. */
+export interface Config {
+  /** Milliseconds a `HEAD` write settles before the branch behind it is read and published. */
+  branchWatchDebounceMs: number
+}
+
 /** Host service backing the generated `ctx.remote.workspace` namespace. */
 export class WorkspaceController extends TypertRemoteService {
   static inject = ['typert', 'workspaceRegistry']
+  static Config: z<Config> = z.object({
+    branchWatchDebounceMs: z.number().step(1).min(0).default(200),
+  })
 
   private readonly commands: WorkspaceCommands
   private readonly feed: WorkspaceFeed
+  private readonly branchWatch: WorkspaceBranchWatch
 
-  /** @param ctx - Host context containing the Workspace registry. */
-  constructor(ctx: Context) {
+  /**
+   * @param ctx - Host context containing the Workspace registry.
+   * @param config - validated settled-write window for branch observation.
+   */
+  constructor(ctx: Context, config: Config) {
     super(ctx, 'workspaceController', { namespace: 'workspace' })
     this.commands = new WorkspaceCommands(ctx)
     this.feed = new WorkspaceFeed(ctx)
+    // A checkout replaces HEAD outside every DSH operation, so the branch is
+    // observed on disk and pushed; the unary verb below seeds a cold client.
+    this.branchWatch = new WorkspaceBranchWatch(config.branchWatchDebounceMs, (change) => {
+      ctx.emit('workspace/branch-changed', change)
+    })
+    const observe = (): void => {
+      void this.branchWatch.sync(ctx.workspaceRegistry.list().map(workspace => ({
+        workspaceId: workspace.id,
+        path: workspace.path,
+      })))
+    }
+    observe()
+    ctx.on('domain/changed', observe)
+    ctx.effect(() => async () => { await this.branchWatch.dispose() }, 'workspace-controller.branch-watch')
     // This package is the Loader entry for both Remote owners it hosts: the
     // directory-picking seam is abstract and never an entry itself. The child
     // stays pending until a picking backend is composed, so a host without one

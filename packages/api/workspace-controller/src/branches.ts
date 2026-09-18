@@ -48,9 +48,32 @@ async function gitHeadFile(root: string): Promise<string | undefined> {
   if (await isDirectory(dotGit)) return join(dotGit, 'HEAD')
   const pointer = await readText(dotGit)
   if (pointer === undefined) return undefined
+  const directory = resolveGitDirectory(root, pointer)
+  return directory === undefined ? undefined : join(directory, 'HEAD')
+}
+
+/** Resolve a `gitdir:` pointer to the git directory it names. */
+function resolveGitDirectory(root: string, pointer: string): string | undefined {
   const directory = /^gitdir:[ \t]*(\S.*?)[ \t]*$/mu.exec(pointer)?.[1]
   if (directory === undefined) return undefined
-  return join(isAbsolute(directory) ? directory : resolve(root, directory), 'HEAD')
+  return isAbsolute(directory) ? directory : resolve(root, directory)
+}
+
+/**
+ * Resolve the directory whose `HEAD` carries one Workspace's checked-out branch.
+ *
+ * An ordinary checkout keeps `HEAD` in `.git`; a worktree or submodule points at
+ * its git directory from a `gitdir:` file.
+ *
+ * @param root - Workspace directory.
+ * @returns the directory holding `HEAD`, or undefined when the path is not a checkout.
+ */
+export async function gitHeadWatch(root: string): Promise<string | undefined> {
+  const dotGit = join(root, '.git')
+  if (await isDirectory(dotGit)) return dotGit
+  const pointer = await readText(dotGit)
+  if (pointer === undefined) return undefined
+  return resolveGitDirectory(root, pointer)
 }
 
 /**

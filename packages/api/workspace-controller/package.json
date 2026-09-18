@@ -30,6 +30,10 @@
       "types": "./lib/typert.host.d.ts",
       "default": "./lib/typert.host.js"
     },
+    "./remote-events": {
+      "types": "./lib/types/remote-events.d.ts",
+      "default": "./lib/types/remote-events.js"
+    },
     "./remote": {
       "types": "./lib/typert.remote-client.d.ts",
       "default": "./lib/typert.remote-client.js"
@@ -66,6 +70,8 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-deque": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^",
+    "chokidar": "^4.0.3",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

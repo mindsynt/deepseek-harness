@@ -216,6 +216,22 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
   }
 
   /**
+   * Apply one pushed branch change for a Workspace.
+   *
+   * The Host read the branch on disk, so this is the newest observation of it
+   * and needs no refetch.
+   * @param change - changed Workspace and its branch, absent when the path is no longer a checkout.
+   */
+  applyBranch(change: WorkspaceBranchView): void {
+    const next: Record<string, string> = {}
+    for (const [workspaceId, branch] of Object.entries(this.branches)) {
+      if (workspaceId !== change.workspaceId) next[workspaceId] = branch
+    }
+    if (change.branch !== undefined) next[change.workspaceId] = change.branch
+    this.commitBranches(next)
+  }
+
+  /**
    * Replace the projection from one complete stream-generation baseline.
    * @param baseline - complete Workspace and archive projection.
    */
@@ -313,6 +329,11 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     for (const item of items) {
       if (item.branch !== undefined) next[item.workspaceId] = item.branch
     }
+    this.commitBranches(next)
+  }
+
+  /** Publish labels only when they differ from the ones already held. */
+  private commitBranches(next: Record<string, string>): void {
     const keys = Object.keys(next)
     if (keys.length === Object.keys(this.branches).length
       && keys.every(key => next[key] === this.branches[key])) return

@@ -525,4 +525,25 @@ async resolveByPath(path: string): Promise<Workspace | undefined>
 Types: [SessionId](core.zh.md)
 
 Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
+
+<a id="workspace-events"></a>
+
+### `workspace/*` events
+
+<a id="workspacebranch-changed--emit"></a>
+
+#### `workspace/branch-changed` — emit
+
+A Workspace's checked-out git branch changed on disk.
+
+```ts cordis-catalog
+/**
+ * A Workspace's checked-out git branch changed on disk.
+ * @mode emit
+ * @param change - Workspace identity and its new branch, absent when the path is no longer a checkout.
+ */
+'workspace/branch-changed'(change: WorkspaceBranchView): void
+```
+
+Source: [`packages/api/workspace-controller/src/types.ts`](../../packages/api/workspace-controller/src/types.ts)
 <!-- END GENERATED cordis-surface -->

@@ -9,6 +9,8 @@
     "src/index.ts",
     "src/types.ts",
     "src/branches.ts",
+    "src/branch-watch.ts",
+    "src/remote-events.ts",
     "src/commands.ts",
     "src/directory-picker.ts",
     "src/feed.ts"

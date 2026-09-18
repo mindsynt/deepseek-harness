@@ -44,6 +44,9 @@ export const inject = ['remote', 'remote.workspace']
 export function apply(ctx: Context): void {
   const model = new ClientWorkspaceModel(ctx.remote.workspace)
   new WorkspaceController(ctx, model)
+  // A checkout is external state the follow stream cannot announce, so the Host
+  // pushes each observed branch change instead.
+  ctx.remote.$on('workspace/branch-changed', (change) => { model.applyBranch(change) })
   const control = createWorkspaceStateStream(ctx.remote, {
     accept: model,
     carrierFailed: () => { model.handleCarrierFailure() },

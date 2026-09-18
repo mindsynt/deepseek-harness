@@ -83,6 +83,20 @@ describe('Workspace Controller Client apply', () => {
     expect(client.ctx.get('workspaces')).toBeUndefined()
   }, COLD_BOOT_TIMEOUT_MS)
 
+  pluginTest('applies a forwarded branch change to the Workspace labels', async ({ mock, start }) => {
+    const client = await pluginClient(mock, start, openStream([baseline('mounted')]))
+    // The Host forwards an observed checkout as an emit frame on `$events`.
+    mock.streams.push('$events', {
+      type: 'emit',
+      event: 'workspace/branch-changed',
+      args: [{ workspaceId: wid('mounted'), branch: 'feature/nested-name' }],
+    })
+    await mock.streams.drained('$events')
+    await vi.waitFor(() => {
+      expect(client.ctx.workspaces.list.getSnapshot().branches).toEqual({ mounted: 'feature/nested-name' })
+    })
+  })
+
   pluginTest('reopens the follow and re-provides the service across a Loader rebuild', async ({ mock, start }) => {
     const client = await pluginClient(mock, start, openStream([baseline('mounted')]))
     await vi.waitFor(() => {

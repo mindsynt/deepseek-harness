@@ -59,7 +59,8 @@ async function harness() {
     lookups: { configure: () => dispose },
     contexts: { configureHost: () => dispose },
   } as never)
-  const controller = new WorkspaceController(ctx)
+  // A short settled-write window keeps the live-branch cases fast.
+  const controller = new WorkspaceController(ctx, { branchWatchDebounceMs: 20 })
   return { controller, ctx, root, storageDomain }
 }
 

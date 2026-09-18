@@ -126,6 +126,17 @@ export interface WorkspaceBranchesValue {
   readonly items: readonly WorkspaceBranchView[]
 }
 
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * A Workspace's checked-out git branch changed on disk.
+     * @mode emit
+     * @param change - Workspace identity and its new branch, absent when the path is no longer a checkout.
+     */
+    'workspace/branch-changed'(change: WorkspaceBranchView): void
+  }
+}
+
 /** Complete reconnect baseline for Workspace browser state. */
 export interface WorkspaceBaseline {
   readonly items: readonly WorkspaceView[]

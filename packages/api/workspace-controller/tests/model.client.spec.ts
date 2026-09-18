@@ -199,6 +199,34 @@ describe('ClientWorkspaceModel', () => {
     expect(model.getSnapshot().branches).toEqual({ project: 'feature/nested-name' })
   })
 
+  it('applies a pushed branch change without another read', async () => {
+    const remote = new FakeWorkspaceRemote()
+    remote.onBranches = () => Promise.resolve(remoteOk({
+      items: [{ workspaceId: wid('project'), branch: 'main' }, { workspaceId: wid('other'), branch: 'dev' }],
+    }))
+    const model = modelFor(remote)
+    baseline(model, [workspace('project'), workspace('other')])
+    await model.refreshBranches()
+    const reads = remote.calls.filter(call => call.method === 'branches').length
+    expect(model.getSnapshot().branches).toEqual({ project: 'main', other: 'dev' })
+
+    // One Workspace's change leaves every other label untouched.
+    model.applyBranch({ workspaceId: wid('project'), branch: 'dev' })
+    expect(model.getSnapshot().branches).toEqual({ project: 'dev', other: 'dev' })
+    // Repeating the held state publishes nothing.
+    model.applyBranch({ workspaceId: wid('project'), branch: 'dev' })
+    expect(model.getSnapshot().branches).toEqual({ project: 'dev', other: 'dev' })
+    model.applyBranch({ workspaceId: wid('project'), branch: 'feature/nested-name' })
+    expect(model.getSnapshot().branches).toEqual({ project: 'feature/nested-name', other: 'dev' })
+    // A path that stopped being a checkout drops its label.
+    model.applyBranch({ workspaceId: wid('project') })
+    expect(model.getSnapshot().branches).toEqual({ other: 'dev' })
+    // Repeating the held state publishes nothing and reads nothing.
+    model.applyBranch({ workspaceId: wid('project') })
+    expect(model.getSnapshot().branches).toEqual({ other: 'dev' })
+    expect(remote.calls.filter(call => call.method === 'branches').length).toBe(reads)
+  })
+
   it('exposes the branch read through the Client service face', async () => {
     const remote = new FakeWorkspaceRemote()
     remote.onBranches = () => Promise.resolve(remoteOk({

@@ -221,6 +221,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'permission-presets': 'permission-presets.md',
   'session': 'session.md',
   'settings': 'settings.md',
+  'workspace': 'workspace.md',
   'skills': 'skills.md',
   'subagent': 'subagent.md',
   'system-prompt': 'system-prompt.md',
