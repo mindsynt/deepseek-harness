@@ -152,7 +152,7 @@ function describeSettings(port: number, host: string, cookie?: string): Promise<
 }
 
 describe('dsh web authentication through the real CLI', () => {
-  it('rejects a forged loopback Host and preserves the browser cookie across restart', { timeout: 180_000 }, async () => {
+  it('rejects a forged loopback Host and the previous process cookie across restart', { timeout: 180_000 }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-web-auth-real-cli-'))
     const dshHome = join(root, '.dsh')
     const port = await freePort()
@@ -194,7 +194,14 @@ describe('dsh web authentication through the real CLI', () => {
       second = await startWeb(root, dshHome, port)
       const secondUrl = new URL(second.launchUrl)
       expect(secondUrl.searchParams.get('token')).not.toBe(firstUrl.searchParams.get('token'))
-      expect((await describeSettings(port, secondUrl.host, cookie)).status).toBe(200)
+      // The restarted process is a new browser session: the cookie minted by
+      // the previous process no longer authenticates, and its own token does.
+      expect((await describeSettings(port, secondUrl.host, cookie)).status).toBe(401)
+      const restartExchange = await fetch(second.launchUrl, { redirect: 'manual' })
+      expect(restartExchange.status).toBe(303)
+      const restartCookie = restartExchange.headers.get('set-cookie')?.split(';', 1)[0]
+      if (restartCookie === undefined) throw new Error('restarted CLI token exchange omitted Set-Cookie')
+      expect((await describeSettings(port, secondUrl.host, restartCookie)).status).toBe(200)
 
       const credentialMode = (await stat(join(dshHome, '.credentials.yaml'))).mode & 0o777
       expect(credentialMode).toBe(0o600)

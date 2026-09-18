@@ -7,22 +7,38 @@ import { BrowserAuth } from '../src/browser-auth.ts'
 import type { ConnectionIndexRequest, ConnectionIndexResponse } from '../src/rpc.ts'
 import { RecordCredentials } from './browser-credentials.ts'
 
-function signedCookie(store: RecordCredentials, name: string, payload: unknown): string {
-  const body = typeof payload === 'string'
-    ? Buffer.from(payload, 'utf8').toString('base64url')
-    : Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
-  return signedBodyCookie(store, name, body)
-}
-
-function signedBodyCookie(store: RecordCredentials, name: string, body: string): string {
+/** Durable signing secret held by the test credential record. */
+function storedSecret(store: RecordCredentials): Buffer {
   const record = store.record
   if (record?.kind !== 'grant' || typeof record.payload !== 'object' || record.payload === null) {
     throw new Error('test credential store has no signing secret')
   }
   const secret: unknown = Reflect.get(record.payload, 'secret')
   if (typeof secret !== 'string') throw new Error('test credential record has no string secret')
-  const signature = createHmac('sha256', Buffer.from(secret, 'base64url')).update(body).digest('base64url')
-  return `${name}=v1.${body}.${signature}`
+  return Buffer.from(secret, 'base64url')
+}
+
+/** One owner's process key: the durable secret bound to that owner's launch token. */
+function processKey(store: RecordCredentials, auth: BrowserAuth): Buffer {
+  const token = new URL(auth.authenticatedUrl('http://127.0.0.1:3080')).searchParams.get('token')
+  if (token === null) throw new Error('test authentication owner exposed no launch token')
+  return createHmac('sha256', storedSecret(store)).update(token).digest()
+}
+
+/** Sign one cookie body under an explicit key (tampering and cross-process cases). */
+function signedBodyWith(key: Buffer, name: string, body: string): string {
+  return `${name}=v1.${body}.${createHmac('sha256', key).update(body).digest('base64url')}`
+}
+
+function signedCookie(store: RecordCredentials, auth: BrowserAuth, name: string, payload: unknown): string {
+  const body = typeof payload === 'string'
+    ? Buffer.from(payload, 'utf8').toString('base64url')
+    : Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
+  return signedBodyWith(processKey(store, auth), name, body)
+}
+
+function signedBodyCookie(store: RecordCredentials, auth: BrowserAuth, name: string, body: string): string {
+  return signedBodyWith(processKey(store, auth), name, body)
 }
 
 interface ResponseState {
@@ -91,7 +107,7 @@ afterEach(() => {
 })
 
 describe('BrowserAuth', () => {
-  it('mints one process token and a persistent authority-bound cookie', async () => {
+  it('mints one process token and a process-bound authority-bound cookie', async () => {
     const store = new RecordCredentials()
     const processOwner = {}
     const first = await createAuth(store, 30, processOwner)
@@ -119,14 +135,36 @@ describe('BrowserAuth', () => {
     expect(reloaded.authenticatedUrl('http://127.0.0.1:3080')).toBe(login.launchUrl)
     expect(reloaded.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(true)
 
+    // A restart is another process: its cookies belong to it, so the previous
+    // process's cookie stops authenticating instead of surviving to its expiry.
     const restarted = await createAuth(store)
     expect(new URL(restarted.authenticatedUrl('http://127.0.0.1:3080')).searchParams.get('token'))
       .not.toBe(new URL(login.launchUrl).searchParams.get('token'))
-    expect(restarted.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(true)
+    expect(restarted.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(false)
+    const restartedLogin = exchange(restarted)
+    expect(restarted.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: restartedLogin.cookie }))).toBe(true)
+
+    // The rejected cookie receives the minimal 401 even when a stale URL token
+    // rides along, while an obsolete token beside this process's own cookie
+    // still redirects to a clean `/`.
     const staleUrl = new URL(login.launchUrl)
-    const redirected = response()
+    const denied = response()
     expect(restarted.authorizeIndex(request(
       `${staleUrl.pathname}${staleUrl.search}`,
+      '127.0.0.1:3080',
+      { cookie: login.cookie },
+    ), denied.value)).toBe(false)
+    expect(denied.state).toEqual({
+      status: 401,
+      headers: {
+        'cache-control': 'no-store',
+        'content-type': 'text/plain; charset=utf-8',
+      },
+      body: 'dsh web authentication required; reopen the URL printed by dsh web.\n',
+    })
+    const redirected = response()
+    expect(reloaded.authorizeIndex(request(
+      '/?token=obsolete-token-from-an-earlier-process',
       '127.0.0.1:3080',
       { cookie: login.cookie },
     ), redirected.value)).toBe(false)
@@ -171,7 +209,8 @@ describe('BrowserAuth', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-24T00:00:00.000Z'))
     const store = new RecordCredentials()
-    const auth = await createAuth(store)
+    const processOwner = {}
+    const auth = await createAuth(store, 30, processOwner)
     const { cookie } = exchange(auth)
     const [name, value] = cookie.split('=') as [string, string]
 
@@ -179,7 +218,11 @@ describe('BrowserAuth', () => {
     expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: `${name}=${value.slice(0, -1)}x` }))).toBe(false)
     expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: `${name}=%` }))).toBe(false)
     expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', {
-      cookie: signedBodyCookie(store, name, 'a'),
+      cookie: signedBodyCookie(store, auth, name, 'a'),
+    }))).toBe(false)
+    // A cookie signed by the durable secret alone is not this process's cookie.
+    expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', {
+      cookie: signedBodyWith(storedSecret(store), name, value.split('.')[1] as string),
     }))).toBe(false)
     expect(auth.isAuthenticated({ headers: {} })).toBe(false)
     expect(auth.isAuthenticated({ headers: { host: 'bad host', cookie } })).toBe(false)
@@ -195,11 +238,11 @@ describe('BrowserAuth', () => {
     ]
     for (const payload of invalidPayloads) {
       expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', {
-        cookie: signedCookie(store, name, payload),
+        cookie: signedCookie(store, auth, name, payload),
       }))).toBe(false)
     }
 
-    const shorter = await createAuth(store, 1)
+    const shorter = await createAuth(store, 1, processOwner)
     expect(shorter.isAuthenticated(request('/', '127.0.0.1:3080', { cookie }))).toBe(false)
     vi.setSystemTime(new Date('2026-09-24T00:00:00.000Z'))
     expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie }))).toBe(false)

@@ -178,20 +178,28 @@ async function initializeSecret(credentials: CredentialProvider): Promise<Buffer
 }
 
 /**
- * Process launch-token exchange and persistent signed-cookie verification.
+ * Process launch-token exchange and process-bound signed-cookie verification.
  * Connection loads the credential provider's signing secret during activation
- * and retains it for synchronous request authentication.
+ * and derives this process's session key from it, so request authentication
+ * stays synchronous while a cookie only outlives the process that issued it.
  */
 export class BrowserAuth {
   private readonly launchToken: string
+  /** Key signing this process's cookies: the durable secret bound to the process launch token. */
+  private readonly sessionKey: Buffer
   private readonly maxAgeMilliseconds: number
 
   private constructor(
     processOwner: object,
-    private readonly secret: Buffer,
+    rootSecret: Buffer,
     maxAgeDays: number,
   ) {
     this.launchToken = processLaunchToken(processOwner)
+    // The launch token rotates with the process, so binding the key to it makes
+    // every cookie a session of the process that issued it: a restart rejects
+    // the previous process's cookies. The durable record stays the revocation
+    // root — deleting it invalidates every cookie issued afterwards.
+    this.sessionKey = createHmac('sha256', rootSecret).update(this.launchToken).digest()
     this.maxAgeMilliseconds = maxAgeDays * DAY_MILLISECONDS
     if (!Number.isSafeInteger(this.maxAgeMilliseconds)
       || !Number.isSafeInteger(Date.now() + this.maxAgeMilliseconds)) {
@@ -200,8 +208,10 @@ export class BrowserAuth {
   }
 
   /**
-   * Initialize browser authentication and create its durable signing secret
-   * when this Harness home has none.
+   * Initialize browser authentication and create the durable signing secret
+   * when this Harness home has none. The secret is a revocation root rather
+   * than the signing key: each process signs cookies with it bound to its own
+   * launch token.
    * @param processOwner - root application context retaining one token across Connection reloads.
    * @param credentials - persistent credential provider for the Web profile.
    * @param maxAgeDays - positive absolute browser-cookie lifetime in days.
@@ -252,7 +262,7 @@ export class BrowserAuth {
           authority,
           issuedAt,
           expiresAt,
-        }, this.secret)
+        }, this.sessionKey)
         res.writeHead(303, {
           'cache-control': 'no-store',
           'location': '/',
@@ -284,7 +294,7 @@ export class BrowserAuth {
   /**
    * Verify the authority-bound browser cookie on a Host request.
    * @param request - request headers carrying Host and Cookie.
-   * @returns true only for an unexpired cookie signed by this activation's loaded secret.
+   * @returns true only for an unexpired cookie signed by this process's session key.
    */
   isAuthenticated(request: ConnectionTrustRequest): boolean {
     const authority = requestAuthority(request.headers)
@@ -292,7 +302,7 @@ export class BrowserAuth {
     if (authority === undefined || rawCookie === undefined) return false
     const value = cookieValue(rawCookie, cookieName(authority))
     if (value === undefined) return false
-    const payload = decodeCookie(value, this.secret)
+    const payload = decodeCookie(value, this.sessionKey)
     if (payload === undefined || payload.authority !== authority) return false
     const now = Date.now()
     return payload.issuedAt <= now
