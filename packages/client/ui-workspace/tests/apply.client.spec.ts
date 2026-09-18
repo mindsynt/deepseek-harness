@@ -48,11 +48,12 @@ async function bench() {
   ctx.provide('workspaces', {
     list: {
       getSnapshot: () => ({
-        items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+        items: [], branches: {}, archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
       }),
       subscribe,
     },
     create,
+    refreshBranches: vi.fn(async () => undefined),
     rename,
     delete: vi.fn(async () => undefined),
     insertBefore: vi.fn(async () => undefined),

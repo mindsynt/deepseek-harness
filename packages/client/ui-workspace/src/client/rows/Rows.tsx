@@ -151,6 +151,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
   const row = group
   // The ungrouped bucket has no workspace title: its label is dictionary copy.
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
+  const branch = row.workspaceId === undefined ? undefined : row.branch
   const active = containsCurrentDescendant || (group.expanded && group.containsCurrent)
   const [menuOpen, setMenuOpen] = useState(false)
   const workspaceMenuItems = [
@@ -180,7 +181,10 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
         <IconTriangleRightFill14 className={clsx(css.arrow, row.expanded && css.arrowOpen)} />
       </span>
       <span className={css.projectText}>
-        <span className={css.title}>{label}</span>
+        <span className={css.titleLine}>
+          <span className={css.title}>{label}</span>
+          {branch !== undefined && <span className={css.branch}>{t('group.branch', { branch })}</span>}
+        </span>
       </span>
       <span className={css.rowActions}>
         {actions !== undefined && (

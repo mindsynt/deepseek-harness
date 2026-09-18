@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -97,6 +97,21 @@ describe('WorkspaceController commands', () => {
       created: false,
       workspace: { workspaceId, title: 'renamed' },
     })
+  })
+
+  it('reads the checked-out branch of each registered Workspace', async () => {
+    const { controller, root } = await harness()
+    const checkedOut = stageDir(root, 'checked-out')
+    mkdirSync(join(checkedOut, '.git'), { recursive: true })
+    writeFileSync(join(checkedOut, '.git', 'HEAD'), 'ref: refs/heads/dev\n')
+    const plain = stageDir(root, 'plain')
+    const branchy = await controller.create({ path: checkedOut })
+    const bare = await controller.create({ path: plain })
+
+    const value = await controller.branches()
+    expect(value.items).toHaveLength(2)
+    expect(value.items).toContainEqual({ workspaceId: branchy.workspace.workspaceId, branch: 'dev' })
+    expect(value.items).toContainEqual({ workspaceId: bare.workspace.workspaceId })
   })
 
   it('maps invalid paths, blank names, conflicts, and unknown ids to stable failures', async () => {

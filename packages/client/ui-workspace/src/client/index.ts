@@ -82,6 +82,10 @@ export function apply(ctx: Context): void {
   const uiWorkspace = new UiWorkspaceService(
     ctx, ctx.remote.directoryPicker, workspaces, sessions)
   ctx.slots.provideRoot({ hooks: { workspaces: workspaces.list } })
+  // A checkout changes no Workspace state the feed could announce, so the
+  // branch labels this surface renders are re-read once when it loads. The
+  // read is a one-shot action, not a registration, so it needs no effect.
+  void workspaces.refreshBranches()
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {

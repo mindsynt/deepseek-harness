@@ -67,7 +67,7 @@ const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView 
 const workspaceState = (
   items: readonly WorkspaceView[],
   archivedSessionIds: readonly SessionId[] = [],
-): WorkspaceSnapshot => ({ items, archivedSessionIds, state: 'idle', phase: 'ready', error: null })
+): WorkspaceSnapshot => ({ items, branches: {}, archivedSessionIds, state: 'idle', phase: 'ready', error: null })
 const noPendingInteraction: SessionStatusSnapshot = new Map()
 function hook<T>(snapshot: T) {
   return function select<S>(selector: (state: T) => S): S { return selector(snapshot) }

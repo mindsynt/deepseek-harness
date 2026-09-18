@@ -159,4 +159,15 @@ export class TestWorkspaces implements IWorkspaces {
       draft.archivedSessionIds = draft.archivedSessionIds.filter(id => id !== sessionId)
     })
   }
+
+  /**
+   * Re-read the Workspace branch labels (recorded). The default keeps the
+   * labels the fixture already carries, since a double owns no checkout.
+   * @returns after the recorded call settles.
+   */
+  async refreshBranches(): Promise<void> {
+    this.calls.push({ method: 'refreshBranches', args: [] })
+    const stub = this.stubs.get('refreshBranches')
+    if (stub !== undefined) await (stub() as Promise<void>)
+  }
 }

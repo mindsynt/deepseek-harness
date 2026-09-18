@@ -34,7 +34,7 @@ function sessionState(sessions: readonly SessionSummary[], phase: SessionListSta
 }
 
 function snapshot(archivedSessionIds: readonly string[], items: readonly WorkspaceView[] = []): WorkspaceSnapshot {
-  return { items, archivedSessionIds: archivedSessionIds.map(sid), state: 'idle', phase: 'ready', error: null }
+  return { items, branches: {}, archivedSessionIds: archivedSessionIds.map(sid), state: 'idle', phase: 'ready', error: null }
 }
 
 function workspace(title: string, sessionIds: readonly string[]): WorkspaceView {

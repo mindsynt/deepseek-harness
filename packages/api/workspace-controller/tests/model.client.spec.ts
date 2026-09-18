@@ -1,10 +1,13 @@
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ClientWorkspaceModel, type WorkspaceRemote,
 } from '../src/client/index.ts'
+import { WorkspaceController } from '../src/client/service.ts'
 import type {
   WorkspaceArchiveSessionRequest,
   WorkspaceArchiveValue,
+  WorkspaceBranchesValue,
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
   WorkspaceDeleteRequest,
@@ -89,6 +92,8 @@ class FakeWorkspaceRemote implements WorkspaceRemote {
     request: WorkspaceUnarchiveSessionRequest,
   ) => Promise<RemoteResult<WorkspaceArchiveValue>> = request =>
     Promise.resolve(remoteOk({ archivedSessionIds: [request.sessionId] }))
+  onBranches: () => Promise<RemoteResult<WorkspaceBranchesValue>> =
+    () => Promise.resolve(remoteOk({ items: [] }))
 
   create(request: WorkspaceCreateRequest): Promise<RemoteResult<WorkspaceCreateValue>> {
     this.record('create', request)
@@ -125,6 +130,11 @@ class FakeWorkspaceRemote implements WorkspaceRemote {
     return this.onUnarchiveSession(request)
   }
 
+  branches(): Promise<RemoteResult<WorkspaceBranchesValue>> {
+    this.record('branches', undefined)
+    return this.onBranches()
+  }
+
   async *follow(_signal?: AbortSignal): AsyncGenerator<WorkspaceFollowFrame> {}
 
   private record(method: string, request: unknown): void {
@@ -159,6 +169,46 @@ describe('ClientWorkspaceModel', () => {
     baseline(model, [workspace('fresh')])
     expect(model.getSnapshot().items.map(item => item.workspaceId)).toEqual(['fresh'])
     expect(model.getSnapshot().archivedSessionIds).toEqual([])
+  })
+
+  it('labels Workspaces with their checked-out branch and keeps labels when a read fails', async () => {
+    const remote = new FakeWorkspaceRemote()
+    remote.onBranches = () => Promise.resolve(remoteOk({
+      items: [{ workspaceId: wid('project'), branch: 'feature/nested-name' }, { workspaceId: wid('plain') }],
+    }))
+    const model = modelFor(remote)
+    baseline(model, [workspace('project'), workspace('plain')])
+    const first = model.refreshBranches()
+    // One read serves concurrent callers.
+    expect(model.refreshBranches()).toBe(first)
+    await first
+    expect(model.getSnapshot().branches).toEqual({ project: 'feature/nested-name' })
+    // A same-path mutation does not re-read the branch.
+    model.upsertView(workspace('project', [], '2026-02-02T00:00:00.000Z'))
+    const reads = remote.calls.filter(call => call.method === 'branches').length
+    expect(reads).toBe(1)
+
+    // The same labels again are not republished.
+    await model.refreshBranches()
+    expect(model.getSnapshot().branches).toEqual({ project: 'feature/nested-name' })
+
+    remote.onBranches = () => Promise.resolve(
+      workspaceError(new RemoteError('gateway/internal', 'git unavailable', {})),
+    )
+    await model.refreshBranches()
+    expect(model.getSnapshot().branches).toEqual({ project: 'feature/nested-name' })
+  })
+
+  it('exposes the branch read through the Client service face', async () => {
+    const remote = new FakeWorkspaceRemote()
+    remote.onBranches = () => Promise.resolve(remoteOk({
+      items: [{ workspaceId: wid('project'), branch: 'dev' }],
+    }))
+    const ctx = new Context()
+    const controller = new WorkspaceController(ctx, modelFor(remote))
+    await controller.refreshBranches()
+    expect(controller.list.getSnapshot().branches).toEqual({ project: 'dev' })
+    await ctx.fiber.dispose()
   })
 
   it('keeps the last baseline during retry and exposes a terminal stream failure', () => {

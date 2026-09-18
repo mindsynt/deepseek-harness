@@ -340,6 +340,15 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 @Remote('unarchiveSession') unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue>
 
 /**
+ * Read the checked-out git branch of every registered Workspace.
+ *
+ * A branch is external checkout state that no Workspace mutation announces,
+ * so it stays out of the durable projection and is read on demand instead.
+ * @returns one entry per registered Workspace, each omitting `branch` when its path is not a checkout.
+ */
+@Remote('branches') async branches(): Promise<WorkspaceBranchesValue>
+
+/**
  * Stream a complete Workspace baseline followed by ordered increments.
  * @param signal - generation cancellation.
  * @returns baseline followed by ordered Workspace increments.

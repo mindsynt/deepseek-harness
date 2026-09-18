@@ -2,12 +2,14 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { readWorkspaceBranch } from './branches.ts'
 import { WorkspaceCommands } from './commands.ts'
 import { DirectoryPickerController } from './directory-picker.ts'
 import { WorkspaceFeed } from './feed.ts'
 import type {
   WorkspaceArchiveSessionRequest,
   WorkspaceArchiveValue,
+  WorkspaceBranchesValue,
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
   WorkspaceDeleteRequest,
@@ -118,6 +120,24 @@ export class WorkspaceController extends TypertRemoteService {
   @Remote('unarchiveSession')
   unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue> {
     return this.commands.unarchiveSession(request)
+  }
+
+  /**
+   * Read the checked-out git branch of every registered Workspace.
+   *
+   * A branch is external checkout state that no Workspace mutation announces,
+   * so it stays out of the durable projection and is read on demand instead.
+   * @returns one entry per registered Workspace, each omitting `branch` when its path is not a checkout.
+   */
+  @Remote('branches')
+  async branches(): Promise<WorkspaceBranchesValue> {
+    const items = await Promise.all(this.ctx.workspaceRegistry.list().map(async (workspace) => {
+      const branch = await readWorkspaceBranch(workspace.path)
+      return branch === undefined
+        ? { workspaceId: workspace.id }
+        : { workspaceId: workspace.id, branch }
+    }))
+    return { items }
   }
 
   /**

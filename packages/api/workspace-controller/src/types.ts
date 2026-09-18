@@ -114,6 +114,18 @@ export interface WorkspaceArchiveValue {
   readonly archivedSessionIds: readonly SessionId[]
 }
 
+/** One Workspace's checked-out git branch. */
+export interface WorkspaceBranchView {
+  readonly workspaceId: WorkspaceId
+  /** Branch under `refs/heads`, or the abbreviated commit when HEAD is detached. */
+  readonly branch?: string
+}
+
+/** Complete current branch facts for the registered Workspaces. */
+export interface WorkspaceBranchesValue {
+  readonly items: readonly WorkspaceBranchView[]
+}
+
 /** Complete reconnect baseline for Workspace browser state. */
 export interface WorkspaceBaseline {
   readonly items: readonly WorkspaceView[]

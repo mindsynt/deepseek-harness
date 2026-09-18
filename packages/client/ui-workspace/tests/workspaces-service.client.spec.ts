@@ -86,6 +86,7 @@ function workspaceState(
 ): WorkspaceSnapshot {
   return {
     items,
+    branches: {},
     archivedSessionIds,
     phase,
     state: phase === 'ready' ? 'idle' : 'loading',
@@ -176,6 +177,8 @@ class FakeWorkspaces implements IWorkspaces {
     }))
   }
 
+  onRefreshBranches: IWorkspaces['refreshBranches'] = async () => {}
+
   onUnarchive: IWorkspaces['unarchiveSession'] = async (sessionId) => {
     this.list.update(state => ({
       ...state,
@@ -201,6 +204,10 @@ class FakeWorkspaces implements IWorkspaces {
   unarchiveSession(sessionId: SessionId): Promise<void> {
     this.unarchiveCalls.push(sessionId)
     return this.onUnarchive(sessionId)
+  }
+
+  refreshBranches(): Promise<void> {
+    return this.onRefreshBranches()
   }
 }
 

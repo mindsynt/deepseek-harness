@@ -34,6 +34,14 @@ export interface IWorkspaces {
   /** Host-authoritative Workspace rows, order, archive set, and follow lifecycle. */
   readonly list: WorkspaceSource
   /**
+   * Re-read the checked-out branch of every registered Workspace.
+   *
+   * A surface that shows a branch calls this when it loads, since a checkout
+   * changes no Workspace state the follow stream could announce.
+   * @returns after the read settles and any changed labels are published.
+   */
+  refreshBranches(): Promise<void>
+  /**
    * Register an existing path as a Workspace.
    * @param input - Host create payload.
    * @returns the created or idempotently resolved Workspace.
@@ -92,6 +100,10 @@ export class WorkspaceController extends Service implements IWorkspaces {
   constructor(ctx: Context, private readonly model: ClientWorkspaceModel) {
     super(ctx, 'workspaces')
     this.list = model
+  }
+
+  refreshBranches(): Promise<void> {
+    return this.model.refreshBranches()
   }
 
   async create(input: { path: string }): Promise<WorkspaceView> {

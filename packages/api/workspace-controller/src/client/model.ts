@@ -8,6 +8,7 @@ import type {
   WorkspaceArchiveSessionRequest,
   WorkspaceArchiveValue,
   WorkspaceBaseline,
+  WorkspaceBranchView,
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
   WorkspaceDeleteValue,
@@ -28,6 +29,8 @@ export type WorkspaceListPhase = 'pending' | 'ready'
 /** Immutable Client Workspace state. */
 export interface WorkspaceSnapshot {
   readonly items: readonly WorkspaceView[]
+  /** Current git branch per Workspace id; a path that is not a checkout has no entry. */
+  readonly branches: Readonly<Record<string, string>>
   /** Complete registry-global archive set in Host order. */
   readonly archivedSessionIds: WorkspaceArchiveValue['archivedSessionIds']
   readonly state: 'idle' | 'loading' | 'error'
@@ -54,6 +57,10 @@ export interface WorkspaceFollowSink {
  */
 export class ClientWorkspaceModel implements WorkspaceFollowSink {
   private items: readonly WorkspaceView[] = []
+  private branches: Readonly<Record<string, string>> = Object.freeze({})
+  /** Identity of the registered (id, path) set the current branch read covers. */
+  private branchScope = ''
+  private branchRequest: Promise<void> | undefined
   private archivedSessionIds: WorkspaceArchiveValue['archivedSessionIds'] = []
   private state: WorkspaceSnapshot['state'] = 'loading'
   private phase: WorkspaceListPhase = 'pending'
@@ -195,6 +202,20 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
   }
 
   /**
+   * Re-read the checked-out branch of every registered Workspace.
+   *
+   * A branch is external checkout state that no Workspace mutation announces,
+   * so it is read on demand instead of following the durable projection. A
+   * failed read keeps the previous labels: the branch is decorative, and its
+   * own failure must not surface as a Workspace error.
+   * @returns after the read settles and any changed labels are published.
+   */
+  refreshBranches(): Promise<void> {
+    this.branchRequest ??= this.readBranches().finally(() => { this.branchRequest = undefined })
+    return this.branchRequest
+  }
+
+  /**
    * Replace the projection from one complete stream-generation baseline.
    * @param baseline - complete Workspace and archive projection.
    */
@@ -274,11 +295,40 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
   private buildSnapshot(): WorkspaceSnapshot {
     return {
       items: this.items,
+      branches: this.branches,
       archivedSessionIds: this.archivedSessionIds,
       state: this.state,
       phase: this.phase,
       error: this.error,
     }
+  }
+
+  private async readBranches(): Promise<void> {
+    const result = await this.remote.branches()
+    if (result.ok) this.installBranches(result.value.items)
+  }
+
+  private installBranches(items: readonly WorkspaceBranchView[]): void {
+    const next: Record<string, string> = {}
+    for (const item of items) {
+      if (item.branch !== undefined) next[item.workspaceId] = item.branch
+    }
+    const keys = Object.keys(next)
+    if (keys.length === Object.keys(this.branches).length
+      && keys.every(key => next[key] === this.branches[key])) return
+    this.branches = Object.freeze(next)
+    this.invalidate()
+  }
+
+  /**
+   * Re-read branches when the registered (id, path) set the labels describe moves.
+   * Renames, reorders, and other same-path mutations change no branch.
+   */
+  private syncBranches(): void {
+    const scope = this.items.map(item => `${item.workspaceId}\u0000${item.path}`).join('\u0001')
+    if (scope === this.branchScope) return
+    this.branchScope = scope
+    void this.refreshBranches()
   }
 
   private installArchived(archivedSessionIds: WorkspaceArchiveValue['archivedSessionIds']): void {
@@ -312,6 +362,7 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     this.items = index === -1
       ? [view, ...this.items]
       : this.items.map((item, position) => position === index ? view : item)
+    this.syncBranches()
     this.invalidate()
   }
 
@@ -326,6 +377,7 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
       return
     }
     this.items = items
+    this.syncBranches()
     this.invalidate(immediate)
   }
 
@@ -336,6 +388,7 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     }
     this.items = [...installed.values()]
     this.committedOrder = views.map(view => view.workspaceId)
+    this.syncBranches()
   }
 
   private invalidate(immediate = false): void {

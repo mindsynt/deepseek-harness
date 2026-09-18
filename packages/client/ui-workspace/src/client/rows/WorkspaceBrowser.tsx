@@ -21,7 +21,7 @@ import type {
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
-import type { GroupNode, SessionNode, SessionOrderBy } from '../tree.ts'
+import type { GroupNode, SessionNode, SessionOrderBy, WorkspaceRow } from '../tree.ts'
 import {
   deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, owningGroupKey, owningParentFolder,
   pinCurrentBlank, reconcileManualOrder, UNGROUPED_KEY, visibleSessionIds,
@@ -177,7 +177,7 @@ type SessionTreeProps = Pick<
   /** Host account home for POSIX hover-path abbreviation. */
   home?: string | undefined
   /** Workspaces in Host group order with browser-projected Session order. */
-  workspaces: readonly WorkspaceView[]
+  workspaces: readonly WorkspaceRow[]
   /** Browser-projected order for Sessions outside every Workspace. */
   ungroupedSessionIds: readonly SessionId[]
   /** Whether the current Workspace stream has a complete Host baseline. */
@@ -790,6 +790,7 @@ export function WorkspaceBrowser({
   // Ordering remains live while the rail or search replaces the list body.
   const list = useSessions(state => state)
   const workspaces = useWorkspaces(state => state.items)
+  const branches = useWorkspaces(state => state.branches)
   const workspacePhase = useWorkspaces(state => state.phase)
   const workspaceStreamState = useWorkspaces(state => state.state)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
@@ -814,19 +815,23 @@ export function WorkspaceBrowser({
     () => visibleSessionIds(list, archivedSessionIds),
     [archivedSessionIds, list],
   )
-  const orderedWorkspaces = useMemo(() => workspaces.map((workspace) => {
+  const orderedWorkspaces = useMemo(() => workspaces.map((workspace): WorkspaceRow => {
+    // The branch is not part of the durable Host projection: labels read on
+    // demand are merged into the rows the tree groups by.
+    const branch = branches[workspace.workspaceId]
     const memberIds = workspace.sessionIds
     const baseOrder = orderBy === 'updated'
       ? orderByRecency(memberIds, list.byId)
       : reconcileManualOrder(memberIds, sessionOrderByAccount[workspace.workspaceId], list.byId)
     return {
       ...workspace,
+      ...branch === undefined ? {} : { branch },
       sessionIds: pinCurrentBlank(
         baseOrder,
         currentBlank !== undefined && memberIds.includes(currentBlank) ? currentBlank : undefined,
       ),
     }
-  }), [currentBlank, list.byId, orderBy, sessionOrderByAccount, workspaces])
+  }), [branches, currentBlank, list.byId, orderBy, sessionOrderByAccount, workspaces])
   const orderedUngroupedSessionIds = useMemo(() => {
     const baseOrder = orderBy === 'updated'
       ? orderByRecency(ungroupedMemberIds, list.byId)

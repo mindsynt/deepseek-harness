@@ -3269,6 +3269,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the complete resulting archive set.',
       },
       {
+        signature: '@Remote(\'branches\') async branches(): Promise<WorkspaceBranchesValue>',
+        description: 'Read the checked-out git branch of every registered Workspace.\n\nA branch is external checkout state that no Workspace mutation announces, so it stays out of the durable projection and is read on demand instead.',
+        parameters: [],
+        returns: 'one entry per registered Workspace, each omitting `branch` when its path is not a checkout.',
+      },
+      {
         signature: '@Remote({ mode: \'stream\' }) follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>',
         description: 'Stream a complete Workspace baseline followed by ordered increments.',
         parameters: [{ name: 'signal', description: 'generation cancellation.' }],
@@ -7111,6 +7117,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceBaseline',
     declaration: 'export interface WorkspaceBaseline {\n    readonly items: readonly WorkspaceView[];\n    readonly archivedSessionIds: readonly SessionId[];\n}',
+  },
+  {
+    name: 'WorkspaceBranchesValue',
+    declaration: 'export interface WorkspaceBranchesValue {\n    readonly items: readonly WorkspaceBranchView[];\n}',
+  },
+  {
+    name: 'WorkspaceBranchView',
+    declaration: 'export interface WorkspaceBranchView {\n    readonly workspaceId: WorkspaceId;\n    readonly branch?: string;\n}',
   },
   {
     name: 'WorkspaceByteRange',

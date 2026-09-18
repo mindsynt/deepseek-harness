@@ -387,3 +387,21 @@
     scroll-behavior: auto;
   }
 }
+
+.titleLine {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.branch {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}

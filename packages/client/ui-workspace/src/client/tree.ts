@@ -65,6 +65,14 @@ export interface SessionNode {
 /** Session order selected by the Workspace browser. */
 export type SessionOrderBy = 'manual' | 'updated'
 
+/**
+ * Workspace membership row the tree groups: the Host projection plus the
+ * checked-out branch the browser merges in for its label.
+ */
+export interface WorkspaceRow extends WorkspaceView {
+  readonly branch?: string
+}
+
 /** One workspace group section: header row facts + visible top-level session rows. */
 export interface GroupNode {
   /** Group key: the workspace id or {@link UNGROUPED_KEY}. */
@@ -75,6 +83,8 @@ export interface GroupNode {
   /** Workspace creation time (epoch ms); absent only for the ungrouped bucket. */
   createdAt: number | undefined
   label: string
+  /** Checked-out git branch of the backing Workspace; absent when it is not a checkout. */
+  branch: string | undefined
   /** Total visible sessions in the group. */
   sessionCount: number
   expanded: boolean
@@ -120,6 +130,7 @@ interface Group {
   cwd: string | undefined
   createdAt: number | undefined
   label: string
+  branch: string | undefined
   sessions: SessionSummary[]
 }
 
@@ -232,9 +243,10 @@ function buildGroup(
   cwd: string | undefined,
   createdAt: number | undefined,
   label: string,
+  branch: string | undefined,
   members: readonly SessionSummary[],
 ): Group {
-  return { key, workspaceId, cwd, createdAt, label, sessions: [...members] }
+  return { key, workspaceId, cwd, createdAt, label, branch, sessions: [...members] }
 }
 
 /** Apply a stored Ungrouped order and append newly loose Sessions by recency. */
@@ -262,7 +274,7 @@ function orderedUngrouped(
  */
 function groupByWorkspace(
   list: SessionListState,
-  workspaces: readonly WorkspaceView[],
+  workspaces: readonly WorkspaceRow[],
   archived: ReadonlySet<SessionId>,
   ungroupedOrder: readonly string[] | undefined,
 ): Group[] {
@@ -280,7 +292,7 @@ function groupByWorkspace(
     }
     groups.push(buildGroup(
       workspace.workspaceId, workspace.workspaceId, workspace.path,
-      Date.parse(workspace.createdAt), workspace.title, members,
+      Date.parse(workspace.createdAt), workspace.title, workspace.branch, members,
     ))
   }
   const stray = list.ids
@@ -294,6 +306,7 @@ function groupByWorkspace(
       undefined,
       undefined,
       '',
+      undefined,
       orderedUngrouped(stray, ungroupedOrder, list.byId),
     ))
   }
@@ -349,7 +362,7 @@ function sessionNode(
  */
 export function deriveGroups(
   list: SessionListState,
-  workspaces: readonly WorkspaceView[],
+  workspaces: readonly WorkspaceRow[],
   archivedSessionIds: readonly SessionId[],
   statuses: SessionStatuses,
   view: TreeView,
@@ -370,6 +383,7 @@ export function deriveGroups(
       cwd: g.cwd,
       createdAt: g.createdAt,
       label: g.label,
+      branch: g.branch,
       sessionCount: g.sessions.length,
       expanded,
       containsCurrent: g.key === currentGroup,
