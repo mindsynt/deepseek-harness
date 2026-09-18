@@ -2,13 +2,30 @@
 
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { createRequire, isBuiltin } from 'node:module'
-import { basename, dirname, join, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { getEnvironmentData, setEnvironmentData } from 'node:worker_threads'
 import type { ModuleLoaderV1, ModuleLoaderV2, ResolveResult } from '@deepseek-ai/cordis-plugin-loader'
 import { imports as resolvePackageImports, type Package as ResolvePackageManifest } from 'resolve.exports'
 import { isProfileModuleFallbackLink } from './legacy-links.ts'
 import type { ProfileResolutionEntry, ProfileResolutionGeneration } from '../profile.ts'
+
+/**
+ * Whether this process runs the workspace source tree instead of built bundles.
+ *
+ * The `dsh` source launch (`node --import tsx/esm apps/cli/src`) loads this
+ * module as TypeScript, while every built launch loads the emitted JavaScript
+ * under `lib`, so this module's own extension distinguishes the planes without
+ * inspecting enclosing directory names. tsx follows the root tsconfig `paths`
+ * table and rewrites every bare `@deepseek-ai/*` import to that package's
+ * `src`, while profile-fallback resolution anchors the same packages at their
+ * built `lib` entries. Loading both planes instantiates every workspace
+ * package twice and splits module-level identity such as
+ * `TOOL_RUNTIME_SCHEDULER`, so fallback ESM entries are redirected to the
+ * source files tsx selects. CommonJS keeps the built entry: `tsx/esm` registers
+ * no CommonJS hook, so `require` in this process genuinely resolves `lib`.
+ */
+const SOURCE_LAUNCH = import.meta.url.endsWith('.ts')
 
 const WORKER_RESOLUTION_KEY = '@deepseek-ai/dsh-app-boot/profile-resolution'
 const EMPTY_ATTRIBUTES: ImportAttributes = Object.freeze({})
@@ -276,6 +293,58 @@ function localCandidateOwnsResolution(candidate: string, resolved: string, reque
 function isUnselectedPackageMiss(error: unknown): boolean {
   const failure = error as NodeJS.ErrnoException & { path?: unknown }
   return failure.code === 'MODULE_NOT_FOUND' && failure.path === undefined
+}
+
+/**
+ * Map one file inside a package's built `lib` tree to the TypeScript file the
+ * tsconfig `paths` table selects for it: `lib/<rest>.js` is `src/<rest>.ts`,
+ * and `lib/types/<rest>.js` is the same `src/<rest>.ts` its subpath export
+ * names.
+ * @param built - package-relative built path.
+ * @returns the package-relative source path, or undefined for a non-JavaScript artifact.
+ */
+function sourcePathOf(built: string): string | undefined {
+  const lib = `lib${sep}`
+  if (!built.startsWith(lib) || !built.endsWith('.js')) return undefined
+  const rest = built.slice(lib.length, -'.js'.length)
+  const mirror = rest.startsWith(`types${sep}`) ? rest.slice(`types${sep}`.length) : rest
+  return join('src', `${mirror}.ts`)
+}
+
+/**
+ * Redirect one profile-fallback ESM entry to the workspace source file tsx
+ * loads for the same package under a source launch, or return it unchanged.
+ * Only files inside `packageDir` are candidates: the resolver owns the entry's
+ * own export targets, never a dependency it reached. The fallback package
+ * directory is usually a symlink into the app installation while Node reports
+ * the resolved real path, so both sides are canonicalized before the
+ * containment test.
+ * @param packageDir - directory of the fallback package entry.
+ * @param resolved - absolute path of the entry's built file.
+ * @returns the source path when it exists, otherwise `resolved`.
+ */
+function sourceEntryPath(packageDir: string, resolved: string): string {
+  /* v8 ignore next -- built and packaged launches load this module from lib, where fallback entries already match */
+  if (!SOURCE_LAUNCH) return resolved
+  const entryDir = canonicalPath(packageDir)
+  const relativeEntry = relative(entryDir, canonicalPath(resolved))
+  if (relativeEntry.startsWith('..') || isAbsolute(relativeEntry)) return resolved
+  const source = sourcePathOf(relativeEntry)
+  if (source === undefined) return resolved
+  const candidate = join(entryDir, source)
+  return existsSync(candidate) ? candidate : resolved
+}
+
+/**
+ * URL form of {@link sourceEntryPath} for the ESM loader.
+ * @param packageDir - directory of the fallback package entry.
+ * @param result - resolution returned for the entry's built file.
+ * @returns `result` remapped onto the source file, or `result` unchanged.
+ */
+function sourceEntryResult(packageDir: string, result: ResolveResult): ResolveResult {
+  const resolved = fileURLToPath(result.url)
+  const source = sourceEntryPath(packageDir, resolved)
+  return source === resolved ? result : { ...result, url: pathToFileURL(source).href }
 }
 
 function sameResolution(left: string, right: string): boolean {
@@ -703,7 +772,12 @@ export function installProfileResolution(
             return restoreImporter(error)
           }
           /* v8 ignore next -- Node 24+ resolves synchronously; the Node 22 matrix covers its Promise result */
-          if (result instanceof Promise) return result.catch(restoreImporter)
+          if (result instanceof Promise) {
+            return result.then(resolved => route.kind === 'fallback'
+              ? sourceEntryResult(route.entry.packageDir, resolved)
+              : resolved).catch(restoreImporter)
+          }
+          if (route.kind === 'fallback') result = sourceEntryResult(route.entry.packageDir, result)
           if (cacheable) state.esm = result
           return result
         } finally {
@@ -727,12 +801,23 @@ export function installProfileResolution(
         /* v8 ignore start -- Node 22 is the asynchronous adapter and is covered by the external version matrix */
         if (expected instanceof Promise || actual instanceof Promise) {
           return Promise.all([actual, expected]).then(([resolved, wanted]) => {
+            if (route.kind === 'fallback') {
+              resolved = sourceEntryResult(route.entry.packageDir, resolved)
+              wanted = sourceEntryResult(route.entry.packageDir, wanted)
+            }
             assertEquivalent(resolved.url, wanted.url, request, parent)
             if (cacheable) state.esm = resolved
             return resolved
           })
         }
         /* v8 ignore stop */
+        if (route.kind === 'fallback') {
+          const selected = sourceEntryResult(route.entry.packageDir, actual)
+          const wanted = sourceEntryResult(route.entry.packageDir, expected)
+          assertEquivalent(selected.url, wanted.url, request, parent)
+          if (cacheable) state.esm = selected
+          return selected
+        }
         assertEquivalent(actual.url, expected.url, request, parent)
         if (cacheable) state.esm = actual
         return actual

@@ -286,6 +286,127 @@ describe('profile resolution generation', { concurrent: false }, () => {
     expect(await importFrom('resolution-lib', parent)).toMatchObject({ marker: 1 })
   })
 
+  it('redirects profile package entries to their src tree under a source launch', async () => {
+    const f = fixture('source-entry-lib')
+    // The conventional workspace split: exports target `lib/`, tsconfig `paths`
+    // rewrites the same names to `src/`. Under a source launch the entry must
+    // land on the src copy so it shares one module instance with the tsx-
+    // rewritten bare imports of the same package.
+    file(join(f.installed, 'package.json'), JSON.stringify({
+      name: 'source-entry-lib',
+      version: '1.0.0',
+      type: 'module',
+      exports: {
+        '.': { import: './lib/index.js', require: './lib/index.cjs' },
+        './invariant': './lib/invariant.js',
+        './types': './lib/types/types.js',
+      },
+    }))
+    file(join(f.installed, 'lib/index.js'), 'export const probe = "lib"\n')
+    file(join(f.installed, 'lib/index.cjs'), 'module.exports = { probe: "lib" }\n')
+    file(join(f.installed, 'lib/invariant.js'), 'export const probe = "lib-invariant"\n')
+    file(join(f.installed, 'lib/types/types.js'), 'export const probe = "lib-types"\n')
+    file(join(f.installed, 'src/index.ts'), 'export const probe = "src"\n')
+    file(join(f.installed, 'src/invariant.ts'), 'export const probe = "src-invariant"\n')
+    file(join(f.installed, 'src/types.ts'), 'export const probe = "src-types"\n')
+    const registration = installProfileResolution(await generationOf(f))
+    registrations.push(registration)
+    const parent = pathToFileURL(join(f.profile.dir, 'entry.mjs')).href
+    // tsconfig `paths` rewrites every bare import under tsx; the profiled entry
+    // must resolve to the same src file so one module instance per package exists.
+    expect(resolveFrom('source-entry-lib', parent))
+      .toBe(pathToFileURL(join(f.installed, 'src/index.ts')).href)
+    expect(resolveFrom('source-entry-lib/invariant', parent))
+      .toBe(pathToFileURL(join(f.installed, 'src/invariant.ts')).href)
+    // The `./types` export is the one exception: its built file lives under
+    // `lib/types/`, but its source sits at `src/types.ts`.
+    expect(resolveFrom('source-entry-lib/types', parent))
+      .toBe(pathToFileURL(join(f.installed, 'src/types.ts')).href)
+    expect(await importFrom('source-entry-lib', parent)).toMatchObject({ probe: 'src' })
+    expect(await importFrom('source-entry-lib/types', parent)).toMatchObject({ probe: 'src-types' })
+  })
+
+  it('redirects a fallback entry reached through a symlinked package directory', async () => {
+    const f = fixture('linked-source-lib')
+    // The installation exposes workspace packages as node_modules symlinks
+    // while Node reports the real path it resolved; containment has to survive
+    // that difference or the entry keeps loading from the built plane.
+    const real = join(f.root, 'install', 'packages', 'linked-source-lib')
+    rmSync(f.installed, { recursive: true, force: true })
+    file(join(real, 'package.json'), JSON.stringify({
+      name: 'linked-source-lib',
+      version: '1.0.0',
+      type: 'module',
+      exports: { '.': { import: './lib/index.js', require: './lib/index.js' } },
+    }))
+    file(join(real, 'lib/index.js'), 'export const probe = "lib"\n')
+    file(join(real, 'src/index.ts'), 'export const probe = "src"\n')
+    symlinkSync(real, f.installed, 'dir')
+
+    const generation = await generationOf(f)
+    expect(generation.entries.find(entry => entry.name === 'linked-source-lib')?.packageDir).toBe(f.installed)
+    const registration = installProfileResolution(generation)
+    registrations.push(registration)
+    const parent = pathToFileURL(join(f.profile.dir, 'entry.mjs')).href
+    expect(resolveFrom('linked-source-lib', parent))
+      .toBe(pathToFileURL(join(real, 'src/index.ts')).href)
+    // CommonJS keeps the built entry: tsx/esm registers no CommonJS hook, so a
+    // `require` in this process genuinely resolves `lib`.
+    expect(createRequire(join(f.profile.dir, 'entry.cjs')).resolve('linked-source-lib'))
+      .toBe(join(real, 'lib/index.js'))
+  })
+
+  it('keeps a fallback entry whose package ships only built files', async () => {
+    const f = fixture('built-only-lib')
+    file(join(f.installed, 'package.json'), JSON.stringify({
+      name: 'built-only-lib',
+      version: '1.0.0',
+      type: 'module',
+      exports: { '.': { import: './lib/index.js', require: './lib/index.cjs' } },
+    }))
+    file(join(f.installed, 'lib/index.js'), 'export const probe = "lib"\n')
+    file(join(f.installed, 'lib/index.cjs'), 'module.exports = { probe: "lib" }\n')
+    const registration = installProfileResolution(await generationOf(f))
+    registrations.push(registration)
+    const parent = pathToFileURL(join(f.profile.dir, 'entry.mjs')).href
+    expect(resolveFrom('built-only-lib', parent))
+      .toBe(pathToFileURL(join(f.installed, 'lib/index.js')).href)
+    expect(createRequire(join(f.profile.dir, 'entry.cjs')).resolve('built-only-lib'))
+      .toBe(join(f.installed, 'lib/index.cjs'))
+  })
+
+  it('verifies a package resolved after the shared fallback position', async () => {
+    const f = fixture()
+    // The package sits past the shared fallback position, so the route carries
+    // no package directory and verification compares the disk result unchanged.
+    const afterFallback = join(f.root, 'node_modules', 'after-fallback-lib')
+    pkg(afterFallback, 'after-fallback-lib', 6)
+    const registration = installProfileResolution(await generationOf(f), 'verify')
+    registrations.push(registration)
+    const parent = pathToFileURL(join(f.profile.dir, 'entry.mjs')).href
+    expect(resolveFrom('after-fallback-lib', parent))
+      .toBe(pathToFileURL(join(afterFallback, 'index.js')).href)
+    // Attributes make the resolution uncacheable, so verification still reruns.
+    expect(resolveFrom('after-fallback-lib', parent, { type: 'javascript' }))
+      .toBe(pathToFileURL(join(afterFallback, 'index.js')).href)
+    expect(createRequire(join(f.profile.dir, 'entry.cjs')).resolve('after-fallback-lib'))
+      .toBe(join(afterFallback, 'index.cjs'))
+  })
+
+  it('leaves a fallback entry that resolves outside its package directory', async () => {
+    const f = fixture('escaping-lib')
+    // A package may resolve a request to a sibling of its own directory; the
+    // redirect owns the entry's export targets, not whatever it reached.
+    file(join(f.installed, 'package.json'), JSON.stringify({
+      name: 'escaping-lib', version: '1.0.0', type: 'module', main: '../shared/index.js',
+    }))
+    file(join(f.root, 'install', 'node_modules', 'shared', 'index.js'), 'export const probe = "shared"\n')
+    const registration = installProfileResolution(await generationOf(f))
+    registrations.push(registration)
+    expect(createRequire(join(f.profile.dir, 'entry.cjs')).resolve('escaping-lib'))
+      .toBe(join(f.root, 'install', 'node_modules', 'shared', 'index.js'))
+  })
+
   it('routes a scoped CommonJS package through its containing node_modules directory', async () => {
     const f = fixture('@scope/resolution-lib')
     const registration = installProfileResolution(await generationOf(f))
