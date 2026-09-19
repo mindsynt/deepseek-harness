@@ -25,14 +25,14 @@ export interface StubSettingsScope<T> {
 }
 
 /**
- * Build an in-memory settings scope for service specs: starts in the host
- * loading state, records writes, and lets the test publish Host acceptances.
+ * Build an in-memory settings scope for service specs: starts in the loading
+ * state, records writes, and lets the test publish Host acceptances.
  * @returns the stub handle.
  */
 export function stubSettingsScope<T>(): StubSettingsScope<T> {
   let snapshot: SettingsScopeSnapshot<T> = {
     status: 'loading', value: undefined, base: undefined, user: undefined,
-    revision: undefined, writable: false, mode: 'host',
+    revision: undefined, writable: false,
   }
   const listeners = new Set<() => void>()
   const set = vi.fn(() => Promise.resolve())

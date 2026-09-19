@@ -26,8 +26,8 @@ export class SettingsDocumentStore {
   private following: (() => void) | undefined
 
   /**
-   * @param ctx - the plugin's context, whose loopback `remote.settings`
-   * namespace opens the provider document.
+   * @param ctx - the plugin's context, whose `remote.settings` namespace opens
+   * the provider document.
    * @param describeFace - the shared mirror's describe face (`hasDocument` source).
    */
   constructor(

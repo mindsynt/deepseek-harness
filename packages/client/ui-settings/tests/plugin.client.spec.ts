@@ -28,6 +28,18 @@ describe('settings domain base plugin', () => {
     await vi.waitFor(() => { expect(describeCall).toHaveBeenCalledTimes(1) })
   })
 
+  it('serves the Host document to a page reached at a non-loopback authority', async () => {
+    const { ctx, describeCall, remote, fiber } = bench()
+    // The Host /api fence is the trust decision for a page authority; this
+    // client must not re-derive it from the page hostname.
+    remote.$host = { home: undefined, isLoopback: false }
+    await fiber.await()
+    const face = ctx.settingsScope.describe()
+    await face.ensure()
+    expect(face.getSnapshot().view).toEqual({ writable: true, hasDocument: true, namespaces: [] })
+    expect(describeCall).toHaveBeenCalledTimes(1)
+  })
+
   it('refreshes the mirror on document commits and connection resets, once each', async () => {
     const { ctx, describeCall, remote, fiber } = bench()
     await fiber.await()

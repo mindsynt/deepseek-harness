@@ -39,38 +39,19 @@ function acknowledgedNamespace(version: string, revision = 1) {
 }
 
 /** The welcome store over a real mirror-derived scope and a fake wire. */
-function buildWelcome(
-  api: { describe?: ReturnType<typeof vi.fn>; mutate?: ReturnType<typeof vi.fn> },
-  persistence: 'host' | 'memory' = 'host',
-) {
+function buildWelcome(api: { describe?: ReturnType<typeof vi.fn>; mutate?: ReturnType<typeof vi.fn> }) {
   const ctx = { remote: { settings: api } } as never
-  const mirror = new SettingsDescribeMirror(ctx, persistence)
+  const mirror = new SettingsDescribeMirror(ctx)
   const scope = new SettingsScopeController(
     ctx,
     { namespace: WELCOME_NOTICE_SETTINGS_NAMESPACE, decode: decodeWelcomeSection },
     mirror,
-    persistence,
     schemaService,
   )
   return { mirror, controller: new WelcomeNoticeStore(scope) }
 }
 
 describe('WelcomeNoticeStore', () => {
-  it('acknowledges in memory while Host settings persistence is disabled', async () => {
-    const describeCall = vi.fn()
-    const mutate = vi.fn()
-    const { controller } = buildWelcome({ describe: describeCall, mutate }, 'memory')
-
-    await controller.load()
-    expect(controller.store.getSnapshot()).toEqual({ status: 'ready', acknowledged: false, error: null })
-    await expect(controller.acknowledge()).resolves.toBe(true)
-    expect(controller.store.getSnapshot()).toEqual({ status: 'ready', acknowledged: true, error: null })
-    await controller.load()
-    expect(controller.store.getSnapshot()).toEqual({ status: 'ready', acknowledged: true, error: null })
-    expect(describeCall).not.toHaveBeenCalled()
-    expect(mutate).not.toHaveBeenCalled()
-  })
-
   it('acknowledges only the exact current copy version', async () => {
     for (const [version, acknowledged] of [
       [undefined, false],

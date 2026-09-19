@@ -189,7 +189,9 @@ export class ModelsSettingsStore {
     if (!declared.ok) { this.failLoad(generation, declared.error.message); return }
     const mirrored = this.describeFace.getSnapshot()
     if (mirrored.view === undefined) {
-      this.failLoad(generation, mirrored.error ?? 'settings are unavailable in this browser')
+      // `ensure` awaited a completed read, so this holds neither an answer nor
+      // a failure only when the mirror is still idle.
+      this.failLoad(generation, mirrored.error ?? 'the settings document has not answered yet')
       return
     }
     const providers = joinProviderDirectory(registered.value, declared.value)

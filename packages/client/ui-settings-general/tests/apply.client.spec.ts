@@ -2,8 +2,8 @@
 /**
  * Ownerless-copy registrations inside the assembled web client: the five
  * seats, the `settings` dictionaries, the locale-following nav label, the
- * loopback-only document action over the real settings mirror, and recovery
- * across Loader rebuilds of the declaring chain.
+ * document action over the real settings mirror, and recovery across Loader
+ * rebuilds of the declaring chain.
  */
 import { describe, expect, onTestFinished, vi } from 'vitest'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -26,7 +26,7 @@ const COLD_BOOT_TIMEOUT_MS = 60_000
 /** Dictionary namespace this plugin owns; every seat it fills declares it. */
 const NS = 'settings'
 
-/** The seats this plugin fills for a loopback browser (slot name → expected component). */
+/** The seats this plugin fills (slot name → expected component). */
 const SEATS = [
   ['settings.trigger', TriggerContent],
   ['settings.header', HeaderContent],
@@ -180,16 +180,17 @@ describe('ui-settings-general apply', () => {
     await vi.waitFor(() => { expect(c.mock.log.calls('settings/describe')).toHaveLength(3) })
   })
 
-  it('withholds the Host document action off-loopback', async ({ mock, start }) => {
+  it('serves the Host document and every seat off-loopback', async ({ mock, start }) => {
     const loopbackUrl = location.href
     setPageUrl('http://198.51.100.7:3000/')
     onTestFinished(() => { setPageUrl(loopbackUrl) })
     const { c } = await client(mock, start)
+    // Only the page authority is remote; the Host fence already admitted this
+    // origin through `trustedHosts`, so settings stay durable.
     expect(c.connection.isLoopback).toBe(false)
-    expect(ownEntries(c, 'settings.action')).toEqual([])
-    // Off-loopback settings stay process-local: no describe read, so the browser language stands.
-    expect(c.mock.log.calls('settings/describe')).toEqual([])
-    expect(c.ctx.locale.getSnapshot().active).toBe('en')
+    expectSeated(c)
+    expect(c.mock.log.calls('settings/describe').length).toBeGreaterThan(0)
+    expect(c.ctx.locale.getSnapshot().active).toBe('zh')
     await c.unload(SELF)
     await c.flush()
     for (const [name] of SEATS) expect(ownEntries(c, name)).toEqual([])
