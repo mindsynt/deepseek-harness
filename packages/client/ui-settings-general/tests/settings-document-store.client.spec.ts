@@ -14,6 +14,10 @@ function response(hasDocument = false) {
   return { ok: true, value: { writable: true, hasDocument, namespaces: [] } }
 }
 
+function capable(value = true): RemoteResult<boolean> {
+  return { ok: true, value }
+}
+
 function opened(): RemoteResult<{ opened: true }> {
   return { ok: true, value: { opened: true } }
 }
@@ -26,7 +30,13 @@ describe('SettingsDocumentStore', () => {
   it('loads provider metadata and asks the settings domain to open its document', async () => {
     const describe = vi.fn(() => Promise.resolve(response(true)))
     const openDocument = vi.fn(() => Promise.resolve(opened()))
-    const controller = derivedDocumentStore({ settings: { describe, openSettingsDocument: openDocument } })
+    const controller = derivedDocumentStore({
+      settings: {
+        describe,
+        canOpenSettingsDocument: () => Promise.resolve(capable()),
+        openSettingsDocument: openDocument,
+      },
+    })
     await controller.load()
     expect(controller.store.getSnapshot()).toEqual({
       status: 'ready', opening: false, error: null,
@@ -38,7 +48,11 @@ describe('SettingsDocumentStore', () => {
   it('marks absent or failed metadata unavailable without opening anything', async () => {
     const openDocument = vi.fn(() => Promise.resolve(opened()))
     const absent = derivedDocumentStore({
-      settings: { describe: () => Promise.resolve(response()), openSettingsDocument: openDocument },
+      settings: {
+        describe: () => Promise.resolve(response()),
+        canOpenSettingsDocument: () => Promise.resolve(capable()),
+        openSettingsDocument: openDocument,
+      },
     })
     await absent.load()
     await absent.open()
@@ -46,13 +60,21 @@ describe('SettingsDocumentStore', () => {
     expect(openDocument).not.toHaveBeenCalled()
 
     const failed = derivedDocumentStore({
-      settings: { describe: () => Promise.reject(new Error('offline')), openSettingsDocument: openDocument },
+      settings: {
+        describe: () => Promise.reject(new Error('offline')),
+        canOpenSettingsDocument: () => Promise.resolve(capable()),
+        openSettingsDocument: openDocument,
+      },
     })
     await failed.load()
     expect(failed.store.getSnapshot()).toMatchObject({ status: 'unavailable', error: 'offline' })
 
     const rejected = derivedDocumentStore({
-      settings: { describe: () => Promise.resolve(describeFailed('provider failed')), openSettingsDocument: openDocument },
+      settings: {
+        describe: () => Promise.resolve(describeFailed('provider failed')),
+        canOpenSettingsDocument: () => Promise.resolve(capable()),
+        openSettingsDocument: openDocument,
+      },
     })
     await rejected.load()
     expect(rejected.store.getSnapshot()).toMatchObject({
@@ -60,11 +82,67 @@ describe('SettingsDocumentStore', () => {
     })
   })
 
+  it('removes the action when the Host cannot open the document natively', async () => {
+    const openDocument = vi.fn(() => Promise.resolve(opened()))
+    const controller = derivedDocumentStore({
+      settings: {
+        describe: () => Promise.resolve(response(true)),
+        canOpenSettingsDocument: () => Promise.resolve(capable(false)),
+        openSettingsDocument: openDocument,
+      },
+    })
+    await controller.load()
+    await controller.open()
+    expect(controller.store.getSnapshot()).toEqual({
+      status: 'unavailable', opening: false, error: null,
+    })
+    expect(openDocument).not.toHaveBeenCalled()
+  })
+
+  it('treats a refused or failed opener probe as unavailable without recording an error', async () => {
+    const refused = derivedDocumentStore({
+      settings: {
+        describe: () => Promise.resolve(response(true)),
+        canOpenSettingsDocument: () => Promise.resolve({
+          ok: false as const, error: new RemoteError('gateway/internal', 'probe refused', {}),
+        }),
+        openSettingsDocument: vi.fn(),
+      },
+    })
+    await refused.load()
+    expect(refused.store.getSnapshot()).toMatchObject({ status: 'unavailable', error: null })
+
+    const failed = derivedDocumentStore({
+      settings: {
+        describe: () => Promise.resolve(response(true)),
+        canOpenSettingsDocument: () => Promise.reject(new Error('offline')),
+        openSettingsDocument: vi.fn(),
+      },
+    })
+    await failed.load()
+    expect(failed.store.getSnapshot()).toMatchObject({ status: 'unavailable', error: null })
+  })
+
+  it('treats a Host that does not answer the opener probe as unavailable', async () => {
+    const controller = derivedDocumentStore({
+      settings: {
+        describe: () => Promise.resolve(response(true)),
+        openSettingsDocument: vi.fn(),
+      },
+    })
+    await controller.load()
+    expect(controller.store.getSnapshot()).toMatchObject({ status: 'unavailable', error: null })
+  })
+
   it('collapses concurrent open gestures and recovers after a failure', async () => {
     let resolveOpen!: (response: RemoteResult<{ opened: true }>) => void
     const openDocument = vi.fn(() => new Promise<RemoteResult<{ opened: true }>>((resolve) => { resolveOpen = resolve }))
     const controller = derivedDocumentStore({
-      settings: { describe: () => Promise.resolve(response(true)), openSettingsDocument: openDocument },
+      settings: {
+        describe: () => Promise.resolve(response(true)),
+        canOpenSettingsDocument: () => Promise.resolve(capable()),
+        openSettingsDocument: openDocument,
+      },
     })
     await controller.load()
     const first = controller.open()
@@ -86,6 +164,7 @@ describe('SettingsDocumentStore', () => {
           describe: vi.fn()
             .mockRejectedValueOnce(new Error('offline'))
             .mockResolvedValueOnce(response(true)),
+          canOpenSettingsDocument: vi.fn(() => Promise.resolve(capable())),
           openSettingsDocument: vi.fn(),
         },
       },

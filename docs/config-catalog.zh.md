@@ -237,14 +237,14 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-settings-controller`
 
 ```ts config-catalog
-/** Host integrations replaceable by direct unit tests. */
-export interface SettingsControllerInternals {
-  /** Host text-editor integration used to open the settings document. */
-  readonly openTextFile?: (path: string, signal: AbortSignal) => Promise<void>
+/** Native document-opening policy. */
+export interface Config {
+  /** Override platform desktop-opener detection. */
+  readonly nativeOpen?: boolean
 }
 ```
 
-来源： [`packages/api/settings-controller/src/index.ts:35`](../packages/api/settings-controller/src/index.ts)
+来源： [`packages/api/settings-controller/src/index.ts:32`](../packages/api/settings-controller/src/index.ts)
 
 <a id="deepseek-aidsh-api-terminal-controller"></a>
 

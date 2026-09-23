@@ -52,6 +52,7 @@ function localeView(preference: string, revision = 0): SettingsNamespaceView {
 async function client(mock: RemoteMock, start: () => Promise<TestClient>, hasDocument = false) {
   const settings = mock.remote.settings
   settings.describe.mockResolvedValue(ok({ writable: true, hasDocument, namespaces: [localeView('zh')] }))
+  settings.canOpenSettingsDocument.mockResolvedValue(ok(true))
   const c = await start()
   // The locale adopts the Host preference once the describe mirror holds the document.
   await c.ctx.configForms.describe().ensure()

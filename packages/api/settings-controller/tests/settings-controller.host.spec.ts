@@ -7,7 +7,7 @@ import { configurationFixture } from '../../../settings/settings/tests/configura
 
 async function boot() {
   const fixture = await configurationFixture()
-  await fixture.ctx.plugin(SettingsController)
+  await fixture.ctx.plugin(SettingsController, { nativeOpen: true })
   return { ...fixture, controller: fixture.ctx.settingsController }
 }
 
@@ -16,7 +16,7 @@ describe('settings Remote', () => {
     const { ctx, controller } = await boot()
     expect(controller.typertRemote.namespace).toBe('settings')
     expect(remoteMethods(controller).map(method => method.method)).toEqual([
-      'describe', 'update', 'replace', 'mutate', 'openSettingsDocument',
+      'describe', 'canOpenSettingsDocument', 'update', 'replace', 'mutate', 'openSettingsDocument',
     ])
     expect(ctx.get('credentialsController')).toBeDefined()
   })
@@ -37,6 +37,16 @@ describe('settings Remote', () => {
     expect((await controller.replace('default-model', {}, undefined)).value).toEqual({ provider: 'test', model: 'original' })
   })
 
+  it('reports native document-opening capability from the deployment policy', async () => {
+    const enabled = await configurationFixture()
+    await enabled.ctx.plugin(SettingsController, { nativeOpen: true })
+    expect(enabled.ctx.settingsController.canOpenSettingsDocument()).toBe(true)
+
+    const disabled = await configurationFixture()
+    await disabled.ctx.plugin(SettingsController, { nativeOpen: false })
+    expect(disabled.ctx.settingsController.canOpenSettingsDocument()).toBe(false)
+  })
+
   it('reports an absent Config form service', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
@@ -49,7 +59,7 @@ describe('settings Remote', () => {
   it('opens the profile patch and contains opener failure and cancellation', async () => {
     const { ctx, profile } = await configurationFixture()
     const openTextFile = vi.fn(async (_path: string, _signal: AbortSignal) => {})
-    const controller = new SettingsController(ctx, { openTextFile })
+    const controller = new SettingsController(ctx, {}, { openTextFile })
     const abort = new AbortController()
     await controller.openSettingsDocument(abort.signal)
     expect(openTextFile).toHaveBeenCalledWith(profile.patchPath, abort.signal)
@@ -64,7 +74,7 @@ describe('settings Remote', () => {
     const prepared = Promise.withResolvers<string>()
     vi.spyOn(ctx.settings, 'prepareDocument').mockReturnValue(prepared.promise)
     const openTextFile = vi.fn(async (_path: string, _signal: AbortSignal) => {})
-    const controller = new SettingsController(ctx, { openTextFile })
+    const controller = new SettingsController(ctx, {}, { openTextFile })
     const abort = new AbortController()
     const opening = controller.openSettingsDocument(abort.signal)
     abort.abort()
@@ -93,7 +103,7 @@ it('reports a form removed after its write committed', async () => {
 it('classifies document preparation failures and cancellation during opening', async () => {
   const { ctx } = await configurationFixture({ hmr: false })
   let abort = new AbortController()
-  const controller = new SettingsController(ctx, { openTextFile: async () => {
+  const controller = new SettingsController(ctx, {}, { openTextFile: async () => {
     abort.abort(); throw new Error('opening cancelled')
   } })
   const prepare = vi.spyOn(ctx.settings, 'prepareDocument')

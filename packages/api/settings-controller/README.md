@@ -29,7 +29,7 @@ Mount this package as a Loader entry in a profile that serves browser configurat
 
 `settings.describe()` returns deployment facts and every namespace under `redactSecrets: true`. `settings.update`, `settings.replace`, and `settings.mutate` expose the settings service's three write operations and return the namespace's new redacted view; stale writes use `settings-conflict` and other provider refusals use `settings-rejected`.
 
-`settings.openSettingsDocument()` prepares the provider-owned document and opens it with the native text editor; it accepts no browser-supplied filesystem target.
+`settings.openSettingsDocument()` prepares the provider-owned document and opens it with the native text editor; it accepts no browser-supplied filesystem target. `settings.canOpenSettingsDocument()` reports whether this Host can hand that document to a native editor, honoring the deployment's `nativeOpen` override or platform desktop detection; the browser offers the action only where it can succeed.
 
 -----
 
@@ -38,6 +38,7 @@ Mount this package as a Loader entry in a profile that serves browser configurat
 
 | Field | Default | Meaning |
 |---|---|---|
+| `nativeOpen` | Platform desktop detection | Override desktop-opener detection for the settings document action. |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-api-settings-controller) is the exhaustive source for accepted fields and their JSDoc.
 

@@ -2538,6 +2538,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['RemoteError when no settings provider is mounted.'],
       },
       {
+        signature: '@Remote canOpenSettingsDocument(): boolean',
+        description: 'Report whether this Host can hand the settings document to a native editor.',
+        parameters: [],
+        returns: 'true when the platform names a desktop opener or the deployment overrides detection.',
+      },
+      {
         signature: '@Remote update( ns: string, patch: Record<string, JsonValue>, expectedRevision: number | undefined, ): Promise<SettingsNamespaceView>',
         description: 'Merge a patch into one namespace\'s stored user section.',
         parameters: [{ name: 'ns', description: 'namespace key to write.' }, { name: 'patch', description: 'fields to merge into the user section.' }, { name: 'expectedRevision', description: 'revision the caller read; `undefined` writes unconditionally.' }],

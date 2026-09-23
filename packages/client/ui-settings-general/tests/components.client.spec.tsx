@@ -140,6 +140,7 @@ describe('SettingsDocumentAction', () => {
           ok: true as const,
           value: { writable: true, hasDocument: true, namespaces: [] },
         })),
+        canOpenSettingsDocument: vi.fn(() => Promise.resolve({ ok: true as const, value: true })),
         openSettingsDocument: openDocument,
       },
     })
@@ -158,7 +159,15 @@ describe('SettingsDocumentAction', () => {
     const describe = vi.fn()
       .mockResolvedValueOnce({ ok: true as const, value: { writable: true, hasDocument: false, namespaces: [] } })
       .mockResolvedValueOnce({ ok: true as const, value: { writable: true, hasDocument: true, namespaces: [] } })
-    const ctx = { remote: { settings: { describe, openSettingsDocument: vi.fn() } } } as never
+    const ctx = {
+      remote: {
+        settings: {
+          describe,
+          canOpenSettingsDocument: vi.fn(() => Promise.resolve({ ok: true as const, value: true })),
+          openSettingsDocument: vi.fn(),
+        },
+      },
+    } as never
     const mirror = new SettingsDescribeMirror(ctx)
     const controller = new SettingsDocumentStore(ctx, mirror)
     const first = render(<SettingsDocumentAction
@@ -192,6 +201,7 @@ describe('SettingsDocumentAction', () => {
           ok: true as const,
           value: { writable: true, hasDocument: true, namespaces: [] },
         })),
+        canOpenSettingsDocument: vi.fn(() => Promise.resolve({ ok: true as const, value: true })),
         openSettingsDocument: vi.fn(() => Promise.resolve({
           ok: false as const,
           error: new RemoteError('gateway/internal', 'xdg-open missing', {}),
@@ -207,6 +217,27 @@ describe('SettingsDocumentAction', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open configuration file' }))
     expect((await screen.findByRole('alert')).textContent).toBe('Could not open configuration file')
     expect(screen.getByRole('button', { name: 'Open configuration file' })).toBeTruthy()
+  })
+
+  it('renders nothing when the Host reports no native opener', async () => {
+    const controller = derivedDocumentStore({
+      settings: {
+        describe: vi.fn(() => Promise.resolve({
+          ok: true as const,
+          value: { writable: true, hasDocument: true, namespaces: [] },
+        })),
+        canOpenSettingsDocument: vi.fn(() => Promise.resolve({ ok: true as const, value: false })),
+        openSettingsDocument: vi.fn(),
+      },
+    })
+    render(<SettingsDocumentAction
+      {...kit}
+      t={t}
+      controller={controller}
+      useSnapshot={bindSnapshotSelector(controller.store)}
+    />)
+    await waitFor(() => { expect(controller.store.getSnapshot().status).toBe('unavailable') })
+    expect(screen.queryByRole('button', { name: 'Open configuration file' })).toBeNull()
   })
 })
 

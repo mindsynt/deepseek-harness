@@ -29,7 +29,7 @@ kind: "package-reference"
 
 `settings.describe()` 返回部署信息，以及在 `redactSecrets: true` 下读取的所有 namespace。`settings.update`、`settings.replace` 与 `settings.mutate` 暴露 settings 服务的三种写入操作，并返回该 namespace 的新脱敏视图；陈旧写入使用 `settings-conflict`，其他提供方拒绝使用 `settings-rejected`。
 
-`settings.openSettingsDocument()` 准备提供方持有的文档，并用原生文本编辑器打开；该方法不接受浏览器提供的文件系统目标。
+`settings.openSettingsDocument()` 准备提供方持有的文档，并用原生文本编辑器打开；该方法不接受浏览器提供的文件系统目标。`settings.canOpenSettingsDocument()` 报告该 Host 是否能将上述文档交给原生编辑器，读取部署的 `nativeOpen` 覆盖或平台桌面探测结果；浏览器只在能够成功的地方提供该动作。
 
 -----
 
@@ -38,6 +38,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
+| `nativeOpen` | 平台桌面探测 | 覆盖设置文档动作的桌面打开器探测。 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-api-settings-controller)是所有受支持字段及其 JSDoc 的完整来源。
 

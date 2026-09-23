@@ -88,6 +88,12 @@ Host service backing the generated `ctx.remote.settings` namespace. Every remote
 @Remote describe(): SettingsDescribeValue
 
 /**
+ * Report whether this Host can hand the settings document to a native editor.
+ * @returns true when the platform names a desktop opener or the deployment overrides detection.
+ */
+@Remote canOpenSettingsDocument(): boolean
+
+/**
  * Merge a patch into one namespace's stored user section.
  * @param ns - namespace key to write.
  * @param patch - fields to merge into the user section.

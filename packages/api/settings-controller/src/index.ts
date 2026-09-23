@@ -8,7 +8,9 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
+import Schema from '@deepseek-ai/schemastery'
 import {
+  canOpenNativePath,
   openNativeTextFile,
 } from '@deepseek-ai/dsh-native-command'
 import type { SettingsDescriptor, SettingsPathOp, SettingsForms } from '@deepseek-ai/dsh-settings'
@@ -26,6 +28,12 @@ export type * from './types.ts'
 
 const settingsNamespaceRequestSchema = z.object({ ns: z.string().min(1) })
 
+/** Native document-opening policy. */
+export interface Config {
+  /** Override platform desktop-opener detection. */
+  readonly nativeOpen?: boolean
+}
+
 /** Read abort state afresh after an awaited provider or opener call. */
 function isAborted(signal: AbortSignal): boolean {
   return signal.aborted
@@ -35,6 +43,8 @@ function isAborted(signal: AbortSignal): boolean {
 export interface SettingsControllerInternals {
   /** Host text-editor integration used to open the settings document. */
   readonly openTextFile?: (path: string, signal: AbortSignal) => Promise<void>
+  /** Native handoff availability probe. */
+  readonly canOpenPath?: () => boolean
 }
 
 /**
@@ -74,17 +84,24 @@ declare module '@deepseek-ai/cordis' {
  * `settings/conflict` or `settings/rejected` with the service's message.
  */
 export class SettingsController extends TypertRemoteService {
+  static Config: Schema<Config> = Schema.object({ nativeOpen: Schema.boolean() })
+
   private readonly openTextFile: (path: string, signal: AbortSignal) => Promise<void>
+  private readonly canOpenPath: () => boolean
 
   /**
    * Register the settings namespace and mount the credentials namespace beside
    * it. Both namespaces stay registered when a provider is absent so calls can
    * return the configuration API's actionable missing-provider diagnostic.
    * @param ctx - Host context where settings and credential providers may be mounted.
+   * @param config - native-opener deployment policy; omission detects the platform.
+   * @param internals - host integrations replaceable by direct unit tests.
    */
-  constructor(ctx: Context, internals: SettingsControllerInternals = {}) {
+  constructor(ctx: Context, config: Config = {}, internals: SettingsControllerInternals = {}) {
     super(ctx, 'settingsController', { namespace: 'settings' })
     this.openTextFile = internals.openTextFile ?? openNativeTextFile
+    this.canOpenPath = internals.canOpenPath
+      ?? (() => config.nativeOpen ?? canOpenNativePath())
     ctx.plugin(CredentialsController)
   }
 
@@ -102,6 +119,15 @@ export class SettingsController extends TypertRemoteService {
       hasDocument: true,
       namespaces: settings.describe({ redactSecrets: true }).map(namespaceView),
     }
+  }
+
+  /**
+   * Report whether this Host can hand the settings document to a native editor.
+   * @returns true when the platform names a desktop opener or the deployment overrides detection.
+   */
+  @Remote
+  canOpenSettingsDocument(): boolean {
+    return this.canOpenPath()
   }
 
   /**

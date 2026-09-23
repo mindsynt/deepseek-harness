@@ -660,6 +660,11 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     // Open In scenario supplies launch facts that suppress every native probe.
     { id: 'open-in-app', disabled: options.openInAppEnvironment === undefined },
     { id: 'ui-open-in-app', disabled: options.openInAppEnvironment === undefined },
+    // The settings document action is asserted through an intercepted Host
+    // request in this lane; pin its native-opener capability so headless CI
+    // and desktop developer hosts render the same UI branch (platform opener
+    // behavior belongs to the native-opener unit tests).
+    { id: 'settings-controller', config: { nativeOpen: true } },
     ...options.agentPresets === undefined ? [] : [
       { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
       { insert: (options.agentPresets.definitions ?? []).map(config => ({ id: `preset-${config.id}`, name: '@deepseek-ai/dsh-agent-preset', config })) },

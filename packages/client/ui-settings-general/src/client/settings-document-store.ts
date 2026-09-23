@@ -8,7 +8,7 @@ import type { SettingsDescribeFace } from '@deepseek-ai/dsh-client-ui-settings/c
 
 /** Browser state of the Host-owned settings document. */
 export interface SettingsDocumentState {
-  /** Metadata-loading phase; unavailable means the provider has no local document or the read failed. */
+  /** Metadata-loading phase; unavailable means the document is absent, the Host cannot open it natively, or the read failed. */
   status: 'idle' | 'loading' | 'ready' | 'unavailable'
   /** Whether one native-open request is in flight. */
   opening: boolean
@@ -16,7 +16,7 @@ export interface SettingsDocumentState {
   error: string | null
 }
 
-/** Derives local-document availability from the shared mirror and invokes the pathless Host-owned open operation. */
+/** Derives document availability from the shared mirror and the Host opener probe, then invokes the pathless open operation. */
 export class SettingsDocumentStore {
   /** uSES-safe state source shared by the registered header action. */
   readonly store: SnapshotStore<SettingsDocumentState> = createSnapshotStore({
@@ -24,6 +24,8 @@ export class SettingsDocumentStore {
   })
 
   private following: (() => void) | undefined
+  /** Host answer to the opener probe; undefined until the first load settles. */
+  private canOpenDocument: boolean | undefined
 
   /**
    * @param ctx - the plugin's context, whose `remote.settings` namespace opens
@@ -36,9 +38,9 @@ export class SettingsDocumentStore {
   ) {}
 
   /**
-   * Begin following the mirror (idempotent) and reflect whether the current
-   * provider owns a local document.
-   * @returns settlement once the snapshot reflects the mirror.
+   * Begin following the mirror (idempotent), probe the native opener, and
+   * reflect whether the current provider's document can be offered.
+   * @returns settlement once the snapshot reflects both facts.
    */
   async load(): Promise<void> {
     this.following ??= this.describeFace.subscribe(() => { this.derive() })
@@ -46,7 +48,14 @@ export class SettingsDocumentStore {
       state.status = 'loading'
       state.error = null
     })
-    await this.describeFace.ensure()
+    // The opener capability is a Host fact beside the document metadata; a
+    // refused probe removes only this action, exactly like an absent document.
+    const capability = Promise.resolve()
+      .then(() => this.ctx.remote.settings.canOpenSettingsDocument())
+      .then(result => result.ok ? result.value : false)
+      .catch(() => false)
+    const [canOpen] = await Promise.all([capability, this.describeFace.ensure()])
+    this.canOpenDocument = canOpen
     this.derive()
   }
 
@@ -79,6 +88,9 @@ export class SettingsDocumentStore {
   }
 
   private derive(): void {
+    // The mirror may publish before the opener probe settles; hold the action
+    // out of both ready and unavailable until both facts are known.
+    if (this.canOpenDocument === undefined) return
     const mirrored = this.describeFace.getSnapshot()
     if (mirrored.view === undefined) {
       // A held failure with no answer means the document cannot be located;
@@ -93,7 +105,7 @@ export class SettingsDocumentStore {
     }
     const { hasDocument } = mirrored.view
     this.store.update((state) => {
-      state.status = hasDocument ? 'ready' : 'unavailable'
+      state.status = hasDocument && this.canOpenDocument === true ? 'ready' : 'unavailable'
       state.error = null
     })
   }

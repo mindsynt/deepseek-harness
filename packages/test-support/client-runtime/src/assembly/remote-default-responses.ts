@@ -17,6 +17,9 @@ export const remoteDefaultResponses: RemoteTable = {
     'workspace/initializeDefault': ok(undefined),
     // ui-settings `mirror.ensure()` at apply and again on `connection/reset`.
     'settings/describe': ok({ writable: true, hasDocument: false, namespaces: [] }),
+    // ui-settings-general document action `load()` on mount; capability applies
+    // even when no local document is advertised.
+    'settings/canOpenSettingsDocument': ok(true),
     // ui-model-selection `ModelDirectoryResolver` constructor.
     'session/modelCatalog': ok({
       default: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
