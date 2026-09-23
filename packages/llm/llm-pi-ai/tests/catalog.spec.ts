@@ -956,6 +956,56 @@ describe('compat switches', () => {
     })
   })
 
+  it('infers a shipped provider’s dialect for a model its catalog does not describe', () => {
+    const models = modelsOf({
+      xiaomi: { api: 'openai-completions', models: [{ id: 'mimo-v2.6-flash' }] },
+    }, 'xiaomi')
+
+    expect(models.get('mimo-v2.6-flash')?.compat).toMatchObject({
+      thinkingFormat: 'deepseek',
+      requiresReasoningContentOnAssistantMessages: true,
+    })
+  })
+
+  it('infers a dialect from an endpoint host the catalog ships under another route', () => {
+    const models = modelsOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://ws-gqi9kilb3n6fwikq.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+        models: [{ id: 'deepseek-v4.1-flash' }],
+      },
+    }, 'acme-gateway')
+
+    const compat = models.get('deepseek-v4.1-flash')?.compat as OpenAICompletionsCompat
+    expect(compat.thinkingFormat).toBe('qwen')
+    expect(compat.supportsDeveloperRole).toBe(false)
+    expect(compat.supportsStore).toBe(false)
+  })
+
+  it('keeps an explicit dialect over the inferred catalog default', () => {
+    const models = modelsOf({
+      xiaomi: {
+        api: 'openai-completions',
+        compat: { thinkingFormat: 'openai' },
+        models: [{ id: 'mimo-v2.6-flash' }],
+      },
+    }, 'xiaomi')
+
+    expect((models.get('mimo-v2.6-flash')?.compat as OpenAICompletionsCompat).thinkingFormat).toBe('openai')
+  })
+
+  it('leaves an unrecognized endpoint to pi-ai detection', () => {
+    const models = modelsOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://gateway.acme.example/v1',
+        models: [{ id: 'acme-large' }],
+      },
+    }, 'acme-gateway')
+
+    expect(models.get('acme-large')?.compat).toBeUndefined()
+  })
+
   it('carries private-endpoint stream and reasoning controls', () => {
     const models = modelsOf({
       'acme-baseten': {

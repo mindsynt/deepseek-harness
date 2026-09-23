@@ -747,6 +747,131 @@ function resolveModelReasoning(
 type ModelCompat = OpenAICompletionsCompat | OpenAIResponsesCompat | AnthropicMessagesCompat | BedrockCompat
 
 /**
+ * Compat fields a route can inherit from a catalog provider it is not itself
+ * keyed by. Reasoning dispatch is the reason this exists: a private gateway's
+ * URL says nothing, so pi-ai falls back to OpenAI detection, while the
+ * installed catalog often knows the same gateway family by another route id
+ * or endpoint host. Scalars only, so a consensus is an exact comparison.
+ */
+const INFERABLE_COMPAT_FIELDS = [
+  'thinkingFormat',
+  'supportsReasoningEffort',
+  'supportsDeveloperRole',
+  'supportsStore',
+  'requiresReasoningContentOnAssistantMessages',
+  'maxTokensField',
+] as const satisfies readonly (keyof PiAiCompatProfile)[]
+
+/** One catalog provider's consensus compat, indexed for route inference. */
+interface CatalogCompatDefault {
+  readonly provider: string
+  /** Catalog endpoint hostname, when the provider ships one. */
+  readonly host: string | undefined
+  /** The switches every model on that provider shares. */
+  readonly compat: PiAiCompatProfile
+}
+
+let compatDefaultIndex: readonly CatalogCompatDefault[] | undefined
+
+/** The lowercased hostname of one absolute URL, or undefined when unparsable. */
+function hostnameOf(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined
+  try {
+    const hostname = new URL(url).hostname
+    return hostname.length === 0 ? undefined : hostname.toLowerCase()
+  } catch {
+    return undefined
+  }
+}
+
+/** The compat switches every installed model on one provider shares. */
+function providerCompatConsensus(provider: string): PiAiCompatProfile | undefined {
+  const models = [...catalogModels(provider).values()]
+  if (models.length === 0) return undefined
+  const consensus: Record<string, unknown> = {}
+  for (const field of INFERABLE_COMPAT_FIELDS) {
+    const values = models
+      .map(model => (model.compat as Record<string, unknown> | undefined)?.[field])
+      .filter(value => value !== undefined)
+    if (values.length !== models.length) continue
+    if (values.every(value => value === values[0])) consensus[field] = values[0]
+  }
+  return Object.keys(consensus).length === 0 ? undefined : consensus as PiAiCompatProfile
+}
+
+/** Every catalog provider that carries an inferable consensus, computed once. */
+function compatDefaults(): readonly CatalogCompatDefault[] {
+  compatDefaultIndex ??= builtinProviders().flatMap((provider) => {
+    const compat = providerCompatConsensus(provider.id)
+    return compat === undefined
+      ? []
+      : [{ provider: provider.id, host: hostnameOf(provider.baseUrl), compat }]
+  })
+  return compatDefaultIndex
+}
+
+/** Shared trailing DNS labels; an exact host counts as fully shared. */
+function sharedHostLabels(left: string, right: string): number {
+  if (left === right) return Number.MAX_SAFE_INTEGER
+  const leftLabels = left.split('.').reverse()
+  const rightLabels = right.split('.').reverse()
+  let shared = 0
+  while (shared < leftLabels.length && shared < rightLabels.length && leftLabels[shared] === rightLabels[shared]) {
+    shared += 1
+  }
+  return shared
+}
+
+/** The compat fields every matching catalog provider agrees on. */
+function mergeCompatDefaults(matches: readonly CatalogCompatDefault[]): PiAiCompatProfile | undefined {
+  if (matches.length === 0) return undefined
+  const merged: Record<string, unknown> = {}
+  for (const field of INFERABLE_COMPAT_FIELDS) {
+    const values = matches.map(match => (match.compat as Record<string, unknown>)[field])
+    if (values.every(value => value !== undefined && value === values[0])) merged[field] = values[0]
+  }
+  return Object.keys(merged).length === 0 ? undefined : merged as PiAiCompatProfile
+}
+
+/**
+ * The compat switches the installed catalog supplies for a route it does not
+ * describe: an exact provider id first (a `xiaomi` route inherits the shipped
+ * MiMo dialect), then catalog providers whose endpoint shares a DNS suffix of
+ * at least three labels with this route's URL (an Aliyun `*.maas.aliyuncs.com`
+ * gateway inherits the shipped Qwen dialect). Ambiguous fields are dropped.
+ * @param provider - provider route key.
+ * @param baseUrl - the route's resolved endpoint, when it has one.
+ * @param api - the model's resolved wire protocol.
+ * @returns the inferred switches, or undefined when nothing matches.
+ */
+function inferredCompatDefaults(
+  provider: string,
+  baseUrl: string | undefined,
+  api: string,
+): PiAiCompatProfile | undefined {
+  const gate = compatGate(api)
+  if (gate === undefined) return undefined
+  const byProvider = catalogProvider(provider) === undefined ? undefined : providerCompatConsensus(provider)
+  const host = hostnameOf(baseUrl)
+  let inferred = byProvider
+  if (inferred === undefined && host !== undefined) {
+    const matches = compatDefaults()
+      .map(entry => ({ entry, shared: entry.host === undefined ? 0 : sharedHostLabels(host, entry.host) }))
+      .filter(({ shared }) => shared >= 3)
+    if (matches.length > 0) {
+      const best = Math.max(...matches.map(({ shared }) => shared))
+      inferred = mergeCompatDefaults(matches.filter(({ shared }) => shared === best).map(({ entry }) => entry))
+    }
+  }
+  if (inferred === undefined) return undefined
+  const filtered: Record<string, unknown> = {}
+  for (const [field, value] of Object.entries(inferred)) {
+    if (gate[field] === 'offer') filtered[field] = value
+  }
+  return Object.keys(filtered).length === 0 ? undefined : filtered as PiAiCompatProfile
+}
+
+/**
  * Resolve one model's compat block from the profile's switches.
  *
  * A model switch wins over the route switch field by field; whatever neither
@@ -770,6 +895,7 @@ function resolveModelCompat(
   route: PiAiCompatProfile | undefined,
   base: Model<Api> | undefined,
   api: string,
+  fallback: PiAiCompatProfile | undefined,
 ): { compat: ModelCompat } | Record<string, never> {
   const gate = compatGate(api)
   const configured: Record<string, unknown> = {}
@@ -786,7 +912,6 @@ function resolveModelCompat(
     }
     configured[field] = value
   }
-  if (Object.keys(configured).length === 0) return {}
   // The installed entry's compat matches the entry's OWN api — a route-level
   // `api` repoint (an anthropic catalog served through an OpenAI-compatible
   // gateway) leaves `base.compat` in the other protocol's shape, so it is
@@ -794,7 +919,8 @@ function resolveModelCompat(
   // model starts from pi-ai's baseURL-derived detection instead, which is
   // what a protocol change means for every other compat field too.
   const inherited = base?.api === api ? base.compat : undefined
-  return { compat: { ...inherited, ...configured } as ModelCompat }
+  const merged = { ...fallback, ...inherited, ...configured }
+  return Object.keys(merged).length === 0 ? {} : { compat: merged as ModelCompat }
 }
 
 /** One route's materialized catalog, plus the request caps its profile chose. */
@@ -926,7 +1052,16 @@ export function resolveRouteModels(
       contextWindow,
       maxTokens,
       ...resolveModelReasoning(provider, entry, base),
-      ...resolveModelCompat(provider, entry, request.compat, base, api),
+      // A model the route's own catalog does not describe may still be served
+      // by a gateway family the installed catalog knows by id or endpoint.
+      ...resolveModelCompat(
+        provider,
+        entry,
+        request.compat,
+        base,
+        api,
+        base === undefined ? inferredCompatDefaults(provider, baseUrl, api) : undefined,
+      ),
     }
   }
   const models: Model<Api>[] = []
