@@ -23,24 +23,18 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
-import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular,
   IconDataOutlineRegular, IconWarningOutlineRegular, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
+import { EffortSlider } from './EffortSlider.tsx'
 import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
 type Pane = 'root' | 'model' | 'effort'
-
-/** One dynamic effort row; undefined means preserve the provider default. */
-interface EffortChoice {
-  key: string
-  effort: string | undefined
-  label: string
-}
 
 /** Unplaced portal card: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real (Menu primitive's measure pass). */
 const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
@@ -61,6 +55,9 @@ export function ModelSelect(
   )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
+  // Slider preview: pointer/arrow movement shows a level before anything is
+  // committed through the same selection verb a row click used.
+  const [effortPreview, setEffortPreview] = useState<number | null>(null)
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -73,6 +70,10 @@ export function ModelSelect(
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [menuPos, setMenuPos] = useState<CSSProperties | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+  // A pointerdown on a non-focusable part of the portaled card blurs to the
+  // body with no relatedTarget; remembering that the gesture started inside
+  // keeps the blur handler from reading it as a departure.
+  const pointerInsideRef = useRef(false)
   const id = useId()
 
   const choices = useMemo(() => state.groups.flatMap(group =>
@@ -98,18 +99,18 @@ export function ModelSelect(
     : effectiveEffort === undefined
       ? t('effort.providerDefault')
       : reasoning.efforts.find(level => level.id === effectiveEffort)?.name ?? effectiveEffort
-  const effortChoices = useMemo<readonly EffortChoice[]>(() => reasoning === undefined
-    ? []
-    : [
-      ...reasoning.defaultEffort === undefined
-        ? [{ key: 'provider-default', effort: undefined, label: t('effort.providerDefault') }]
-        : [],
-      ...reasoning.efforts.map((effort: ModelReasoningEffort) => ({
-        key: `effort:${effort.id}`,
-        effort: effort.id,
-        label: effort.name,
-      })),
-    ], [reasoning, t])
+  const effortLevels = reasoning?.efforts ?? []
+  const committedEffortIndex = effortLevels.findIndex(level => level.id === effectiveEffort)
+  // A provider default has no stop of its own; the slider shows the first
+  // level until the user previews or commits one, while the header names the
+  // default that is actually in use. A pointer drag previews a fractional
+  // position so the handle follows the pointer; the nearest stop is what the
+  // aria value and the committed selection use.
+  const effortPosition = effortPreview ?? (committedEffortIndex < 0 ? 0 : committedEffortIndex)
+  const effortIndex = Math.min(effortLevels.length - 1, Math.max(0, Math.round(effortPosition)))
+  const effortCurrent = effortPreview === null && committedEffortIndex < 0
+    ? t('effort.providerDefault')
+    : effortLevels[effortIndex]?.name
   const busy = state.status === 'selecting'
 
   const reload = (): void => {
@@ -119,14 +120,23 @@ export function ModelSelect(
 
   useEffect(() => {
     if (!open) return
-    const closeOutside = (event: MouseEvent): void => {
-      // The portaled card is outside the trigger subtree; check both.
-      if (rootRef.current?.contains(event.target as Node) === true) return
-      if (menuRef.current?.contains(event.target as Node) === true) return
-      setOpen(false)
+    const track = (event: PointerEvent): void => {
+      const target = event.target instanceof Node ? event.target : null
+      // The portaled card is outside the trigger subtree; both count as inside.
+      const inside = target !== null
+        && (rootRef.current?.contains(target) === true || menuRef.current?.contains(target) === true)
+      pointerInsideRef.current = inside
+      if (!inside) setOpen(false)
     }
-    document.addEventListener('mousedown', closeOutside)
-    return () => { document.removeEventListener('mousedown', closeOutside) }
+    const settle = (): void => { pointerInsideRef.current = false }
+    document.addEventListener('pointerdown', track)
+    document.addEventListener('pointerup', settle)
+    document.addEventListener('pointercancel', settle)
+    return () => {
+      document.removeEventListener('pointerdown', track)
+      document.removeEventListener('pointerup', settle)
+      document.removeEventListener('pointercancel', settle)
+    }
   }, [open])
 
   // A pane switch unmounts the row that had focus, which drops focus onto the
@@ -140,8 +150,12 @@ export function ModelSelect(
     paneFocus.current = null
     if (!open || intent === null) return
     if (intent === 'drill') {
-      // The checked row is the value in use; a pane without one opens on its
-      // first row.
+      // The effort pane's one control is the slider; the row panes open on
+      // the value in use (or their first row when nothing is checked).
+      if (pane === 'effort') {
+        focusEffortSlider()
+        return
+      }
       const checked = menuRef.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]:not([disabled])')
       const target = checked ?? itemRefs.current.find(item => item !== null && !item.disabled)
       // Rows a selection in flight disabled cannot take the keyboard; the
@@ -191,6 +205,7 @@ export function ModelSelect(
 
   const show = (): void => {
     setPane('root')
+    setEffortPreview(null)
     setOpen(true)
     reload()
   }
@@ -198,11 +213,13 @@ export function ModelSelect(
   const close = (restoreFocus = false): void => {
     setOpen(false)
     setPane('root')
+    setEffortPreview(null)
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
   }
 
   const drill = (next: Pane): void => {
     paneFocus.current = 'drill'
+    setEffortPreview(null)
     setPane(next)
   }
 
@@ -210,6 +227,12 @@ export function ModelSelect(
   const back = (from: Exclude<Pane, 'root'>): void => {
     paneFocus.current = from
     setPane('root')
+  }
+
+  /** The slider a drilled effort pane hands the keyboard to, else the trigger. */
+  const focusEffortSlider = (): void => {
+    const slider = menuRef.current?.querySelector<HTMLElement>('[role="slider"]')
+    ;(slider ?? triggerRef.current)?.focus()
   }
 
   const moveFocus = (offset: number): void => {
@@ -257,6 +280,10 @@ export function ModelSelect(
       }
       if (focused !== triggerRef.current) return
       event.preventDefault()
+      if (pane === 'effort') {
+        focusEffortSlider()
+        return
+      }
       const checked = menuRef.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]:not([disabled])')
       ;(checked ?? rows.find(item => !item.disabled))?.focus()
       return
@@ -268,10 +295,15 @@ export function ModelSelect(
   }
 
   const onBlur = (event: FocusEvent<HTMLDivElement>): void => {
-    if (event.relatedTarget instanceof Node && (
-      rootRef.current?.contains(event.relatedTarget) === true
-      || menuRef.current?.contains(event.relatedTarget) === true
+    const next = event.relatedTarget
+    if (next instanceof Node && (
+      rootRef.current?.contains(next) === true
+      || menuRef.current?.contains(next) === true
     )) return
+    // Clicking a non-focusable part of the portaled card moves focus to the
+    // body with no relatedTarget; that is still inside the card, so the
+    // pointerdown listener owns dismissal for pointer gestures.
+    if (next === null && pointerInsideRef.current) return
     close()
   }
 
@@ -373,6 +405,17 @@ export function ModelSelect(
           role="menu"
           aria-label={t('menu.aria')}
           aria-busy={state.status === 'loading' || busy}
+          onMouseDown={(event) => {
+            // Pressing a non-focusable decoration (header, caption, track
+            // padding) must not hand focus to the body: the pane's keys would
+            // stop reaching the card. Focusable controls keep their normal
+            // focus handoff.
+            const target = event.target
+            if (target instanceof Element
+              && target.closest('button, input, select, textarea, a[href], [tabindex]') === null) {
+              event.preventDefault()
+            }
+          }}
         >
           {pane === 'root' && (
             <>
@@ -455,27 +498,59 @@ export function ModelSelect(
                   <button type="button" className={css.retry} onClick={reload}>{t('action.reload')}</button>
                 </div>
               )}
-              {effortChoices.length === 0
-                ? <div className={css.empty}>{t('empty.efforts')}</div>
-                : effortChoices.map(level => (
+              <div className={css.effortPane}>
+                <div className={css.effortHead}>
+                  <span className={css.effortHeadLabel}>{t('menu.effort')}</span>
+                  <span className={css.effortHeadValue}>{effortCurrent}</span>
+                </div>
+                {effortLevels.length === 0
+                  ? <div className={css.empty}>{t('empty.efforts')}</div>
+                  : (
+                    <EffortSlider
+                      levels={effortLevels}
+                      index={effortIndex}
+                      position={effortPosition}
+                      disabled={busy}
+                      ariaLabel={t('menu.effort')}
+                      fasterLabel={t('effort.faster')}
+                      smarterLabel={t('effort.smarter')}
+                      onPreview={setEffortPreview}
+                      onCommit={(at, source) => {
+                        // Tab/Enter without moving settles the value already in
+                        // use (the provider default included), exactly as the
+                        // checked row used to.
+                        if (effortPreview === null) {
+                          close(true)
+                          return
+                        }
+                        const level = effortLevels[at]
+                        // A pointer release on the stop already in use keeps
+                        // the card open; a key still settles and closes.
+                        if (level === undefined || (source === 'pointer' && level.id === effectiveEffort)) return
+                        chooseEffort(level.id)
+                      }}
+                      onExit={() => { back('effort') }}
+                    />
+                  )}
+                {reasoning !== undefined && reasoning.defaultEffort === undefined && (
                   <button
                     ref={itemRef()}
                     type="button"
                     role="menuitemradio"
-                    aria-checked={effectiveEffort === level.effort}
-                    className={clsx(css.option, effectiveEffort === level.effort && css.selected)}
-                    key={level.key}
+                    aria-checked={effectiveEffort === undefined}
+                    className={clsx(css.option, effectiveEffort === undefined && css.selected)}
                     disabled={busy}
-                    onClick={() => { chooseEffort(level.effort) }}
+                    onClick={() => { chooseEffort(undefined) }}
                   >
                     <span className={css.optionCopy}>
-                      <span className={css.modelName}>{level.label}</span>
+                      <span className={css.modelName}>{t('effort.providerDefault')}</span>
                     </span>
                     <span className={css.check}>
-                      {effectiveEffort === level.effort ? <IconCheckOutlineRegular /> : null}
+                      {effectiveEffort === undefined ? <IconCheckOutlineRegular /> : null}
                     </span>
                   </button>
-                ))}
+                )}
+              </div>
             </>
           )}
         </div>,

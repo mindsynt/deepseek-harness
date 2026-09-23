@@ -67,37 +67,33 @@ describe.skipIf(MODE === 'record')('web e2e: declared reasoning efforts reach th
     await trigger.click()
     await page.getByRole('menuitem', { name: /推理等级/ }).click()
 
-    // Declared levels, nothing else: the provider-default entry (the route
-    // configures no `reasoning`), then Off/High/Max — minimal, low, medium,
-    // and xhigh were not declared and must not be offered.
-    const levels = page.getByRole('menuitemradio')
-    await expect.poll(async () => levels.allTextContents(), { timeout: 10_000 })
-      .toEqual(['Default', 'Off', 'High', 'Max'])
+    // Declared levels, nothing else: the slider offers Off/High/Max — minimal,
+    // low, medium, and xhigh were not declared and must not be offered. The
+    // route configures no `reasoning`, so the provider-default row is present
+    // and checked; the slider itself parks on the first declared level.
+    const slider = page.getByRole('slider', { name: '推理等级' })
+    const providerDefault = page.getByRole('menuitemradio', { name: 'Default' })
+    await expect.poll(() => providerDefault.getAttribute('aria-checked'), { timeout: 10_000 })
+      .toBe('true')
+    await expect.poll(() => slider.getAttribute('aria-valuetext'), { timeout: 10_000 }).toBe('Off')
+    await expect.poll(() => page.getByRole('menuitemradio').count(), { timeout: 10_000 }).toBe(1)
     const snapshot = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
 
     // Keyboard: the clicked cell unmounts with its pane, so the drilled pane's
-    // checked row takes the focus it left behind. ↑↓ walk the rows from there
-    // and Tab settles the focused one exactly as Enter would.
+    // slider takes the focus it left behind. ←/→ preview the stops from there
+    // and Tab settles the previewed one exactly as Enter would.
     await expect.poll(
-      () => levels.nth(0).evaluate(element => element === document.activeElement),
+      () => slider.evaluate(element => element === document.activeElement),
       { timeout: 10_000 },
     ).toBe(true)
-    await page.keyboard.press('ArrowDown')
-    await expect.poll(
-      () => levels.nth(1).evaluate(element => element === document.activeElement),
-      { timeout: 10_000 },
-    ).toBe(true)
-    await page.keyboard.press('ArrowDown')
-    await expect.poll(
-      () => levels.nth(2).evaluate(element => element === document.activeElement),
-      { timeout: 10_000 },
-    ).toBe(true)
+    await page.keyboard.press('ArrowRight')
+    await expect.poll(() => slider.getAttribute('aria-valuetext'), { timeout: 10_000 }).toBe('High')
 
     // Settling with Tab is the same gesture that saves the default selection, so
     // the effort lands in the Agent default Settings section beside provider/model.
     await page.keyboard.press('Tab')
-    await expect.poll(() => levels.count(), { timeout: 10_000 }).toBe(0)
+    await expect.poll(() => page.getByRole('menu').count(), { timeout: 10_000 }).toBe(0)
     await expect.poll(
       async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'),
       { timeout: 10_000 },
@@ -105,13 +101,14 @@ describe.skipIf(MODE === 'record')('web e2e: declared reasoning efforts reach th
     await expect.poll(() => trigger.getAttribute('aria-label'), { timeout: 10_000 })
       .toBe('选择模型，当前 Acme Think，推理等级 High')
 
-    // Reopening the drilled pane parks the keyboard on the level in use, and
+    // Reopening the drilled pane parks the slider on the level in use, and
     // Shift+Tab walks back out like Escape: to the drilled cell, then closed.
     await trigger.click()
     await page.getByRole('menuitem', { name: /推理等级/ }).click()
-    const high = page.getByRole('menuitemradio', { name: 'High' })
+    const reopened = page.getByRole('slider', { name: '推理等级' })
+    await expect.poll(() => reopened.getAttribute('aria-valuetext'), { timeout: 10_000 }).toBe('High')
     await expect.poll(
-      () => high.evaluate(element => element === document.activeElement),
+      () => reopened.evaluate(element => element === document.activeElement),
       { timeout: 10_000 },
     ).toBe(true)
     await page.keyboard.press('Shift+Tab')
@@ -121,6 +118,45 @@ describe.skipIf(MODE === 'record')('web e2e: declared reasoning efforts reach th
       { timeout: 10_000 },
     ).toBe(true)
     await page.keyboard.press('Shift+Tab')
+    await expect.poll(() => page.getByRole('menu').count(), { timeout: 10_000 }).toBe(0)
+
+    // Pointer: a release on another stop commits through the same path, while
+    // a release on the stop already in use leaves the card open so a stray
+    // click cannot dismiss it.
+    await trigger.click()
+    await page.getByRole('menuitem', { name: /推理等级/ }).click()
+    const track = page.getByRole('slider', { name: '推理等级' })
+    const box = await track.boundingBox()
+    if (box === null) throw new Error('effort slider is not visible')
+    const right = box.x + box.width - 1
+    const middle = box.y + box.height / 2
+    await page.mouse.click(right, middle)
+    await expect.poll(() => trigger.getAttribute('aria-label'), { timeout: 10_000 })
+      .toBe('选择模型，当前 Acme Think，推理等级 Max')
+    await expect.poll(
+      async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'),
+      { timeout: 10_000 },
+    ).toContain('reasoningEffort: max')
+
+    await trigger.click()
+    await page.getByRole('menuitem', { name: /推理等级/ }).click()
+    const reopenedTrack = page.getByRole('slider', { name: '推理等级' })
+    const reopenedBox = await reopenedTrack.boundingBox()
+    if (reopenedBox === null) throw new Error('effort slider is not visible')
+    await page.mouse.click(reopenedBox.x + reopenedBox.width - 1, reopenedBox.y + reopenedBox.height / 2)
+    await expect.poll(() => page.getByRole('menu').count(), { timeout: 10_000 }).toBe(1)
+    // Clicking a non-focusable part of the pane (the caption) keeps the card
+    // open: the focus handoff to the body must not read as a departure.
+    await page.getByText('更快', { exact: true }).click()
+    await expect.poll(() => page.getByRole('menu').count(), { timeout: 10_000 }).toBe(1)
+    // Escape backs out of the drilled pane first, then closes the card.
+    await page.keyboard.press('Escape')
+    await expect.poll(
+      () => page.getByRole('menuitem', { name: /推理等级/ })
+        .evaluate(element => element === document.activeElement),
+      { timeout: 10_000 },
+    ).toBe(true)
+    await page.keyboard.press('Escape')
     await expect.poll(() => page.getByRole('menu').count(), { timeout: 10_000 }).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)

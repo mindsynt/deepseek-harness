@@ -287,3 +287,35 @@
   height: 12px;
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* Effort pane: a single discrete slider over the declared levels, with the
+   provider-default row only when the adapter names no default. */
+.effortPane {
+  box-sizing: border-box;
+  min-width: min(236px, calc(100vw - 40px));
+  padding: 4px 4px 2px;
+}
+
+.effortHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 10px 6px;
+}
+
+.effortHeadLabel {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.effortHeadValue {
+  overflow: hidden;
+  color: var(--dsw-alias-brand-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -75,11 +75,14 @@ describe('ModelSelect reasoning effort', () => {
     })
     fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
-    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
-      .toEqual(['Off', 'High', 'Max'])
+    const slider = screen.getByRole('slider', { name: '推理等级' })
+    expect(slider.getAttribute('aria-valuetext')).toBe('High')
     expect(screen.queryByText('Largest budget')).toBeNull()
+    expect(screen.queryByRole('menuitemradio')).toBeNull()
 
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /Max/ }))
+    fireEvent.keyDown(slider, { key: 'ArrowRight' })
+    expect(slider.getAttribute('aria-valuetext')).toBe('Max')
+    fireEvent.keyDown(slider, { key: 'Tab' })
     await waitFor(() => {
       expect(select).toHaveBeenCalledWith({
         provider: 'deepseek-official',
@@ -116,8 +119,10 @@ describe('ModelSelect reasoning effort', () => {
       name: '选择模型，当前 Model，推理等级 Default',
     }))
     fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
-    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
-      .toEqual(['Default', 'Standard'])
+    expect(screen.getByRole('slider', { name: '推理等级' }).getAttribute('aria-valuetext'))
+      .toBe('Standard')
+    const providerDefault = screen.getByRole('menuitemradio', { name: 'Default' })
+    expect(providerDefault.getAttribute('aria-checked')).toBe('true')
   })
 
   it('shows the durable model id when the catalog has no matching display name', () => {
@@ -284,35 +289,48 @@ describe('ModelSelect keyboard walk', () => {
     expect(document.activeElement).toBe(cells[0])
 
     fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
-    const rows = screen.getAllByRole('menuitemradio')
-    expect(rows.map(row => row.textContent)).toEqual(['Off', 'High', 'Max'])
-    // The pane opens on its checked row, so walking starts from High.
-    fireEvent.keyDown(rows[1]!, { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(rows[2])
-    fireEvent.keyDown(rows[2]!, { key: 'ArrowDown' }) // wraps to the top
-    expect(document.activeElement).toBe(rows[0])
-    fireEvent.keyDown(rows[0]!, { key: 'ArrowUp' }) // wraps to the bottom
-    expect(document.activeElement).toBe(rows[2])
+    const slider = screen.getByRole('slider', { name: '推理等级' })
+    // The pane opens on the value in use, so walking starts from High.
+    expect(document.activeElement).toBe(slider)
+    expect(slider.getAttribute('aria-valuetext')).toBe('High')
+    fireEvent.keyDown(slider, { key: 'ArrowRight' })
+    expect(slider.getAttribute('aria-valuetext')).toBe('Max')
+    fireEvent.keyDown(slider, { key: 'ArrowRight' }) // clamped at the smarter end
+    expect(slider.getAttribute('aria-valuetext')).toBe('Max')
+    fireEvent.keyDown(slider, { key: 'ArrowLeft' })
+    expect(slider.getAttribute('aria-valuetext')).toBe('High')
     expect(screen.getByRole('menu')).toBeTruthy()
   })
 
   it('Tab settles the focused row like Enter and closes the menu', async () => {
     const select = mountOpen()
     fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
-    const rows = screen.getAllByRole('menuitemradio')
-    fireEvent.keyDown(rows[1]!, { key: 'ArrowDown' }) // High → Max
-    expect(fireEvent.keyDown(rows[2]!, { key: 'Tab' })).toBe(false)
+    const slider = screen.getByRole('slider', { name: '推理等级' })
+    fireEvent.keyDown(slider, { key: 'ArrowRight' }) // High → Max
+    expect(fireEvent.keyDown(slider, { key: 'Tab' })).toBe(false)
     expect(select).toHaveBeenCalledWith({
       provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'max',
     })
     await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
   })
 
+  it('Tab without moving settles the value in use and closes, without selecting a stop', () => {
+    const select = mountOpen()
+    fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
+    const slider = screen.getByRole('slider', { name: '推理等级' })
+    // The slider parks on High (the model's default); Tab with no preview must
+    // keep that value rather than write the first stop.
+    expect(slider.getAttribute('aria-valuetext')).toBe('High')
+    expect(fireEvent.keyDown(slider, { key: 'Tab' })).toBe(false)
+    expect(select).not.toHaveBeenCalled()
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
   it('Shift+Tab leaves a drilled pane and then closes, like Escape', () => {
     mountOpen()
     fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
-    const rows = screen.getAllByRole('menuitemradio')
-    expect(fireEvent.keyDown(rows[0]!, { key: 'Tab', shiftKey: true })).toBe(false)
+    const slider = screen.getByRole('slider', { name: '推理等级' })
+    expect(fireEvent.keyDown(slider, { key: 'Tab', shiftKey: true })).toBe(false)
     // Back on the drilled cell, then closed on the second press.
     const cells = screen.getAllByRole('menuitem')
     expect(document.activeElement).toBe(cells[1])
@@ -355,14 +373,14 @@ describe('ModelSelect keyboard walk', () => {
   it('hands a drilled pane the focus its unmounted cell left behind, on the value in use', () => {
     mountOpen()
     fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
-    const rows = screen.getAllByRole('menuitemradio')
-    // The fixture's model defaults to the High effort: the checked row is where
-    // the keyboard lands, not the top of the list.
-    expect(rows[1]!.getAttribute('aria-checked')).toBe('true')
-    expect(document.activeElement).toBe(rows[1])
+    const slider = screen.getByRole('slider', { name: '推理等级' })
+    // The fixture's model defaults to the High effort: the slider lands on it,
+    // not on the first or last level.
+    expect(slider.getAttribute('aria-valuetext')).toBe('High')
+    expect(document.activeElement).toBe(slider)
     // The walk continues from there.
-    fireEvent.keyDown(rows[1]!, { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(rows[2])
+    fireEvent.keyDown(slider, { key: 'ArrowRight' })
+    expect(slider.getAttribute('aria-valuetext')).toBe('Max')
   })
 
   it('keeps the card navigable when a pane has no rows, and leaves a retry its Tab', () => {
@@ -409,8 +427,7 @@ describe('ModelSelect keyboard walk', () => {
   it('Escape returns to the root pane with the keyboard on the cell that drilled in', () => {
     mountOpen()
     fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
-    const rows = screen.getAllByRole('menuitemradio')
-    fireEvent.keyDown(rows[0]!, { key: 'Escape' })
+    fireEvent.keyDown(screen.getByRole('slider', { name: '推理等级' }), { key: 'Escape' })
     // The root pane is back with its two cells.
     const cells = screen.getAllByRole('menuitem')
     // Back on the drilled cell, so the next keystroke still reaches the menu.

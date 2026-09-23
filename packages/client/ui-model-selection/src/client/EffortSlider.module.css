@@ -1,0 +1,102 @@
+/* Reasoning-effort slider: project tokens only, no product-specific colors. */
+
+.effortSlider {
+  width: 100%;
+  padding: 0 0 6px;
+}
+
+.effortCaptions {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* The focusable track spans the whole control; the rail is inset by the
+   handle radius so a stop at either end still shows the full handle. */
+.effortTrack {
+  position: relative;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.effortRail {
+  position: relative;
+  height: 100%;
+}
+
+/* The rail sits on its own line so the dots and handle can cross it. */
+.effortRail::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 0;
+  bottom: 10px;
+  left: 0;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.effortFill {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--dsw-alias-border-l4), var(--dsw-alias-brand-primary));
+  transition: width 120ms ease;
+}
+
+.effortDot {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-dimmed);
+  transform: translate(-50%, -50%);
+  transition: background 120ms ease;
+  pointer-events: none;
+}
+
+.effortDotReached {
+  background: var(--dsw-alias-bg-base);
+}
+
+.effortHandle {
+  position: absolute;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--dsw-alias-brand-primary);
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-base);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transform: translate(-50%, -50%);
+  transition: left 120ms ease;
+  pointer-events: none;
+}
+
+.effortTrack:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 0;
+}
+
+.effortTrackDisabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* While a pointer holds the track the value follows the pointer directly;
+   the settle transition is for keyboard steps and committed changes only. */
+.effortTrackFollowingPointer .effortFill,
+.effortTrackFollowingPointer .effortHandle {
+  transition: none;
+}
