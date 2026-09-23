@@ -42,7 +42,7 @@ async function bench() {
   runtime.slots.installLocale(locale)
   await runtime.workspaces.update((draft) => {
     draft.items = [{
-      workspaceId: 'w1' as WorkspaceId, title: 'Project', path: '/home/u/Documents/project',
+      workspaceId: 'w1' as WorkspaceId, hostId: 'local', title: 'Project', path: '/home/u/Documents/project',
       sessionIds: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     }] as never
   })
@@ -58,14 +58,14 @@ async function bench() {
 function openHoverCard(): void {
   const row = screen.getByRole('treeitem').parentElement as HTMLElement
   fireEvent.pointerEnter(row)
-  act(() => { vi.advanceTimersByTime(500) })
+  act(() => { vi.advanceTimersByTime(800) })
 }
 
 /** Close it again, so the next hover rebuilds the card from current props. */
 function closeHoverCard(): void {
   const row = screen.getByRole('treeitem').parentElement as HTMLElement
   fireEvent.pointerLeave(row)
-  act(() => { vi.advanceTimersByTime(500) })
+  act(() => { vi.advanceTimersByTime(800) })
 }
 
 describe('Host home in the assembled browsing region', () => {

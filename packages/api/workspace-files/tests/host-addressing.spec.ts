@@ -85,12 +85,12 @@ describe('workspaceFiles — the addressed host world', () => {
     const service = harness.endpoint()
 
     await expect(service.read(scope, 'notes.txt', {}, signal())).resolves.toMatchObject({ text: 'remote', bytes: 7 })
-    await expect(service.readBytes(scope, 'notes.txt', { offset: 0, length: 5 }, signal()))
-      .resolves.toMatchObject({ data: Buffer.from('remot').toString('base64') })
-    await expect(service.readAll(scope, 'notes.txt', signal()))
-      .resolves.toMatchObject({ data: Buffer.from('remote\n').toString('base64') })
-    await expect(service.readRelated(scope, 'src/deep.txt', '../notes.txt', signal()))
-      .resolves.toMatchObject({ data: Buffer.from('remote\n').toString('base64') })
+    const windowed = await service.readBytes(scope, 'notes.txt', { range: { offset: 0, length: 5 } }, signal())
+    expect(Buffer.from(windowed.data).toString()).toBe('remot')
+    const complete = await service.readBytes(scope, 'notes.txt', {}, signal())
+    expect(Buffer.from(complete.data).toString()).toBe('remote\n')
+    const related = await service.readBytes(scope, '../notes.txt', { baseFile: 'src/deep.txt' }, signal())
+    expect(Buffer.from(related.data).toString()).toBe('remote\n')
     await expect(service.stat(scope, 'notes.txt', signal())).resolves.toMatchObject({ bytes: 7 })
     await expect(service.list(scope, remote.root, signal())).resolves.toMatchObject({
       path: '',
@@ -103,9 +103,12 @@ describe('workspaceFiles — the addressed host world', () => {
   it('serves change observations from the addressed world', async () => {
     const remote = await remoteWorld()
     harness.ctx.provide('remoteHosts', openHosts({ alpha: remote.fs }) as never)
+    await writeFile(join(remote.root, 'watched.txt'), 'watched\n', 'utf8')
+    const scope = remoteScope(remote.root, 'alpha')
+    const current = await harness.endpoint().stat(scope, 'watched.txt', signal())
     const controller = new AbortController()
     const iterator = harness.endpoint()
-      .changes(remoteScope(remote.root, 'alpha'), controller.signal)[Symbol.asyncIterator]()
+      .changes(scope, 'watched.txt', controller.signal)[Symbol.asyncIterator]()
     try {
       await expect(iterator.next()).resolves.toEqual({ done: false, value: { kind: 'ready' } })
       const pending = iterator.next()
@@ -116,7 +119,7 @@ describe('workspaceFiles — the addressed host world', () => {
         done: false,
         value: {
           kind: 'change',
-          change: { absolutePath: remote.fs.processPath(target), version: 'v1' },
+          change: { absolutePath: current.absolutePath, version: current.version },
         },
       })
     } finally {
@@ -155,7 +158,7 @@ describe('workspaceFiles — an unopen host', () => {
     expect(failure.code).toBe('workspace-file/host-unavailable')
     expect(failure.details).toEqual({ hostId: 'beta' })
     // `changes` is not async: the addressing refusal escapes it synchronously.
-    expect(() => harness.endpoint().changes({ ...harness.scope, hostId: 'beta' }, signal()))
+    expect(() => harness.endpoint().changes({ ...harness.scope, hostId: 'beta' }, 'notes.txt', signal()))
       .toThrow('host "beta" has no open execution world')
   })
 

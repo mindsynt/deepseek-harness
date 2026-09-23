@@ -11,7 +11,7 @@
 import type { ReactNode, RefObject } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Button, IconFolderClose16, IconPlusOutline16, Menu, Modal, type MenuEntry,
+  Button, IconFolderCloseRegular, IconPlusOutlineRegular, Menu, Modal, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   WorkspaceId, WorkspaceSnapshot, WorkspaceView,
@@ -111,7 +111,7 @@ export function WorkspacePickFlow({
       label: remoteHostLabel === undefined
         ? t('menu.addWorkspace')
         : t('menu.addWorkspaceOn', { host: remoteHostLabel }),
-      icon: <IconPlusOutline16 size={16} />,
+      icon: <IconPlusOutlineRegular size={16} />,
       disabled: flowBusy,
     }]
     : []
@@ -122,7 +122,7 @@ export function WorkspacePickFlow({
     ? workspaces.map(workspace => ({
       id: workspace.workspaceId,
       label: workspace.title,
-      icon: <IconFolderClose16 size={16} />,
+      icon: <IconFolderCloseRegular size={16} />,
       disabled: flowBusy,
     }))
     : addEntries

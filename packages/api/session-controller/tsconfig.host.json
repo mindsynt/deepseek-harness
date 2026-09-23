@@ -19,6 +19,7 @@
     "src/list.ts",
     "src/media-references.ts",
     "src/model-selection-projection.ts",
+    "src/archived-session-gate.ts",
     "src/session-hosts.ts",
     "src/skill-catalog.ts"
   ],
@@ -39,7 +40,7 @@
     { "path": "../../llm/llm" },
     { "path": "../../util/deque" },
     { "path": "../../util/native-command" },
-    { "path": "../../preset/agent-presets" },
+    { "path": "../../preset/agent-preset-registry" },
     { "path": "../../sandbox/sandbox" },
     { "path": "../../sandbox/sandbox-policy" },
     { "path": "../../session/session-persistence" },

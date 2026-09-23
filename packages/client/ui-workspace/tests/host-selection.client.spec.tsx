@@ -50,6 +50,7 @@ async function bench() {
   await ctx.plugin(SlotRegistry).await()
   const create = vi.fn(async (input: { path: string }) => ({
     workspaceId: 'ws-new' as never,
+    hostId: 'local',
     path: input.path,
     title: 'new',
     sessionIds: [],
@@ -190,7 +191,7 @@ describe('ui-workspace projection without the host selection provider', () => {
     runtime.slots.installLocale(locale)
     await runtime.workspaces.update((draft) => {
       draft.items = [{
-        workspaceId: 'w1' as WorkspaceId, title: 'Project', path: '/home/u/project',
+        workspaceId: 'w1' as WorkspaceId, hostId: 'local', title: 'Project', path: '/home/u/project',
         sessionIds: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
       }] as never
     })

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-06-host-backed-web-preferences.md
-2026-08-06-host-backed-web-preferences.md: 5ddef08bec1c5d8e4e4ef3fe24cb1dcb81b76d7c
-2026-08-06-host-backed-web-preferences.zh.md: 47434154b082db2db329205319f1977d4de161df
+2026-08-06-host-backed-web-preferences.md: 117fe67a53419d4e67345997459e8b712a7a488c
+2026-08-06-host-backed-web-preferences.zh.md: f81e35053ae6aba14de4e0cfc998f94483ee7e58

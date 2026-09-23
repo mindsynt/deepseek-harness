@@ -13,10 +13,12 @@
     "src/remote-events.ts",
     "src/commands.ts",
     "src/directory-picker.ts",
-    "src/feed.ts"
+    "src/feed.ts",
+    "src/default-directory.ts"
   ],
   "references": [
     { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
     { "path": "../../core/session" },
     { "path": "../../fs/fs" },
     { "path": "../../host/directory-picker" },
@@ -25,6 +27,7 @@
     { "path": "../../typert/protocol" },
     { "path": "../../util/brand" },
     { "path": "../../util/deque" },
+    { "path": "../../util/native-command" },
     { "path": "../../workspace/workspace" }
   ]
 }

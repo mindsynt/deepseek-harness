@@ -4,7 +4,7 @@
  */
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
   WELCOME_NOTICE_ACK_FIELD, WELCOME_NOTICE_VERSION,
 } from '../onboarding-copy.ts'
@@ -50,7 +50,7 @@ export class WelcomeNoticeStore {
   /**
    * @param scope - the welcome settings namespace scope.
    */
-  constructor(private readonly scope: SettingsScope<WelcomeSection>) {}
+  constructor(private readonly scope: ConfigForm<WelcomeSection>) {}
 
   /**
    * Begin following the bound scope (idempotent) and publish its current answer.

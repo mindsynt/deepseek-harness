@@ -2,12 +2,13 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { WorkspaceBranchWatch } from './branch-watch.ts'
 import { fileSystemFor, readWorkspaceBranch } from './branches.ts'
 import { WorkspaceCommands } from './commands.ts'
 import { DirectoryPickerController } from './directory-picker.ts'
-import { WorkspaceFeed } from './feed.ts'
+import { WorkspaceFeed, workspaceView } from './feed.ts'
+import { defaultWorkspaceDirectory, validateDocumentsDirectory } from './default-directory.ts'
 import type {
   WorkspaceArchiveSessionRequest,
   WorkspaceArchiveValue,
@@ -18,15 +19,32 @@ import type {
   WorkspaceDeleteValue,
   WorkspaceFollowFrame,
   WorkspaceInsertBeforeRequest,
+  WorkspaceInitializeDefaultRequest,
   WorkspaceInsertSessionBeforeRequest,
   WorkspaceOrderValue,
+  WorkspacePinSessionRequest,
+  WorkspacePinValue,
   WorkspaceRenameRequest,
   WorkspaceUnarchiveSessionRequest,
+  WorkspaceUnpinSessionRequest,
   WorkspaceValue,
 } from './types.ts'
 
 export type * from './types.ts'
 export { DirectoryPickerController } from './directory-picker.ts'
+
+/** Host Workspace configuration: first-use directory policy and branch observation. */
+export interface Config {
+  /** Override the system Documents directory with a fully qualified path. */
+  documentsDirectory?: string
+  /** Maximum duration of the operating system's Documents lookup. */
+  documentsLookupTimeoutMs?: number
+  /** Milliseconds a `HEAD` write settles before the branch behind it is read and published. */
+  branchWatchDebounceMs?: number
+}
+
+/** Host configuration after schema defaults have been applied. */
+type ResolvedConfig = Config & { documentsLookupTimeoutMs: number; branchWatchDebounceMs: number }
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -35,34 +53,34 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Settled-write window, in milliseconds, before a replaced `HEAD` is read. */
-export interface Config {
-  /** Milliseconds a `HEAD` write settles before the branch behind it is read and published. */
-  branchWatchDebounceMs: number
-}
-
 /** Host service backing the generated `ctx.remote.workspace` namespace. */
 export class WorkspaceController extends TypertRemoteService {
   static inject = ['typert', 'workspaceRegistry']
-  static Config: z<Config> = z.object({
+
+  static Config: z<Config, ResolvedConfig> = z.object({
+    documentsDirectory: z.string(),
+    documentsLookupTimeoutMs: z.natural().min(1).default(10_000),
     branchWatchDebounceMs: z.number().step(1).min(0).default(200),
   })
 
+  private readonly config: ResolvedConfig
   private readonly commands: WorkspaceCommands
   private readonly feed: WorkspaceFeed
   private readonly branchWatch: WorkspaceBranchWatch
 
   /**
    * @param ctx - Host context containing the Workspace registry.
-   * @param config - validated settled-write window for branch observation.
+   * @param config - first-use directory policy and branch-observation settled-write window.
    */
-  constructor(ctx: Context, config: Config) {
+  constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'workspaceController', { namespace: 'workspace' })
+    this.config = WorkspaceController.Config(config)
+    if (this.config.documentsDirectory !== undefined) validateDocumentsDirectory(this.config.documentsDirectory)
     this.commands = new WorkspaceCommands(ctx)
     this.feed = new WorkspaceFeed(ctx)
     // A checkout replaces HEAD outside every DSH operation, so the branch is
     // observed on disk and pushed; the unary verb below seeds a cold client.
-    this.branchWatch = new WorkspaceBranchWatch(ctx, config.branchWatchDebounceMs, (change) => {
+    this.branchWatch = new WorkspaceBranchWatch(ctx, this.config.branchWatchDebounceMs, (change) => {
       ctx.emit('workspace/branch-changed', change)
     })
     const observe = (): void => {
@@ -90,6 +108,29 @@ export class WorkspaceController extends TypertRemoteService {
   @Remote('create')
   create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
     return this.commands.create(request)
+  }
+
+  /**
+   * Initialize or reuse the default Workspace during first-use startup.
+   * @param request - initial directory name and title; never rename an existing default.
+   * @param signal - caller lifetime; cancels native directory lookup.
+   * @returns the durable Workspace, or undefined when first-use initialization is ineligible; creates no Session or message.
+   */
+  @Remote('initializeDefault')
+  async initializeDefault(request: WorkspaceInitializeDefaultRequest, signal: AbortSignal): Promise<WorkspaceValue | undefined> {
+    const { directoryName, title } = request
+    if (directoryName.trim() === '' || directoryName !== directoryName.trim()
+      || directoryName.endsWith('.') || /[/\\:\0]/.test(directoryName) || title.trim() === '') {
+      throw new RemoteError('gateway/bad-request', 'default Workspace requires a directory name and non-blank title', {})
+    }
+    const workspace = await this.ctx.workspaceRegistry.initializeDefault(async () => {
+      const timeout = AbortSignal.timeout(this.config.documentsLookupTimeoutMs)
+      const path = await defaultWorkspaceDirectory(
+        directoryName, this.config.documentsDirectory, AbortSignal.any([signal, timeout]),
+      )
+      return { path, title }
+    })
+    return workspace === undefined ? undefined : { workspace: workspaceView(workspace) }
   }
 
   /**
@@ -173,6 +214,26 @@ export class WorkspaceController extends TypertRemoteService {
         : { workspaceId: workspace.id, branch }
     }))
     return { items }
+  }
+
+  /**
+   * Surface one known unarchived Session ahead of unpinned Sessions.
+   * @param request - Session identity to pin.
+   * @returns the complete resulting pin set, most recently pinned first.
+   */
+  @Remote('pinSession')
+  pinSession(request: WorkspacePinSessionRequest): Promise<WorkspacePinValue> {
+    return this.commands.pinSession(request)
+  }
+
+  /**
+   * Remove one Session's pin without changing its saved Session order.
+   * @param request - Session identity to unpin.
+   * @returns the complete resulting pin set, most recently pinned first.
+   */
+  @Remote('unpinSession')
+  unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue> {
+    return this.commands.unpinSession(request)
   }
 
   /**
