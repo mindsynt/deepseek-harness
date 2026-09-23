@@ -24,6 +24,8 @@ interface ModelRowProps {
   inputField: 'inputModalities' | 'input'
   inputFallback?: readonly string[] | undefined
   inputLoading?: boolean
+  /** Adapter-owned extra advanced control; absent for the DeepSeek catalog editor. */
+  reasoning?: ReactNode
   expanded: boolean
   disabled: boolean
   t: (key: ModelsKey) => string
@@ -106,6 +108,7 @@ export function ModelRow(props: ModelRowProps): ReactNode {
               model={model} field={props.inputField} position={position}
               fallback={props.inputFallback} disabled={disabled || props.inputLoading === true} t={t} onChange={props.onChange}
             />
+            {props.reasoning}
           </div>
         )
         : null}

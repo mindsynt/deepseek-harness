@@ -11,7 +11,7 @@ import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/Mo
 import { CustomProviderCard } from '../src/client/CustomProviderCard.tsx'
 import { formatCapacity, parseCapacity } from '../src/client/DeepSeekModelsEditor.tsx'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
-import { ModelsSettingsStore, deriveKeyRef, protocolChoices } from '../src/client/store.ts'
+import { ModelsSettingsStore, deriveKeyRef, protocolChoices, thinkingFormatChoices } from '../src/client/store.ts'
 import { createModelsOperations } from '../src/client/operations.ts'
 import type { ModelsOperations } from '../src/client/operations.ts'
 import { en } from '../src/client/locales.ts'
@@ -22,6 +22,7 @@ afterEach(cleanup)
 const t: ModelsSectionInjected['t'] = key => en[key]
 
 const PROTOCOLS = ['openai-completions', 'openai-responses', 'anthropic-messages']
+const THINKING_FORMATS = ['openai', 'deepseek', 'qwen']
 
 /** The pi-ai profile shape as the host serializes it, including the layer-1 fields. */
 const PiAiConfig = Schema.object({
@@ -38,6 +39,10 @@ const PiAiConfig = Schema.object({
       maxTokens: Schema.number(),
     })),
     reasoning: Schema.union(['off', 'high']),
+    compat: Schema.object({
+      thinkingFormat: Schema.union(THINKING_FORMATS),
+      supportsReasoningEffort: Schema.boolean(),
+    }),
   })),
 })
 
@@ -257,6 +262,17 @@ describe('protocolChoices', () => {
     expect(protocolChoices(undefined, settingsSchema)).toEqual([])
     const plain = { ...namespace, schema: JSON.parse(JSON.stringify(Schema.object({}).toJSON())) as JsonValue }
     expect(protocolChoices(plain, settingsSchema)).toEqual([])
+    await Promise.resolve()
+  })
+})
+
+describe('thinkingFormatChoices', () => {
+  it('reads the dialect offer out of the namespace schema and nothing else', async () => {
+    const { namespace } = scriptedFace()
+    expect(thinkingFormatChoices(namespace, settingsSchema)).toEqual(THINKING_FORMATS)
+    expect(thinkingFormatChoices(undefined, settingsSchema)).toEqual([])
+    const plain = { ...namespace, schema: JSON.parse(JSON.stringify(Schema.object({}).toJSON())) as JsonValue }
+    expect(thinkingFormatChoices(plain, settingsSchema)).toEqual([])
     await Promise.resolve()
   })
 })
@@ -893,17 +909,16 @@ describe('hand-declared providers', () => {
   })
 
   it('scopes each card to fields a provider can actually own', async () => {
-    // Reasoning effort is a per-MODEL capability and the
-    // models under one provider disagree about it, so a provider-scoped
-    // control could only be set to a value some of them reject — which would
-    // take the whole provider out of the picker. The composer's model picker
-    // owns the choice, and a switch there records provider+model+effort together.
+    // Reasoning effort is a per-MODEL capability and the models under one
+    // provider disagree about it, so it stays on the model row. A thinking
+    // dialect is the opposite: it belongs to the endpoint, so the route-level
+    // card owns it and pi-ai skips models whose protocol cannot take it.
     const fields = () => [...document.querySelectorAll('input,select')]
       .map(el => el.getAttribute('aria-label')).filter(Boolean)
 
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    expect(fields()).toEqual([en.customRoute, en.customDisplayName, en.baseUrl, en.customApi, en.keyInput])
+    expect(fields()).toEqual([en.customRoute, en.customDisplayName, en.baseUrl, en.customApi, en.thinkingFormat, en.keyInput])
     cleanup()
 
     // A shipped route's models each carry their own protocol, so its editor
@@ -911,7 +926,7 @@ describe('hand-declared providers', () => {
     await mountSection({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
     openEditor('openai')
     fireEvent.click(screen.getByText(en.customized))
-    expect(fields()).toEqual([en.keyInput, en.baseUrl])
+    expect(fields()).toEqual([en.keyInput, en.baseUrl, en.thinkingFormat])
     cleanup()
 
     // A hand-declared route named its own protocol at creation, so editing it
@@ -921,7 +936,7 @@ describe('hand-declared providers', () => {
       declaredRoutes: ['acme-gateway'],
     })
     openEditor('acme-gateway')
-    expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi])
+    expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi, en.thinkingFormat])
   })
 
   it('renames a declared route and falls back to its id when the name is cleared', async () => {
@@ -1036,6 +1051,33 @@ describe('hand-declared providers', () => {
       ops: [{ op: 'set', path: ['providers', 'acme-gateway', 'api'], value: 'anthropic-messages' }],
       expectedRevision: 3,
     })
+  })
+
+  it('pins the route-level thinking dialect without restating sibling compat switches', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'ACME_GATEWAY_API_KEY',
+          api: 'openai-completions',
+          baseURL: 'https://gateway.acme.example/v1',
+          compat: { supportsReasoningEffort: false },
+          models: [{ id: 'acme-think' }],
+        },
+      },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+
+    const format = screen.getByLabelText<HTMLSelectElement>(en.thinkingFormat)
+    expect(format.value).toBe('')
+    fireEvent.change(format, { target: { value: 'deepseek' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    // Only the dialect travels; the sibling compat switch is not restated.
+    expect(firstMutate(mutate).ops).toEqual([{
+      op: 'set', path: ['providers', 'acme-gateway', 'compat', 'thinkingFormat'], value: 'deepseek',
+    }])
   })
 
   it('selects nothing for a declared route whose profile names no protocol', async () => {

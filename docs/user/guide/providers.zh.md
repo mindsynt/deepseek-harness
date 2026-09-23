@@ -43,7 +43,7 @@ Provider ID 是永久的，因为请求、已保存会话、模型默认值和�
 自动生成的[插件配置目录](../../config-catalog.zh.md)列出每个插件的所有受支持字段与默认值；[`dsh-llm-pi-ai`](../../config-catalog.zh.md#deepseek-aidsh-llm-pi-ai) 就是本页所配置的那个提供商段落。[`dsh-llm-pi-ai`](../../../packages/llm/llm-pi-ai/README.zh.md) 和 [`dsh-llm-deepseek`](../../../packages/llm/llm-deepseek/README.zh.md) 参考文档负责直接 `cordis.patch.yml` 配置、目录解析、推理控制、凭据与适配器错误。
 
 ::: tip 其他设置
-模型页提供 API 密钥、显示名称、API 地址、API 协议，以及每个模型的 ID、显示名称、上下文窗口、最大输出 token 数和输入类型。推理等级、请求兼容性开关、请求头、超时和重试策略在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中设置，也就是模型页写入的同一份文档。可以直接编辑它；浏览器与服务器在同一台机器时，也可以点击设置页顶部的**打开配置文件**打开它。适配器会在下一次请求时重新读取，无需重启任何东西。下面各小节介绍多数网关会用到的字段。
+模型页提供 API 密钥、显示名称、API 地址、API 协议，以及每个模型的 ID、显示名称、上下文窗口、最大输出 token 数、输入类型和推理等级。等级 wire 写法的重命名、其余请求兼容性开关、请求头、超时和重试策略在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中设置，也就是模型页写入的同一份文档。可以直接编辑它；浏览器与服务器在同一台机器时，也可以点击设置页顶部的**打开配置文件**打开它。适配器会在下一次请求时重新读取，无需重启任何东西。下面各小节介绍多数网关会用到的字段。
 
 按常规方式通过 `dsh web` 启动 Web UI 时，`<profile>` 就是 `web`，完整路径为 `$DSH_HOME/profiles/web/cordis.patch.yml`。如果使用自定义 profile，请替换为启动时指定的名称。
 :::
@@ -110,7 +110,7 @@ DeepSeek 将省略的 `inputModalities` 视为纯文本，并拒绝空列表。�
 
 ### 推理等级
 
-对于声明了推理等级的模型，模型选择器会提供**推理等级**菜单。内置提供商的模型从已安装目录继承其等级。手动录入的模型不声明任何等级，因此模型菜单里不会出现推理等级项，由端点自身的默认值决定模型是否思考。请在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中用 `reasoningEfforts` 声明等级：
+对于声明了推理等级的模型，模型选择器会提供**推理等级**菜单。内置提供商的模型从已安装目录继承其等级。手动录入的模型在勾选等级之前不声明任何等级：在**设置 → 模型**中打开该模型的**模型选项**，在**推理等级**下勾选它应提供的档位——每个勾选的档位以自身名称作为 wire 写法声明，**关闭**则声明为空值，因此分发时不发送该参数。若网关不说 OpenAI 的 `reasoning_effort`，还要在提供商卡片的「自定义设置」里选择**思考方言**——顶层 `enable_thinking` 选 `qwen`，`thinking: {type}` 选 `deepseek`，以此类推；该选择是路由级的，会应用到所有协议接受的模型。同一声明也可以直接写入 `$DSH_HOME/profiles/<profile>/cordis.patch.yml`；当网关的某个档位 wire 写法与档位名不同时，就需要 YAML 形式：
 
 ```yaml
 - id: llm-pi-ai

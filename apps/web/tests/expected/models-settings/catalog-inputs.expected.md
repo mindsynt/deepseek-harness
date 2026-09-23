@@ -26,6 +26,20 @@
         - text: 自定义设置 API 地址
         - textbox "API 地址":
           - /placeholder: 提供商默认
+        - text: 思考方言
+        - combobox "思考方言":
+          - option "默认（按端点推断）" [selected]
+          - option "openai"
+          - option "deepseek"
+          - option "openrouter"
+          - option "together"
+          - option "baseten"
+          - option "zai"
+          - option "qwen"
+          - option "chat-template"
+          - option "qwen-chat-template"
+          - option "string-thinking"
+          - option "ant-ling"
         - region "模型目录":
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"
@@ -52,6 +66,22 @@
             - text: 文本
             - checkbox "图片" [checked]
             - text: 图片
+          - group "推理等级 1":
+            - text: 推理等级
+            - checkbox "关闭"
+            - text: 关闭
+            - checkbox "最低"
+            - text: 最低
+            - checkbox "低"
+            - text: 低
+            - checkbox "中"
+            - text: 中
+            - checkbox "高"
+            - text: 高
+            - checkbox "极高"
+            - text: 极高
+            - checkbox "最高"
+            - text: 最高
           - button "添加模型"
       - button "取消"
       - button "保存"

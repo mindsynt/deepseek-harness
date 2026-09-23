@@ -2,6 +2,7 @@
 /** Catalog reads preserve draft ownership and discard responses for a previous provider. */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { validateDeepSeekModels } from '../src/client/DeepSeekModelsEditor.tsx'
 import { ModelListEditor } from '../src/client/ModelListEditor.tsx'
 import type { ModelDiscoveryOutcome, ModelsOperations } from '../src/client/operations.ts'
 import { en } from '../src/client/locales.ts'
@@ -104,4 +105,39 @@ it('restores inherited image input after a failed catalog read is retried manual
   expect(screen.queryByText('Catalog unavailable')).toBeNull()
   expect(discover).toHaveBeenCalledTimes(2)
   expect(onChange).not.toHaveBeenCalled()
+})
+
+it('declares per-model reasoning levels and drops them when cleared', () => {
+  const onChange = vi.fn()
+  const view = (
+    models: { id: string; reasoningEfforts?: Record<string, string | null> }[],
+  ) => (
+    <ModelListEditor
+      models={models} onChange={onChange}
+      probe={{ settingsNs: 'llm-pi-ai', provider: 'acme' }} disabled={false}
+      t={key => en[key]} onBusyChange={() => {}}
+      operations={operations(() => Promise.resolve({ kind: 'found', models: [] }))}
+    />
+  )
+  const { rerender } = render(view([{ id: 'thinker' }]))
+  fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }))
+  fireEvent.click(screen.getByRole('checkbox', { name: en.reasoningOff }))
+  expect(onChange).toHaveBeenLastCalledWith([{ id: 'thinker', reasoningEfforts: { off: null } }])
+
+  rerender(view([{ id: 'thinker', reasoningEfforts: { off: null } }]))
+  fireEvent.click(screen.getByRole('checkbox', { name: en.reasoningHigh }))
+  expect(onChange).toHaveBeenLastCalledWith([{ id: 'thinker', reasoningEfforts: { off: null, high: 'high' } }])
+
+  rerender(view([{ id: 'thinker', reasoningEfforts: { off: null, high: 'high' } }]))
+  fireEvent.click(screen.getByRole('checkbox', { name: en.reasoningOff }))
+  expect(onChange).toHaveBeenLastCalledWith([{ id: 'thinker', reasoningEfforts: { high: 'high' } }])
+})
+
+it('refuses a reasoning declaration with only off before the write', () => {
+  expect(validateDeepSeekModels([{ id: 'thinker', reasoningEfforts: { off: null } }]))
+    .toEqual({ index: 0, key: 'modelReasoningInvalid' })
+  expect(validateDeepSeekModels([{ id: 'thinker', reasoningEfforts: {} }]))
+    .toEqual({ index: 0, key: 'modelReasoningInvalid' })
+  expect(validateDeepSeekModels([{ id: 'thinker', reasoningEfforts: false }])).toBeUndefined()
+  expect(validateDeepSeekModels([{ id: 'thinker', reasoningEfforts: { off: null, high: 'high' } }])).toBeUndefined()
 })

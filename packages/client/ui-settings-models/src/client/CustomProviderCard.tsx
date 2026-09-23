@@ -17,11 +17,13 @@
  * and at least one model — are required here rather than at load, so the
  * failure names the field while the user is still looking at it.
  *
- * There is deliberately no reasoning-effort control, here or on the editor
- * card: effort is a per-MODEL capability, and the models under one provider
- * disagree about it, so a provider-scoped control can only be set to a value
- * some of them reject. The composer's model picker offers each model its own
- * levels instead.
+ * There is deliberately no provider-scoped reasoning-effort control: effort is
+ * a per-MODEL capability, and the models under one provider disagree about it,
+ * so a provider-wide value can only be set to a level some of them reject. The
+ * composer's model picker offers each model its own levels, and a model row's
+ * advanced section declares the levels that model offers. The card does ask
+ * for the route's **Thinking format**, because the dialect is a property of
+ * the endpoint; pi-ai skips models whose protocol cannot take it.
  */
 
 import { useEffect, useState } from 'react'
@@ -66,6 +68,8 @@ export interface CustomProviderCardProps {
   taken: readonly string[]
   /** Wire protocols the adapter can serve, in the order it reports them. */
   protocols: readonly string[]
+  /** Thinking dialects the adapter accepts for a route-level compat switch. */
+  thinkingFormats?: readonly string[]
   /**
    * Revision of the `llm-pi-ai` user section this card opened at, sent with
    * the create so a route another tab declared meanwhile is a refusal rather
@@ -100,6 +104,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   const [displayName, setDisplayName] = useState('')
   const [baseURL, setBaseURL] = useState('')
   const [protocol, setProtocol] = useState(protocols[0] ?? '')
+  const [thinkingFormat, setThinkingFormat] = useState('')
   const [keyDraft, setKeyDraft] = useState('')
   const [models, setModels] = useState<readonly ModelDraft[]>([])
   const [busy, setBusy] = useState(false)
@@ -164,6 +169,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         ...storesKey ? { apiKeyEnv: keyRef } : {},
         api: protocol,
         baseURL: normalizedBaseURL,
+        ...thinkingFormat.length === 0 ? {} : { compat: { thinkingFormat } },
         models: models.map(model => ({ ...model })),
       }
       // `taken` is a snapshot too, so the id check alone cannot see a route
@@ -261,11 +267,36 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
           value={protocol}
           aria-label={t('customApi')}
           disabled={profileDisabled}
-          onChange={(event) => { setProtocol(event.target.value) }}
+          onChange={(event) => {
+            const next = event.target.value
+            setProtocol(next)
+            // The dialect belongs to the OpenAI-completions wire; leaving that
+            // protocol must not carry a hidden value into the created profile.
+            if (next !== 'openai-completions') setThinkingFormat('')
+          }}
         >
           {protocols.map(choice => <option key={choice} value={choice}>{protocolLabel(t, choice)}</option>)}
         </select>
       </div>
+      {/* A dialect is a property of the endpoint, so the create card pins it
+          once on the route; pi-ai skips any model whose protocol cannot take it. */}
+      {protocol === 'openai-completions'
+        ? (
+          <div className={styles['field']}>
+            <span className={styles['fieldLabel']}>{t('thinkingFormat')}</span>
+            <select
+              className={`${styles['input']} ${styles['selectInput']}`}
+              value={thinkingFormat}
+              aria-label={t('thinkingFormat')}
+              disabled={profileDisabled}
+              onChange={(event) => { setThinkingFormat(event.target.value) }}
+            >
+              <option value="">{t('thinkingFormatDefault')}</option>
+              {(props.thinkingFormats ?? []).map(choice => <option key={choice} value={choice}>{choice}</option>)}
+            </select>
+          </div>
+        )
+        : null}
       <div className={styles['field']}>
         <span className={styles['fieldLabel']}>{t('keyInput')}</span>
         <input

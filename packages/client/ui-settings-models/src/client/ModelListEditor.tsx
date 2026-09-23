@@ -22,6 +22,7 @@ import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { ModelsOperations } from './operations.ts'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { en } from './locales.ts'
+import { ModelReasoningEfforts } from './ModelReasoningEfforts.tsx'
 import { ModelRow } from './ModelRow.tsx'
 import styles from './ModelsSection.module.css'
 
@@ -362,6 +363,15 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             inputField="input"
             inputFallback={inputDefaults.get(textOf(model, 'id')) ?? props.defaultInput}
             inputLoading={catalogProvider !== undefined && catalog === undefined}
+            reasoning={
+              <ModelReasoningEfforts
+                model={model}
+                position={index + 1}
+                disabled={disabled}
+                t={t}
+                onChange={(next) => { onChange(models.map((row, at) => at === index ? next : row)) }}
+              />
+            }
             expanded={expanded.has(index)}
             disabled={disabled}
             t={t}

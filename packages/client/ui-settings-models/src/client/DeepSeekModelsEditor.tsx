@@ -73,7 +73,7 @@ export interface DeepSeekModelsValidationFailure {
   index: number
   /** Message key owned by the Models settings section. */
   key: 'modelIdRequired' | 'modelIdDuplicate' | 'modelNameInvalid' | 'modelContextInvalid'
-  | 'modelMaxTokensInvalid'
+  | 'modelMaxTokensInvalid' | 'modelReasoningInvalid'
 }
 
 /** Convert a schema-validated catalog value into records without dropping hidden fields. */
@@ -116,6 +116,15 @@ export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidation
     if (maxTokens !== undefined
       && (typeof maxTokens !== 'number' || !Number.isInteger(maxTokens) || maxTokens <= 0)) {
       return { index, key: 'modelMaxTokensInvalid' }
+    }
+    // The adapter refuses a declaration with no thinking level (an empty dict,
+    // or `off` alone); the schema cannot express that because `false`, absent,
+    // and a declared dict are three different meanings.
+    const efforts = model['reasoningEfforts']
+    if (efforts !== undefined && efforts !== false
+      && (typeof efforts !== 'object' || efforts === null || Array.isArray(efforts)
+        || !Object.keys(efforts).some(level => level !== 'off'))) {
+      return { index, key: 'modelReasoningInvalid' }
     }
   }
   return undefined

@@ -123,15 +123,37 @@ export function deriveKeyRef(provider: string): string {
  * @param schema - settings schema operations.
  * @returns the protocol identifiers, or an empty list when the schema has none.
  */
+/** The string members of one serialized union node, in schema order. */
+function unionStrings(node: unknown): string[] {
+  const list = (node as { type?: string; list?: readonly { value?: unknown }[] } | undefined)
+  if (list?.type !== 'union' || list.list === undefined) return []
+  return list.list.map(entry => entry.value).filter((value): value is string => typeof value === 'string')
+}
+
 export function protocolChoices(
   namespace: SettingsNamespaceView | undefined,
   schema: SettingsSchemaOperations,
 ): string[] {
   if (namespace === undefined) return []
-  const node = schema.nodeAtPath(schema.rehydrate(namespace.schema), ['providers', PROBE_ROUTE, 'api'])
-  const list = (node as { type?: string; list?: readonly { value?: unknown }[] } | undefined)
-  if (list?.type !== 'union' || list.list === undefined) return []
-  return list.list.map(entry => entry.value).filter((value): value is string => typeof value === 'string')
+  return unionStrings(schema.nodeAtPath(schema.rehydrate(namespace.schema), ['providers', PROBE_ROUTE, 'api']))
+}
+
+/**
+ * The `compat.thinkingFormat` values a pi-ai route may name, read out of the
+ * same schema so the dialect offer cannot drift from the adapter's own set.
+ * @param namespace - the namespace view whose schema declares the profile shape.
+ * @param schema - settings schema operations.
+ * @returns the format identifiers, or an empty list when the schema has none.
+ */
+export function thinkingFormatChoices(
+  namespace: SettingsNamespaceView | undefined,
+  schema: SettingsSchemaOperations,
+): string[] {
+  if (namespace === undefined) return []
+  return unionStrings(schema.nodeAtPath(
+    schema.rehydrate(namespace.schema),
+    ['providers', PROBE_ROUTE, 'compat', 'thinkingFormat'],
+  ))
 }
 
 /** The credential reference a resolved profile names (its `apiKeyEnv` field). */

@@ -11,11 +11,13 @@
  * display name and wire protocol of a pi-ai route the adapter does not ship —
  * the two fields the create card asked that route for, editable here for the
  * same reason).
- * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
- * the models under one provider disagree about it, so a provider-scoped
- * control can only be set to a value some of them reject. The composer's
- * model picker offers each model its own levels; `cordis.patch.yml` keeps the
- * profile field for a deployment that knows its route. Everything else stays
+ * Reasoning effort is deliberately absent from the provider-scoped fields: it
+ * is a per-MODEL capability, and the models under one provider disagree about
+ * it, so a provider-wide value can only be set to a level some of them reject.
+ * The composer's model picker offers each model its own levels, and a pi-ai
+ * model row's advanced section declares them. The route's **Thinking format**
+ * picks the dialect those levels travel in; a per-level wire-spelling rename
+ * stays in `cordis.patch.yml`. Everything else stays
  * owned by `cordis.patch.yml`. Profile edits land as minimal `settings.mutate`
  * path ops against the stored section — the card names only the fields it can
  * see instead of rebuilding the whole subtree from a partial descriptor.
@@ -33,7 +35,7 @@ import {
 import { apiKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
-import { deriveKeyRef, protocolChoices } from './store.ts'
+import { deriveKeyRef, protocolChoices, thinkingFormatChoices } from './store.ts'
 import { protocolLabel } from './protocol-label.ts'
 import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
@@ -192,6 +194,11 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     () => layout === 'pi-ai' ? protocolChoices(namespace, schema) : [],
     [layout, namespace, schema],
   )
+  const thinkingFormats = useMemo(
+    () => layout === 'pi-ai' ? thinkingFormatChoices(namespace, schema) : [],
+    [layout, namespace, schema],
+  )
+  const thinkingFormat = schema.getPath(draft, ['compat', 'thinkingFormat'])
 
   useEffect(() => {
     let stale = false
@@ -218,6 +225,22 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     setDraft(current => value === undefined
       ? schema.deletePath(current, [key])
       : schema.setPath(current, [key], value))
+  }
+  /**
+   * Set or clear one `compat` switch, preserving the sibling switches. The
+   * `compat` object itself leaves the draft when it empties, so a profile does
+   * not carry an `{}` the schema would materialize back into a real layer.
+   */
+  const setCompatField = (key: string, next: string | undefined): void => {
+    const value = next === undefined || next.trim().length === 0 ? undefined : next
+    setDraft((current) => {
+      if (value !== undefined) return schema.setPath(current, ['compat', key], value)
+      const cleared = schema.deletePath(current, ['compat', key])
+      const compat = schema.getPath(cleared, ['compat'])
+      const empty = typeof compat === 'object' && compat !== null && !Array.isArray(compat)
+        && Object.keys(compat).length === 0
+      return empty ? schema.deletePath(cleared, ['compat']) : cleared
+    })
   }
 
   // The model list is validated by the same per-row checker for both families,
@@ -456,6 +479,29 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                         announced as a choice with no identity. */}
                     {probeApi === undefined ? <option value="">{t('customApiUnset')}</option> : null}
                     {protocols.map(choice => <option key={choice} value={choice}>{protocolLabel(t, choice)}</option>)}
+                  </select>
+                </div>
+              )
+              : null}
+            {/* A thinking dialect is a property of the endpoint, not of one
+                model, so it lands on the route; pi-ai skips models whose
+                protocol does not take it. Kept off a route that names a
+                protocol the field can never fit. */}
+            {family === 'pi-ai' && (probeApi === undefined || probeApi === 'openai-completions')
+              ? (
+                <div className={styles['field']}>
+                  <span className={styles['fieldLabel']}>{t('thinkingFormat')}</span>
+                  <select
+                    className={`${styles['input']} ${styles['selectInput']}`}
+                    value={typeof thinkingFormat === 'string' ? thinkingFormat : ''}
+                    aria-label={t('thinkingFormat')}
+                    disabled={disabled}
+                    onChange={(event) => {
+                      setCompatField('thinkingFormat', event.target.value === '' ? undefined : event.target.value)
+                    }}
+                  >
+                    <option value="">{t('thinkingFormatDefault')}</option>
+                    {thinkingFormats.map(choice => <option key={choice} value={choice}>{choice}</option>)}
                   </select>
                 </div>
               )

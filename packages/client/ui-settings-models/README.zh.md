@@ -37,11 +37,13 @@ Host 配置 `credentialOnboarding` 默认为 `true`。Electron preload 标记会
 
 ### 编辑提供商
 
-收起的「自定义设置」折叠区承载精选的额外字段：两个家族都有 `baseURL`（deepseek 的占位符显示公共端点）、各适配器自己的模型目录，以及适配器未提供的 pi-ai 路由的**显示名称**与 **API 协议**。Profile `headers` 仍是 `cordis.patch.yml` 或 Cordis 配置中的部署配置，Models 页面不提供编辑器。Provider ID 保持固定：它是 settings 的键、其他每个 namespace 与每一条已记录会话引用的名字，也是页面读不回、因而搬不走的凭据引用词干。推理等级刻意不在可编辑字段之列：它是按模型的能力，提供商级的控件只可能被设成某些模型会拒绝的值。每个模型行可编辑 `id`、可选显示 `name`、可选 `contextWindow`/`maxTokens` 和输入类型；无关的模型字段在编辑后仍会保留。
+收起的「自定义设置」折叠区承载精选的额外字段：两个家族都有 `baseURL`（deepseek 的占位符显示公共端点）、各适配器自己的模型目录，以及适配器未提供的 pi-ai 路由的**显示名称**与 **API 协议**。对 OpenAI Chat Completions 的 pi-ai 路由，折叠区还会提供**思考方言**选择：即路由级 `compat.thinkingFormat`，pi-ai 用它来说网关的推理方言（例如顶层 `enable_thinking` 选 `qwen`）。它按路由配置，因为方言属于端点；pi-ai 会跳过协议不接受该字段的模型。Profile `headers` 仍是 `cordis.patch.yml` 或 Cordis 配置中的部署配置，Models 页面不提供编辑器。Provider ID 保持固定：它是 settings 的键、其他每个 namespace 与每一条已记录会话引用的名字，也是页面读不回、因而搬不走的凭据引用词干。推理等级不做成提供商级控件：它是按模型的能力，提供商级的值只可能被设成某些模型会拒绝的档位。每个模型行可编辑 `id`、可选显示 `name`、可选 `contextWindow`/`maxTokens`、输入类型和它自己的推理等级；无关的模型字段在编辑后仍会保留。
 
 `llm-deepseek` 的 DeepSeek 卡片编辑端点、凭据和模型目录。它使用 Messages，默认端点占位符为 `https://api.deepseek.com/anthropic`。
 
 展开**自定义设置 → 模型选项**编辑模型。两个提供商家族共用相同的模型行布局、标签和图标：上下文窗口与最大输出 token 数分为两列，**输入类型**独占下一行，提供**文本**和**图片**复选框。未声明输入类型的模型行优先显示已安装模型的输入类型，其次是提供商默认值，最后回退为文本。已知 pi-ai 提供商会加载已安装目录，不向端点发送请求；打开模型行不会写入覆盖值。显式输入选择具有优先权，包括为视觉模型设置的仅文本覆盖。修改复选框会保存所选类型，且至少保留一种。DeepSeek 写入 `inputModalities`，pi-ai 写入 `input`。DeepSeek 取消勾选图片时，还会移除 `imagePixelBudget` 和 `imageMaxBytes`，因为适配器在没有图片输入时拒绝这些限制。在 `cordis.patch.yml` 中清除输入字段可恢复适配器继承；**恢复默认模型**会重置整个模型目录覆盖。仅声明上游模型实际能够处理的输入类型。
+
+**推理等级**一行编辑该 pi-ai 模型的 `reasoningEfforts`：每个勾选的档位以自身名称声明，**关闭**声明为空值，因此分发时不发送该参数。至少需要保留一个「关闭」以外的档位；全部不勾选则移除该声明，让手动录入的模型回到不提供等级的状态。wire 写法的重命名仍留在 `cordis.patch.yml`。
 
 ### 新增与删除提供商
 
