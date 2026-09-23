@@ -49,6 +49,7 @@ export function err<T>(error: RemoteFailure): RemoteResult<T> {
 export function workspace(id: string, overrides: Partial<WorkspaceView> = {}): WorkspaceView {
   return {
     workspaceId: id as WorkspaceId,
+    hostId: 'local',
     path: `/work/${id}`,
     title: id,
     sessionIds: [],
@@ -86,7 +87,11 @@ export function followGenerations(generations: readonly StreamScript[]): StreamS
 export const workspaceWorld: RemoteTable = {
   unary: {
     'workspace/create': (request: WorkspaceCreateRequest): RemoteResult<WorkspaceCreateValue> => ok({
-      workspace: workspace('created', { path: request.path }), created: true,
+      workspace: workspace('created', {
+        path: request.path,
+        ...request.hostId === undefined ? {} : { hostId: request.hostId },
+      }),
+      created: true,
     }),
     'workspace/rename': (request: WorkspaceRenameRequest): RemoteResult<WorkspaceValue> => ok({
       workspace: workspace(String(request.workspaceId), { title: request.title }),

@@ -3,7 +3,8 @@
  * spill backend does — persist oversized text and return a model-facing
  * locator plus retrieval guidance — without saying HOW. Implementations
  * subclass {@link SpillStore} and register as the `spillStore` service;
- * `@deepseek-ai/dsh-spill-local` (host filesystem) is the first.
+ * `@deepseek-ai/dsh-spill-local` (an artifact filesystem resolved through
+ * `ctx.fs`) is the first.
  *
  * The Service Definition is deliberately minimal: `saveText` and nothing else. It owns NO
  * retention policy (that is `@deepseek-ai/dsh-output-retention`), NO tool-result

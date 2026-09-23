@@ -89,6 +89,13 @@ class FakeFs extends FileSystem {
   override async listDir(_target: FsTarget): Promise<FsDirEntry[]> {
     return []
   }
+  override async mkdir(target: FsTarget): Promise<{ created: boolean }> {
+    this.throwIfArmed()
+    if (this.files.has(target.targetKey)) {
+      throw new FsError(`not a directory: ${target.displayPath}`, 'FS_NOT_DIRECTORY')
+    }
+    return { created: true }
+  }
   override async writeText(target: FsTarget, content: string, expected?: FsWriteIntent): Promise<FsWriteOutcome> {
     this.throwIfArmed()
     this.writeIntents.push(expected)

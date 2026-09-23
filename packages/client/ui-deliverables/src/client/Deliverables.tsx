@@ -5,6 +5,7 @@ import { Button, IconChevronDownOutline14, IconChevronUpOutline14 } from '@deeps
 import type { GlobalStandardProps, InjectFace, PropsLocale, PropsRuntime, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PresentedOpenController } from './present-open.ts'
+import { presentedOpenPhase, presentedOpenRemoteHost } from './present-open.ts'
 import type { ChangesSummaryStore } from './changes-summary.ts'
 import { ChangedFiles } from './ChangedFiles.tsx'
 import { changesForClosing, presentedForClosing, type ChangesTurnData, type PresentedPath } from './turn-deliverables.ts'
@@ -99,11 +100,14 @@ export function Deliverables({
       </div>}
       {host !== null && host !== 'error' && !host.available && <span className={css.hostStatus}>{t('presented.unavailable')}</span>}
       <div className={css.presented} data-presented-files-row data-single={matched.presented.length === 1 ? true : undefined}>
-        {presented.map(file => <PresentedFileCard key={`${file.seq}:${file.index}`} file={file} cwd={cwd}
-          phase={states[presentedFileUrl(sessionId, file.seq, file.index)]}
-          host={host === 'error' ? null : host} t={t}
-          onPreview={() => { openFile(file.path) }}
-          onAction={(action) => { void openPresented(sessionId, file.seq, file.index, action) }} />)}
+        {presented.map((file) => {
+          const opened = states[presentedFileUrl(sessionId, file.seq, file.index)]
+          return <PresentedFileCard key={`${file.seq}:${file.index}`} file={file} cwd={cwd}
+            phase={presentedOpenPhase(opened)} remoteHost={presentedOpenRemoteHost(opened)}
+            host={host === 'error' ? null : host} t={t}
+            onPreview={() => { openFile(file.path) }}
+            onAction={(action) => { void openPresented(sessionId, file.seq, file.index, action) }} />
+        })}
       </div>
       {collapsible && <button type="button" className={css.toggle}
         aria-expanded={expanded}

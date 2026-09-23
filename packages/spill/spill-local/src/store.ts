@@ -1,16 +1,21 @@
 /**
  * Cordis-free storage mechanics for the local spill backend: private
  * session-scoped directory selection, safe-name derivation, path-traversal
- * protection, and the exclusive owner-only write.
+ * protection, and the write handed to the `ctx.fs` seam.
+ *
+ * The default root is the one host-local decision left here (see
+ * {@link privateRoot}); every artifact path is resolved and written through the
+ * `FileSystem` backend that owns the execution world, so this backend is not
+ * tied to the harness host filesystem.
  *
  * @module @deepseek-ai/dsh-spill-local/store
  */
 
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
-import { mkdir, open } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
 
 /** Prefix shared by default-root creation and startup discovery. */
 export const DEFAULT_ROOT_PREFIX = 'dsh-spill-'
@@ -30,6 +35,11 @@ let defaultRoot: string | undefined
 
 /**
  * Return the lazily-created private per-process spill root.
+ *
+ * This is the backend's one host-local filesystem decision: the default root is
+ * created with `mkdtemp` (0700) under the OS temp directory, and its path is the
+ * configured root only when `Config.root` is omitted. The configuration
+ * decisions stay in the service.
  *
  * @returns The private root path.
  */
@@ -80,9 +90,9 @@ export function sessionDir(root: string, sessionId: string): string {
   return join(root, `session-${hash}`)
 }
 
-/** Inputs needed to save a local spill file. */
+/** Inputs needed to save a spill file through a `FileSystem` backend. */
 export interface SaveTextOptions {
-  /** Spill root. */
+  /** Spill root: the configured root, or the private default root. */
   root: string
   /** Owning session id. */
   sessionId: string
@@ -94,38 +104,29 @@ export interface SaveTextOptions {
 
 /** A written spill file. */
 export interface SavedText {
-  /** Absolute saved path. */
+  /** Locator path: the backend's own `FsTarget.displayPath` for the saved file. */
   path: string
   /** UTF-8 content length. */
   bytes: number
 }
 
 /**
- * Write text to a fresh 0600 file below its private session directory.
+ * Write text to a fresh file below its session directory through the filesystem
+ * seam. The backend's `resolve` owns the path spelling the returned locator
+ * exposes, so the locator is meaningful in the backend's execution world rather
+ * than assumed to be the harness host path.
+ *
+ * @param fs The filesystem backend that owns the execution world.
  * @param options The save request.
- * @returns The saved path and UTF-8 byte length.
+ * @returns The backend-resolved locator path and the UTF-8 byte length.
+ * @throws Whatever the backend raises for an unresolvable path or a failed write.
  */
-export async function saveTextFile(options: SaveTextOptions): Promise<SavedText> {
-  const dir = sessionDir(options.root, options.sessionId)
-  const path = join(dir, `${randomBytes(6).toString('hex')}-${encodeSegment(options.suggestedName)}`)
-  let handle
-  for (;;) {
-    await mkdir(dir, { recursive: true, mode: 0o700 })
-    try {
-      handle = await open(path, 'wx', 0o600)
-      break
-    } catch (error: unknown) {
-      /* v8 ignore start -- requires another process to remove the directory
-         between mkdir and open, or an external permission/IO race. */
-      if (isErrno(error, 'ENOENT')) continue
-      throw error
-      /* v8 ignore stop */
-    }
-  }
-  try {
-    await handle.writeFile(options.content)
-  } finally {
-    await handle.close()
-  }
-  return { path, bytes: Buffer.byteLength(options.content, 'utf8') }
+export async function saveTextFile(fs: FileSystem, options: SaveTextOptions): Promise<SavedText> {
+  const path = join(sessionDir(options.root, options.sessionId), `${randomBytes(6).toString('hex')}-${encodeSegment(options.suggestedName)}`)
+  const target = await fs.resolve(path)
+  // `createIfAbsent` is the seam's exclusive-create guard: an existing entry —
+  // including one a planted symlink resolves to — rejects instead of being
+  // overwritten.
+  await fs.writeText(target, options.content, { kind: 'createIfAbsent' })
+  return { path: target.displayPath, bytes: Buffer.byteLength(options.content, 'utf8') }
 }

@@ -1228,6 +1228,11 @@
     },
     {
       "doc": "docs/subsystems/filesystem.md",
+      "symbol": "FsMkdirOutcome",
+      "source": "packages/fs/fs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
       "symbol": "FsWriteIntent",
       "source": "packages/fs/fs/src/types.ts"
     },

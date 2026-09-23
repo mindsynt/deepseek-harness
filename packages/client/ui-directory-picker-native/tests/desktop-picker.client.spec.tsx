@@ -26,7 +26,7 @@ test('the composed native flow cancels through Desktop without invoking the Host
   const injected = (entry.inject as () => { pick: () => Promise<string | null> })()
   const Component = entry.component as ComponentType<DirectoryFlowOwnerProps & typeof injected>
   const onCancel = vi.fn()
-  render(<Component {...injected} open busy={false} onCancel={onCancel} onPicked={vi.fn()} onError={vi.fn()} />)
+  render(<Component {...injected} open busy={false} hostLabel="This machine" onCancel={onCancel} onPicked={vi.fn()} onError={vi.fn()} />)
   await waitFor(() => { expect(onCancel).toHaveBeenCalledOnce() })
   expect(pick).toHaveBeenCalledOnce()
   expect(remote.directoryPicker.pick).not.toHaveBeenCalled()

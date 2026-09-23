@@ -107,20 +107,44 @@ describe('directoryPicker browse Remotes', () => {
   it('serves listings and creation, defaulting to the home directory', async () => {
     const picker = await harness(BROWSE_STUB)
     const signal = new AbortController().signal
-    expect(await picker.list(undefined, signal)).toMatchObject({ path: '/home/user', home: '/home/user' })
-    expect(await picker.list('/home/user/projects', signal))
+    expect(await picker.list(undefined, undefined, signal)).toMatchObject({ path: '/home/user', home: '/home/user' })
+    expect(await picker.list('/home/user/projects', undefined, signal))
       .toMatchObject({ path: '/home/user/projects' })
-    expect(await picker.createDirectory('/home/user', 'fresh')).toBe('/home/user/fresh')
+    expect(await picker.createDirectory('/home/user', 'fresh', undefined)).toBe('/home/user/fresh')
+  })
+
+  it('forwards the addressed host id to the browse capability', async () => {
+    const list = vi.fn(async (path: string | undefined, _hostId: string | undefined) => ({
+      path: path ?? '/home/user',
+      home: '/home/user',
+      crumbs: [{ name: '/', path: '/', hidden: false }],
+      entries: [],
+      truncated: false,
+    }))
+    const createDirectory = vi.fn(async (path: string, name: string) => `${path}/${name}`)
+    const picker = await harness({ kind: 'browse', list, createDirectory })
+    await expect(picker.list('/srv/deploy', 'alpha', new AbortController().signal)).resolves.toMatchObject({ path: '/srv/deploy' })
+    expect(list).toHaveBeenCalledWith('/srv/deploy', 'alpha', expect.any(AbortSignal))
+    // Creation addresses the same world the listing did: the realm's path must
+    // never be created on the Harness host by a dropped host identity.
+    await expect(picker.createDirectory('/srv/deploy', 'fresh', 'alpha')).resolves.toBe('/srv/deploy/fresh')
+    expect(createDirectory).toHaveBeenCalledWith('/srv/deploy', 'fresh', 'alpha')
+    // Absent host identity still reaches the capability as undefined, so the
+    // backend's local default is the one that decides.
+    await picker.list(undefined, undefined, new AbortController().signal)
+    expect(list).toHaveBeenLastCalledWith(undefined, undefined, expect.any(AbortSignal))
+    await picker.createDirectory('/home/user', 'local-fresh', undefined)
+    expect(createDirectory).toHaveBeenLastCalledWith('/home/user', 'local-fresh', undefined)
   })
 
   it('maps the seam\'s typed failures and folds unknown throws to internal', async () => {
     const picker = await harness(BROWSE_STUB)
-    expect(await refused(picker.list('/denied', new AbortController().signal)))
+    expect(await refused(picker.list('/denied', undefined, new AbortController().signal)))
       .toMatchObject({ code: 'directory-picker/unreadable', details: { path: '/denied' } })
-    expect((await refused(picker.createDirectory('/home/user', 'taken'))).code).toBe('directory-picker/exists')
-    expect((await refused(picker.createDirectory('/home/user', 'unwritable'))).code).toBe('gateway/internal')
+    expect((await refused(picker.createDirectory('/home/user', 'taken', undefined))).code).toBe('directory-picker/exists')
+    expect((await refused(picker.createDirectory('/home/user', 'unwritable', undefined))).code).toBe('gateway/internal')
 
-    const thrown = await refused(picker.createDirectory('/home/user', 'gone'))
+    const thrown = await refused(picker.createDirectory('/home/user', 'gone', undefined))
     expect(thrown).toMatchObject({ code: 'gateway/internal', message: 'the volume vanished' })
   })
 
@@ -128,12 +152,12 @@ describe('directoryPicker browse Remotes', () => {
     const createDirectory = vi.fn(async (path: string, name: string) => `${path}/${name}`)
     const picker = await harness({
       kind: 'browse',
-      list: (path, signal) => BROWSE_STUB.list(path, signal),
+      list: (path, hostId, signal) => BROWSE_STUB.list(path, hostId, signal),
       createDirectory,
     })
 
     for (const name of ['', ' ', '.', '..', 'a/b', 'a\\b']) {
-      const failure = await refused(picker.createDirectory('/home/user', name))
+      const failure = await refused(picker.createDirectory('/home/user', name, undefined))
       expect(failure).toMatchObject({
         code: 'gateway/bad-request',
         message: 'invalid payload for host.createDirectory',
@@ -146,22 +170,22 @@ describe('directoryPicker browse Remotes', () => {
   it('reports an aborted listing as cancelled', async () => {
     const picker = await harness({
       kind: 'browse',
-      list: (_path, signal) => new Promise((_resolve, reject) => {
+      list: (_path, _hostId, signal) => new Promise((_resolve, reject) => {
         signal?.addEventListener('abort', () => { reject(new Error('scan aborted')) }, { once: true })
       }),
       createDirectory: async () => '/never',
     })
     const abort = new AbortController()
-    const pending = refused(picker.list(undefined, abort.signal))
+    const pending = refused(picker.list(undefined, undefined, abort.signal))
     abort.abort()
     expect((await pending).code).toBe('gateway/cancelled')
   })
 
   it('refuses the browse verbs under a native composition', async () => {
     const picker = await harness()
-    expect(await refused(picker.list(undefined, new AbortController().signal)))
+    expect(await refused(picker.list(undefined, undefined, new AbortController().signal)))
       .toMatchObject({ code: 'directory-picker/unavailable', details: { capability: 'native' } })
-    expect(await refused(picker.createDirectory('/x', 'y')))
+    expect(await refused(picker.createDirectory('/x', 'y', undefined)))
       .toMatchObject({ code: 'directory-picker/unavailable', details: { capability: 'native' } })
   })
 })

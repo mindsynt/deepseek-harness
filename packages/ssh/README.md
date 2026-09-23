@@ -26,6 +26,10 @@ This family runs files, ordinary processes, terminals and sandbox enforcement on
 | [`fs-ssh`](fs-ssh/README.md) | Remote file identity, reads and guarded atomic mutations | `ctx.fs` |
 | [`subprocess-ssh`](subprocess-ssh/README.md) | Executable lookup, processes, control streams and terminals | `ctx.subprocess` |
 | [`sandbox-ssh`](sandbox-ssh/README.md) | Remote file-effect confinement and enforcement facts | `ctx.sandbox` |
+| [`host-registry`](host-registry/README.md) | One isolated execution realm per registered SSH host | `ctx.remoteHosts` |
+| [`host-credentials`](host-credentials/README.md) | Controlled OpenSSH configuration and identity materialization, plus login storage | `ctx.sshHostCredentials` |
+| [`helper-installer`](helper-installer/README.md) | Remote helper probing, upload and digest confirmation | `ctx.sshHelperInstaller` |
+| [`helper-artifact`](helper-artifact/README.md) | Build-time dependency-closure assembly and archive for the remote helper | `-` |
 
 <a id="related-documentation"></a>
 ## Related documentation

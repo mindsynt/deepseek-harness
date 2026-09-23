@@ -75,6 +75,21 @@ describe('SandboxPolicyService', () => {
     })
   })
 
+  it('provisions a session root under workspace-write despite a read-only deployment default', async () => {
+    const ctx = await mounted({ mode: 'read-only', workspaceRoot: '/deployment-root' })
+    expect(ctx.sandboxPolicy.defaultMode).toBe('read-only')
+    expect(ctx.sandboxPolicy.provisioningPolicy('/srv/project')).toEqual({
+      mode: 'workspace-write',
+      workspaceRoot: '/srv/project',
+    })
+  })
+
+  it('rejects a relative provisioning root', async () => {
+    const ctx = await mounted()
+    expect(() => ctx.sandboxPolicy.provisioningPolicy('relative/project'))
+      .toThrow('sandbox-policy: workspace root must be an absolute execution-world path')
+  })
+
   it('resolves each session mode and cwd together without changing the fallback', async () => {
     const ctx = await mounted({ mode: 'workspace-write', workspaceRoot: '/fallback' })
     const first = session('sess-first', '/projects/first')

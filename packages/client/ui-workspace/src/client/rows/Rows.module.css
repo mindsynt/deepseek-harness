@@ -160,12 +160,12 @@
   transform: rotate(90deg);
 }
 
+/* One text line: the title and its optional branch label share the flexible cell. */
 .projectText {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
 }
 
 .title {
@@ -386,12 +386,6 @@
   .sessionRow .title {
     scroll-behavior: auto;
   }
-}
-
-.titleLine {
-  display: flex;
-  align-items: baseline;
-  min-width: 0;
 }
 
 .branch {

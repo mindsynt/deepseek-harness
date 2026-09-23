@@ -1,0 +1,52 @@
+{
+  "name": "@deepseek-ai/dsh-ssh-hosts",
+  "description": "Enable GUI-managed SSH remote host execution worlds on base-backed dsh profiles",
+  "version": "0.1.6-alpha.2",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/bundle/ssh-hosts"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-helper-installer": "workspace:^",
+    "@deepseek-ai/dsh-host-credentials": "workspace:^",
+    "@deepseek-ai/dsh-hosts-controller": "workspace:^",
+    "@deepseek-ai/dsh-ssh-host-registry": "workspace:^",
+    "@deepseek-ai/dsh-ssh": "workspace:^",
+    "@deepseek-ai/dsh-fs-ssh": "workspace:^",
+    "@deepseek-ai/dsh-subprocess-ssh": "workspace:^",
+    "@deepseek-ai/dsh-sandbox-ssh": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  }
+}

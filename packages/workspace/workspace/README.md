@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this package to keep an ordered, persistent list of project directories and the sessions run in each directory. Hosts can build project sidebars, hide sessions from grouping without deleting their histories, and remove projects without deleting folders, files, or sessions. Re-adding a removed directory creates a fresh project, while sessions whose directories cannot be validated remain ungrouped. Choose it for GUI or host workflows that need durable project grouping; it is invisible to models and adds no prompt or request-context cost, but requires session persistence and storage backends.
+Use this package to keep an ordered, persistent list of project directories, each bound to the host that owns it, and the sessions run in each directory. Hosts can build project sidebars, hide sessions from grouping without deleting their histories, and remove projects without deleting folders, files, or sessions. Re-adding a removed directory creates a fresh project, while sessions whose directories cannot be validated remain ungrouped. Choose it for GUI or host workflows that need durable project grouping; it is invisible to models and adds no prompt or request-context cost, but requires session persistence and storage backends.
 
 ## Table of Contents
 
@@ -50,7 +50,7 @@ With these rows mounted, creating a project shows up in the list immediately and
 
 ### Creating and ordering projects
 
-Create a project from any fully qualified directory that exists: filesystem roots such as `C:\` and ordinary directories are valid. Relative paths, Windows drive-relative paths such as `C:work`, missing paths, and files are rejected without creating a project; creating a project for a directory that already has one returns the existing project unchanged. Rename a project at any time, and move it to any position in the list:
+Create a local project from any fully qualified directory that exists: filesystem roots such as `C:\` and ordinary directories are valid. Relative paths, Windows drive-relative paths such as `C:work`, missing paths, and files are rejected without creating a project. A non-local host's path is canonicalized by string alone — an absolutely rooted POSIX spelling with trailing slashes removed — so only relative spellings are rejected and no Harness-host filesystem access happens. Creating a project for a directory that already has one on the same host returns the existing project unchanged. Rename a project at any time, and move it to any position in the list:
 
 ```text
 // Host consumer code, after the composition above is loaded:
@@ -58,6 +58,8 @@ const project = await ctx.workspaceRegistry.create('/path/to/dir', 'My Project')
 await project.setTitle('Renamed')
 ctx.workspaceRegistry.list() // shows the project, newest first
 ```
+
+`create(path, title?, hostId?)` bounds the project to a host. Omitted or empty `hostId` selects the built-in local host, exported as `LOCAL_HOST_ID` (`'local'`); any other value names a host another composition registered, and the same path on two hosts is two projects. `resolveByPath(path, hostId?)` uses the same pairing.
 
 ### Grouping sessions under a project
 
@@ -79,7 +81,7 @@ This section explains the design decisions behind the feature and points at the 
 
 ### Design philosophy
 
-- **One record per canonical path.** `fs.realpath` is the single uniqueness canon: paths are stored canonicalized, so a symlink to an owned directory collides, and uniqueness is string equality of canonical paths.
+- **One record per host and canonical path.** The local host's uniqueness canon is `fs.realpath`; a non-local host's is string canon (trailing slashes removed, absolute spelling required), because only that host's execution world can resolve the path further. Uniqueness is string equality of `(hostId, canonical path)`.
 - **Membership is ownership plus a live cwd fact.** The record's ordered `sessionIds` is the ownership truth; the startup header index validates it, and `sessionIds` filters on read while the next mutation prunes durably.
 - **Header-only reads.** Bootstrap and attach validation read `SessionHeader` fields only; event bodies are never loaded.
 - **Two-write mutations with an explicit marker.** Create and delete persist a `pendingMutation` marker before the record/order pair can diverge, so startup completes exactly the interrupted operation and unmarked divergence fails loud as corruption.
@@ -87,7 +89,7 @@ This section explains the design decisions behind the feature and points at the 
 
 ### API behavior
 
-The API is one small family with two owners: `WorkspaceRegistry` creates, orders, and deletes projects, manages their session accounting, and archives or restores single sessions; the `Workspace` entity exposes the display title, directory status, and the session projection. Per-method contracts live in the code, not this README — see [src/index.ts](src/index.ts) and [src/entity.ts](src/entity.ts).
+The API is one small family with two owners: `WorkspaceRegistry` creates, orders, and deletes projects on a host, manages their session accounting, and archives or restores single sessions; the `Workspace` entity exposes the display title, host identity, directory status, and the session projection. Per-method contracts live in the code, not this README — see [src/index.ts](src/index.ts) and [src/entity.ts](src/entity.ts).
 
 ### Source map
 
@@ -97,12 +99,12 @@ The API is one small family with two owners: `WorkspaceRegistry` creates, orders
 | [`src/entity.ts`](src/entity.ts) | Package-private `Workspace` implementation and its single `mutate` write path |
 | [`src/spec.ts`](src/spec.ts) | Domain declaration: record schema, registry state, `defineDomain` spec |
 | [`src/types.ts`](src/types.ts) | Public `Workspace` interface and `WorkspaceId` brand |
-| [`src/paths.ts`](src/paths.ts) | The `realpath` uniqueness canon |
+| [`src/paths.ts`](src/paths.ts) | The local `realpath` canon, the remote string canon, and the built-in host identity |
 | [`src/invariant.ts`](src/invariant.ts) | Invariant companion: the entity cache mirrors the durable table |
 
 ### Durable shape
 
-The registry opens the `workspace` domain (version 2): a `workspaces` table keyed by `WorkspaceId` plus one global state holding `workspaceIds` (the authoritative display order), `archivedSessionIds`, and the optional `pendingMutation` marker. Records written before `archivedSessionIds` existed parse with an empty set through the schema default. Archiving and unarchiving both rewrite only that global state, so a restore is one filtered write of the same field; unarchive runs no session-existence probe, because dropping an id from the set cannot introduce an unknown one, while archive verifies the session before adding it.
+The registry opens the `workspace` domain (version 2): a `workspaces` table keyed by `WorkspaceId` plus one global state holding `workspaceIds` (the authoritative display order), `archivedSessionIds`, and the optional `pendingMutation` marker. Records written before `archivedSessionIds` existed parse with an empty set through the schema default, and a record written before `hostId` existed reads as the built-in local host. A `hostId` carrying whitespace or a path separator is refused at the durable boundary. Archiving and unarchiving both rewrite only that global state, so a restore is one filtered write of the same field; unarchive runs no session-existence probe, because dropping an id from the set cannot introduce an unknown one, while archive verifies the session before adding it.
 
 ### Lifecycle
 
@@ -158,7 +160,8 @@ Independent of live requests: the package never touches a request prefix, so it 
 These limits define when the project list is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
 - **Removal never deletes data** — removing a project leaves its folder, files, and session histories in place; those sessions become ungrouped, and session deletion or folder removal are separate, absent capabilities ([decision](../../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)).
-- **A session joins only with a recorded directory** — a session belongs to a project only when its record carries a directory that resolves to the project's path; sessions without one stay ungrouped, and a session from another directory cannot be moved in.
+- **A session joins only with a recorded directory** — a session belongs to a project only when its record carries a directory that canonicalizes to the project's path under the project's host; sessions without one stay ungrouped, and a session from another directory cannot be moved in.
+- **A non-local host's path stays a string** — this package cannot reach a host's execution world, so a non-local path is canonicalized by string alone: trailing slashes are removed while `..`, `.`, interior repeated slashes, and symlinks stay unresolved. Two spellings the remote world would treat as one directory are two projects until host realms are addressable, and `status()` reports the Harness-host filesystem rather than the remote one. A non-local `hostId` is also not checked against registered hosts.
 - **External changes are seen late** — if another process deletes or damages a directory, the project reflects it only at the next refresh or restart.
 - **Archive and unarchive enforce different session checks** — a restore only drops an id from the archive set, so an entry whose session is gone still unarchives and leaves no unknown referent; a restore of an id that is not archived resolves without writing, while `archiveSession` rejects a session that is neither live nor persisted.
 - **Re-adding a directory starts fresh** — after removal, adding the same directory again creates a new project with an empty session list; the old sessions do not come back automatically.

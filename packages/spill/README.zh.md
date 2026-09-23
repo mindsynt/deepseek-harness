@@ -27,7 +27,7 @@ kind: "package-group"
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`spill/`](spill/README.zh.md) | 存储服务：保存超大文本并返回定位信息与取回指引 | `ctx.spillStore` |
-| [`spill-local/`](spill-local/README.zh.md) | 将 spill 文本保存到本机的私有会话级文件 | 注册到 `ctx.spillStore` |
+| [`spill-local/`](spill-local/README.zh.md) | 将 spill 文本经 `ctx.fs` 后端保存到私有的会话级文件 | 注册到 `ctx.spillStore` |
 | [`spill-policy/`](spill-policy/README.zh.md) | 用预览和定位信息替换过大的纯文本工具结果 | 监听 `ctx.tools` |
 
 -----

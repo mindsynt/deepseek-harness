@@ -10,7 +10,7 @@ import { createHelperHarness } from './fixtures/helper.ts'
 import { runSshHelper } from '../src/helper.ts'
 import { RemoteProcesses } from '../src/helper-processes.ts'
 import { helloSchema, preparedSchema, targetSchema } from '../src/schemas.ts'
-import { SSH_MAX_TEXT_STREAMS } from '../src/protocol.ts'
+import { SSH_MAX_TEXT_STREAMS, SSH_PROTOCOL_VERSION } from '../src/protocol.ts'
 
 const entryPath = fileURLToPath(new URL('../src/helper-entry.ts', import.meta.url))
 const nextSchema = z.object({ done: z.boolean(), value: z.string() })
@@ -47,13 +47,13 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
     const test = await createHelperHarness(false)
     try {
       for (const params of [
-        { protocol: 2, workspace: test.root, leaseMs: 3000 },
-        { protocol: 1, workspace: 'relative', leaseMs: 3000 },
-        { protocol: 1, workspace: test.root, leaseMs: 2999 },
+        { protocol: 1, workspace: test.root, leaseMs: 3000 },
+        { protocol: SSH_PROTOCOL_VERSION, workspace: 'relative', leaseMs: 3000 },
+        { protocol: SSH_PROTOCOL_VERSION, workspace: test.root, leaseMs: 2999 },
       ]) await expect(test.client.request('hello', params, helloSchema)).rejects.toThrow()
       const bootstrapPath = `${test.root}/bootstrap.js`
       await writeFile(bootstrapPath, 'export const identity = "test"\n')
-      const facts = await test.client.request('hello', { protocol: 1, workspace: test.root, leaseMs: 3000, bootstrapPath }, helloSchema)
+      const facts = await test.client.request('hello', { protocol: SSH_PROTOCOL_VERSION, workspace: test.root, leaseMs: 3000, bootstrapPath }, helloSchema)
       expect(facts.bootstrapHash).toBe(createHash('sha256').update(await readFile(bootstrapPath)).digest('hex'))
     } finally { await test.close() }
   })

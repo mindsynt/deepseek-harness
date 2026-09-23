@@ -139,6 +139,16 @@ class TestFileSystem extends FileSystem {
     return result
   }
 
+  override async mkdir(target: FsTarget): Promise<{ created: boolean }> {
+    const existing = await this.stat(target)
+    if (existing !== undefined) {
+      if (existing.type === 'directory') return { created: false }
+      throw new FsError(`not a directory: ${target.displayPath}`, 'FS_NOT_DIRECTORY')
+    }
+    await mkdir(target.displayPath, { recursive: true })
+    return { created: true }
+  }
+
   override async writeText(target: FsTarget, content: string): Promise<FsWriteOutcome> {
     await mkdir(dirname(target.displayPath), { recursive: true })
     await writeFile(target.displayPath, content)

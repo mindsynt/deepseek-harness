@@ -27,7 +27,7 @@ Three packages play the spill roles; the subsystem reference owns the exhaustive
 | Package | Role | ctx key |
 |---|---|---|
 | [`spill/`](spill/README.md) | Storage service: saves oversized text and returns a locator plus retrieval guidance | `ctx.spillStore` |
-| [`spill-local/`](spill-local/README.md) | Saves spilled text to private session-scoped files on this machine | registers on `ctx.spillStore` |
+| [`spill-local/`](spill-local/README.md) | Saves spilled text to private session-scoped files through the `ctx.fs` backend | registers on `ctx.spillStore` |
 | [`spill-policy/`](spill-policy/README.md) | Replaces oversized plain-text tool results with a preview and locator | listens on `ctx.tools` |
 
 -----

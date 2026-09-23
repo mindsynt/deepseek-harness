@@ -68,14 +68,15 @@ export interface UiWorkspace {
    */
   pickDirectory(): Promise<string | null>
   /**
-   * List one Host directory level.
-   * @param path - directory path; absent selects the Host home.
+   * List one directory level of the addressed execution world.
+   * @param path - directory path; absent selects that world's anchor: the
+   *   Harness home for the local world, the realm root for a remote host.
    * @param signal - cancellation for a superseded scan.
    * @returns directory entries and breadcrumb ancestry.
    */
   listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing>
   /**
-   * Create a child directory.
+   * Create a child directory in the addressed execution world.
    * @param path - existing parent directory.
    * @param name - child directory name.
    * @returns created absolute path.
@@ -114,12 +115,15 @@ class UiWorkspaceService extends Service implements UiWorkspace {
    * @param directoryPicker - the directory-picking Remote namespace.
    * @param workspaces - pure Workspace Controller.
    * @param sessions - pure Session Controller.
+   * @param selectedHostId - reads the host every listing addresses; undefined
+   *   is the local Harness host, including while ui-remote-hosts is absent.
    */
   constructor(
     ctx: Context,
     private readonly directoryPicker: ClientRemote['directoryPicker'],
     private readonly workspaces: IWorkspaces,
     private readonly sessions: ISessions,
+    private readonly selectedHostId: () => string | undefined,
   ) {
     super(ctx, 'uiWorkspace')
     ctx.effect(() => {
@@ -211,13 +215,19 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   }
 
   async listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
-    const result = await this.directoryPicker.list(path, signal)
+    // The selected host is read per call, not captured: the settings section
+    // can move the selection while this surface stays mounted, and a provider
+    // that registers after this service still reaches the next listing.
+    const result = await this.directoryPicker.list(path, this.selectedHostId(), signal)
     if (!result.ok) throw new DirectoryBrowseError(result.error)
     return result.value
   }
 
   async createDirectory(path: string, name: string): Promise<string> {
-    const result = await this.directoryPicker.createDirectory(path, name)
+    // The selected host is read per call exactly as the listing reads it: a
+    // directory created from the browser must land in the world the browser is
+    // showing, not on the Harness host the dialog happens to run on.
+    const result = await this.directoryPicker.createDirectory(path, name, this.selectedHostId())
     if (!result.ok) throw new DirectoryBrowseError(result.error)
     return result.value
   }

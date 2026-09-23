@@ -1,7 +1,7 @@
 /** Delivery gestures share pending state, report failures, and cancel with the plugin. */
 import { afterEach, expect, it, vi } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { PresentedOpenController } from '../src/client/present-open.ts'
+import { PresentedOpenController, presentedOpenPhase, presentedOpenRemoteHost } from '../src/client/present-open.ts'
 
 afterEach(() => { vi.unstubAllGlobals() })
 
@@ -173,4 +173,29 @@ it.each(['open', 'reveal'] as const)('reports an unavailable Host path for %s wh
   await controller.open(id, 2, 1, action)
   expect(controller.state.getSnapshot()[url]).toBe('nativeUnavailable')
   await controller.dispose()
+})
+
+it('keeps the remote host a refused 409 names and leaves every other failure retryable', async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ hostId: 'remote-1' }, { status: 409 }))
+  vi.stubGlobal('fetch', fetcher)
+  const controller = new PresentedOpenController()
+  await controller.open(id, 2, 1)
+  expect(controller.state.getSnapshot()[url]).toEqual({ phase: 'remoteUnavailable', hostId: 'remote-1' })
+  fetcher.mockResolvedValueOnce(new Response('not JSON', { status: 409 }))
+  await controller.open(id, 2, 1)
+  expect(controller.state.getSnapshot()[url]).toBe('error')
+  fetcher.mockResolvedValueOnce(Response.json({ message: 'desktop unavailable' }, { status: 409 }))
+  await controller.open(id, 2, 1, 'reveal')
+  expect(controller.state.getSnapshot()[url]).toBe('revealError')
+  await controller.dispose()
+})
+
+it('reads the phase and the remote host out of both state forms', () => {
+  const remote = { phase: 'remoteUnavailable', hostId: 'remote-1' } as const
+  expect(presentedOpenPhase(undefined)).toBeUndefined()
+  expect(presentedOpenPhase('opened')).toBe('opened')
+  expect(presentedOpenPhase(remote)).toBe('remoteUnavailable')
+  expect(presentedOpenRemoteHost(undefined)).toBeUndefined()
+  expect(presentedOpenRemoteHost('opened')).toBeUndefined()
+  expect(presentedOpenRemoteHost(remote)).toEqual({ phase: 'remoteUnavailable', hostId: 'remote-1' })
 })

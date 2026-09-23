@@ -68,7 +68,12 @@ function call(ctx: Context, owner: Agent | undefined, args: unknown) {
 
 async function setup(
   config: ToolStrReplaceEditor.Config = {},
-  options: { fsPolicy?: boolean; sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access' } = {},
+  options: {
+    fsPolicy?: boolean
+    sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'
+    /** Process provider served to the tool; provided before the plugin mounts. */
+    subprocess?: unknown
+  } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-tool-str-replace-editor-'))
   roots.push(root)
@@ -87,6 +92,7 @@ async function setup(
     await ctx.plugin(SandboxedFileSystem, { cwd: root })
   }
   if (options.fsPolicy === true) await ctx.plugin(FsPolicy)
+  if (options.subprocess !== undefined) ctx.provide('subprocess', options.subprocess as never)
   const fiber = await ctx.plugin(ToolStrReplaceEditor, config)
   return { ctx, root, fiber, owner: await agent(ctx, root) }
 }
@@ -442,6 +448,31 @@ describe('tool-str-replace-editor', () => {
     expect(relative.isError).toBe(true)
     expect(text(relative)).toContain('is not an absolute path')
     expect(await readFile(ambiguous, 'utf8')).toBe('alpha\nbeta\nmiddle\nalpha\nbeta')
+  })
+
+  it('judges absolute paths in the addressed execution world path flavor', async () => {
+    const flavor: { platform: 'posix' | 'windows' } = { platform: 'posix' }
+    const { ctx, owner } = await setup({}, {
+      subprocess: { terminalEnvironment: () => Promise.resolve({ platform: flavor.platform }) },
+    })
+
+    // A POSIX world accepts a POSIX absolute path and refuses a Windows drive
+    // path, which the remote filesystem would otherwise rebase onto its
+    // workspace root as a relative path.
+    const posix = await call(ctx, owner, { command: 'view', path: '/workspace/missing.txt' })
+    expect(posix.isError).toBe(true)
+    expect(text(posix)).not.toContain('is not an absolute path')
+
+    const windowsSpelling = await call(ctx, owner, { command: 'view', path: 'C:\\workspace\\missing.txt' })
+    expect(windowsSpelling.isError).toBe(true)
+    expect(text(windowsSpelling)).toContain('is not an absolute path')
+
+    // A Windows world accepts the drive path; neither judgement consults the
+    // Harness host's own platform.
+    flavor.platform = 'windows'
+    const drive = await call(ctx, owner, { command: 'view', path: 'C:\\workspace\\missing.txt' })
+    expect(drive.isError).toBe(true)
+    expect(text(drive)).not.toContain('is not an absolute path')
   })
 
   it('reports invalid commands or arguments without mutating files', async () => {

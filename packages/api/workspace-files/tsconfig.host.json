@@ -30,7 +30,13 @@
       "path": "../../session/session-persistence"
     },
     {
+      "path": "../../ssh/host-registry"
+    },
+    {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/brand"
     },
     {
       "path": "../../util/deque"

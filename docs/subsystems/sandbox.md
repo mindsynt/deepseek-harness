@@ -213,6 +213,23 @@ resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
  * @returns the last logged mode, or `undefined` without one.
  */
 overrideOf(session: Session): SandboxMode | undefined
+
+/**
+ * Resolve the policy for harness provisioning of one Session's own working
+ * directory. Session creation provisions that directory before the Session
+ * exists, so no session mode can select this call and the deployment default
+ * must not deny it: a `read-only` deployment still has to create the directory
+ * a read-only Session will read. The destination root authorizes exactly its
+ * own subtree under `workspace-write` — the same boundary {@link resolve}
+ * assigns once the Session exists, because a Session cwd IS its
+ * `workspace-write` root — so provisioning adds no writable range beyond the
+ * directory being created. The enforcing backend still canonicalizes the root
+ * and fails loud when containment does not hold.
+ * @param root - absolute destination directory in its execution world.
+ * @returns the provisioning policy: `workspace-write` bounded to `root`.
+ * @throws when `root` is not an absolute execution-world path.
+ */
+provisioningPolicy(root: string): SandboxExecutionPolicy
 ```
 
 Types: [Session](session.md)

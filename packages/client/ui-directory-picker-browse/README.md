@@ -25,7 +25,7 @@ This package provides the in-app directory-browsing surface for the Web GUI: a S
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin alongside `ui-workspace` and the host backend [`dsh-host-directory-picker-browse`](../../host/directory-picker-browse/README.md); one cordis.yml row then composes the whole browse picking interaction. When a workspace flow opens a directory request, the user sees the in-app dialog: a header with the path breadcrumb and an editable path zone, then a single full-width level until a row is selected, after which the row splits into level and children columns.
+Mount this plugin alongside `ui-workspace` and the host backend [`dsh-host-directory-picker-browse`](../../host/directory-picker-browse/README.md); one cordis.yml row then composes the whole browse picking interaction. When a workspace flow opens a directory request, the user sees the in-app dialog: a header naming the addressed execution world beside the path breadcrumb and an editable path zone, then a single full-width level until a row is selected, after which the row splits into level and children columns.
 
 ### Navigating and creating
 
@@ -39,7 +39,7 @@ Step through folders, edit the path directly, or filter the last pane by prefix;
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The dialog is a 680×500 Miller-column view (clamped on short or narrow viewports), driven by the host `listDirectory` and `createDirectory` primitives through `ctx.workspaces`. Both registrations install as one transactional effect through nested `ctx.slots.inject()` calls, because either declaring entry may activate later or replace its declaration; the dialog's copy lives in this package's own locale namespace so the two dictionaries land as a unit. Browse failures stay inside the dialog's own alert surfaces, so this occupant never drives the owner's `onError` arm. The node half is an empty `apply` that keeps the plugin on the host roster.
+The dialog is a 680×500 Miller-column view (clamped on short or narrow viewports), driven by the host `listDirectory` and `createDirectory` primitives through `ctx.uiWorkspace`. The owner passes its selected world's display label as `hostLabel`, which the header shows beside the title: a remote realm lists absolute POSIX paths like the Harness host's own filesystem, so the header is what says which world the panes came from. The label rides outside the heading's accessible name — a heading reader hears `Select Workspace Directory` — and stays announced as that heading's description, so the world still reaches screen readers. `ctx.uiWorkspace` resolves the selected host per listing and per creation, so a selection changed elsewhere reaches the next scan and a new folder lands in the world the panes show. Both registrations install as one transactional effect through nested `ctx.slots.inject()` calls, because either declaring entry may activate later or replace its declaration; the dialog's copy lives in this package's own locale namespace so the two dictionaries land as a unit. Browse failures stay inside the dialog's own alert surfaces — the Host's own diagnostic, including a host with no open execution world, is shown verbatim — so this occupant never drives the owner's `onError` arm. The node half is an empty `apply` that keeps the plugin on the host roster.
 
 </details>
 

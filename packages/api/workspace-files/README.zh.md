@@ -41,6 +41,8 @@ kind: "package-reference"
 
 `read`、`readBytes`、`readAll`、`readRelated` 与 `stat` 接受绝对路径或相对于所选 Session 工作区根的路径。组合文件系统决定路径是否可读；本服务不额外要求文件读取限定于工作区。`readRelated` 从基文件所在目录解析相对文件系统路径，基文件或目标文件位于工作区外时同样适用。这些方法以文件系统执行环境中的绝对路径报告文件。`list` 仍限定于工作区，并以相对于该根的路径报告被列举目录。`changes` 同样只报告工作区根内已埋点的文件系统观察。
 
+请求 scope 同时携带解释工作区根的执行世界所属主机身份。省略该身份、或使用内置本机身份时，读取与观测完全走 Harness 主机自身的文件系统，与以往一致；其他身份寻址该主机已打开的执行世界，而指向未打开世界的身份以 `workspace-file/host-unavailable` 失败，绝不回退到 Harness 主机。Session 查找在 Session 头携带该身份之前不设置它，因此当前的每次读取都停留在 Harness 主机上。
+
 ### 分页
 
 `read` 返回一个行窗口，绝不返回整个文件。`range.offset` 是 1 起算的首行，缺省为 1；`range.limit` 是该页最多的行数，缺省为 `maxLines` 且不得超过它——更大的 limit，或不是正整数的 offset / limit，都是 `gateway/bad-request`。行以 `\n` 结束，末尾的 `\n` 是最后一行的终止符而不是再起一空行，所以两行文件就是两行。页的 `text` 以 `\n` 连接各行，最后一行之后不带终止符；`eof` 在该页含文件最后一行时为 true，offset 越过末尾则返回空页且 `eof` 为 true。每页还带上前置 stat 得到的文件 `version`，消费方据此分辨新页与旧页，以及 `bytes`——后端能报告时的整文件大小。服务只把文件读到该页之后的第一个字符为止，所以再大的文件每次请求也只占一页内存。
@@ -70,7 +72,7 @@ kind: "package-reference"
 
 ### 失败
 
-每种失败都是一个带类型化 details 的 `RemoteError` 代码，声明于 [`src/types.ts`](src/types.ts)：`workspace-file/not-found`、`workspace-file/outside-workspace`（仅目录列举）、`workspace-file/too-large`（带 `limit`，即适用的页、窗口或完整文件上限）、`workspace-file/not-text`、`workspace-file/not-regular-file`（`kind` 为 `directory`、`symlink` 或 `other`）以及 `workspace-file/not-directory`（`kind` 为 `file`、`symlink` 或 `other`）。调用方按代码分支，绝不按消息文本。
+每种失败都是一个带类型化 details 的 `RemoteError` 代码，声明于 [`src/types.ts`](src/types.ts)：`workspace-file/not-found`、`workspace-file/outside-workspace`（仅目录列举）、`workspace-file/too-large`（带 `limit`，即适用的页、窗口或完整文件上限）、`workspace-file/not-text`、`workspace-file/not-regular-file`（`kind` 为 `directory`、`symlink` 或 `other`）、`workspace-file/not-directory`（`kind` 为 `file`、`symlink` 或 `other`）以及 `workspace-file/host-unavailable`（`hostId`，即被请求但没有已打开执行世界的主机）。调用方按代码分支，绝不按消息文本。
 
 ### Client 文件资源
 

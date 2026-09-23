@@ -181,10 +181,8 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
         <IconTriangleRightFill14 className={clsx(css.arrow, row.expanded && css.arrowOpen)} />
       </span>
       <span className={css.projectText}>
-        <span className={css.titleLine}>
-          <span className={css.title}>{label}</span>
-          {branch !== undefined && <span className={css.branch}>{t('group.branch', { branch })}</span>}
-        </span>
+        <span className={css.title}>{label}</span>
+        {branch !== undefined && <span className={css.branch}>{t('group.branch', { branch })}</span>}
       </span>
       <span className={css.rowActions}>
         {actions !== undefined && (

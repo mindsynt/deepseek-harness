@@ -63,6 +63,44 @@ describe('Session creation failures', () => {
       '/default-workspace',
       false,
       undefined,
+      undefined,
+    )
+    await ctx.fiber.dispose()
+  })
+
+  it('forwards the Workspace host identity into Session creation', async () => {
+    const ctx = await baseContext()
+    const workspace = {
+      id: 'workspace-remote' as WorkspaceId,
+      path: '/srv/project',
+      hostId: 'remote-1',
+      attachSession: () => Promise.resolve(),
+    } as unknown as Workspace
+    ctx.provide('workspaceRegistry', {
+      get: () => workspace,
+      list: () => [workspace],
+    } as never)
+    const ensureSession = vi.fn((sessionId: SessionId, cwd: string) => {
+      const session = ctx.sessions.create(sessionId, { meta: { cwd } })
+      return Promise.resolve({ id: sessionId, session } as Agent)
+    })
+    const controller = new SessionCommandController(
+      ctx,
+      controllerAgents({ ensureSession }),
+      '/default-workspace',
+    )
+
+    await controller.create({
+      sessionId: SessionId('remote-workspace-session'),
+      workspaceId: workspace.id,
+    })
+
+    expect(ensureSession).toHaveBeenCalledWith(
+      SessionId('remote-workspace-session'),
+      '/srv/project',
+      true,
+      undefined,
+      'remote-1',
     )
     await ctx.fiber.dispose()
   })

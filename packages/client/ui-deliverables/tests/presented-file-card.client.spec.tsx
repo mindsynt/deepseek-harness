@@ -12,6 +12,7 @@ const props = () => ({
   file: { path: 'out/report.pdf', description: 'Final report', seq: 4, index: 1 },
   host: { name: 'remote-desktop', available: true, fileManager: 'finder' as const },
   phase: undefined,
+  remoteHost: undefined,
   onPreview: vi.fn(),
   onAction: vi.fn(),
   t: makeTranslate(en),
@@ -53,6 +54,14 @@ it.each(['opening', 'revealing'] as const)('keeps sidebar previews available whi
   fireEvent.click(view.getByRole('button', { name: 'Open out/report.pdf in sidebar' }))
   expect(p.onPreview).toHaveBeenCalledTimes(2)
   expect(p.onAction).not.toHaveBeenCalled()
+})
+
+it('names the remote host whose desktop could open a refused file', () => {
+  const p = props()
+  const view = render(<PresentedFileCard {...p} phase="remoteUnavailable" remoteHost={{ hostId: 'remote-1' }} />)
+  const status = view.getByRole('status')
+  expect(status.textContent).toContain("lives in remote host remote-1's execution world")
+  expect(status.getAttribute('data-error')).toBe('true')
 })
 
 it('keeps the native menu disabled until a desktop is available', () => {

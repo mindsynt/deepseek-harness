@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 工作区层级
 
-选择**添加工作区**并选取目录，即可注册工作区并打开 Session。**视图选项 → 分组方式**默认为**按工作区**，将工作区作为同级分组显示。选择**按工作区树**后，每个 Workspace 会位于最近的已注册祖先之下，之后添加的 Workspace 也会自动归入。每个 Workspace 保留自己的 Session 和行操作，子 Workspace 显示在父级自己的 Session 之前。祖先默认展开，已有的折叠偏好除外。保存的折叠状态也会隐藏当前 Session；如果后代 Workspace 包含当前 Session，祖先文件夹图标仍保持高亮。各层级的高亮和点击区域保持整行同宽，仅内容缩进。拖拽 Workspace 仅重排同级项目；落在后代行上时，由最近的兼容祖先接收，因此无需先折叠父级就能将其他工作区拖到其后。选择搜索结果会展开全部祖先。分组方式和展开状态保存在当前浏览器中；切换模式会保留各 Workspace 的展开偏好，单列表视图保持平铺。
+选择**添加工作区**并选取目录，即可注册工作区并打开 Session。**视图选项 → 分组方式**默认为**按工作区**，将工作区作为同级分组显示。选择**按工作区树**后，每个 Workspace 会位于最近的已注册祖先之下，之后添加的 Workspace 也会自动归入。每个 Workspace 保留自己的 Session 和行操作，子 Workspace 显示在父级自己的 Session 之前。祖先默认展开，已有的折叠偏好除外。保存的折叠状态也会隐藏当前 Session；如果后代 Workspace 包含当前 Session，祖先文件夹图标仍保持高亮。各层级的高亮和点击区域保持整行同宽，仅内容缩进。拖拽 Workspace 仅重排同级项目；落在后代行上时，由最近的兼容祖先接收，因此无需先折叠父级就能将其他工作区拖到其后。选择搜索结果会展开全部祖先。分组方式和展开状态保存在当前浏览器中；切换模式会保留各 Workspace 的展开偏好，单列表视图保持平铺。新建 Workspace 所指向的执行世界是**设置 → 远程主机**中选中的主机：浏览对话框会标出该世界，所选路径也注册在该主机上。未选中远程主机时，这个执行世界就是 Harness 宿主机，路径即宿主机自身的路径。
 
 层级仅使用已注册的规范路径，不扫描项目，也不解析符号链接别名。嵌套不会改变 Session 的工作目录、日志或 Workspace 归属。删除父 Workspace 后，子 Workspace 仍保持注册，并归入下一个已注册祖先；没有祖先时显示在根层级。
 
@@ -71,7 +71,11 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 
 ### 目录流子 slot
 
-每个注册各自声明一个**目录流子 slot**（`single` kind：`conversation.hero.workspace.directoryFlow`／`sidebar.workspaces.directoryFlow`），由组合的选择器包 client half 填入其选取交互——`-native` 后端的无渲染 OS 选择器驱动，`-browse` 组合下则是应用内浏览对话框。平铺显示的**添加工作区…** 操作仅在当前界面的 slot 被占用时渲染；slot 为空意味着该组合没有目录选择能力。本包持有触发与接纳：占用方通过 slot 的属主交互约定（`open`/`busy`/`onPicked`/`onCancel`/`onError`）每次打开上报一个所选路径，owner 通过对象层接纳它，并等待 Workspace 列表投影刷新后才选中已提交的 Workspace。
+每个注册各自声明一个**目录流子 slot**（`single` kind：`conversation.hero.workspace.directoryFlow`／`sidebar.workspaces.directoryFlow`），由组合的选择器包 client half 填入其选取交互——`-native` 后端的无渲染 OS 选择器驱动，`-browse` 组合下则是应用内浏览对话框。平铺显示的**添加工作区…** 操作仅在当前界面的 slot 被占用时渲染；slot 为空意味着该组合没有目录选择能力。本包持有触发与接纳：占用方通过 slot 的属主交互约定（`open`/`busy`/`hostLabel`/`onPicked`/`onCancel`/`onError`）每次打开上报一个所选路径，owner 通过对象层接纳它，并等待 Workspace 列表投影刷新后才选中已提交的 Workspace。`hostLabel` 命名该交互浏览的执行世界，因此列出绝对路径的对话框能够说明这些路径属于哪台主机。
+
+### 主机选择
+
+目录浏览与创建工作区作用于「设置 → Remote hosts」中所选的主机：每次列目录与每次创建都通过可选的 `ctx.remoteHostSelection` 读取。组合中若去掉 ui-remote-hosts 这一行，两者仍以 Harness 本机运行——与未选中任何远端主机时的行为相同。该读取跟随服务注册变化，因此后到的提供方、以及 HMR 下被注销的提供方都会生效，无需重新 apply 本插件。在浏览或创建入口作用于所选主机之前，会通过既有的 `hosts.list` verb 采样该主机执行世界的实时状态：远端执行世界从不重连，入口一旦指向 Host 已不再持有的世界，每次请求都会失败。已断开的执行世界会在文件夹错误文案旁明确说明，而不是照常打开目录流；接纳路径会再次采样，因为原生选择器从未列出过该世界。
 
 ### 视图状态
 
@@ -93,6 +97,7 @@ Workspace 与 Session 悬浮卡片会复制对应行被截断的值：激活 Wor
 - [ui-sidebar](../ui-sidebar/README.zh.md)——承载 `sidebar.workspaces` 子 slot 的侧边栏外壳。
 - [ui-conversation](../ui-conversation/README.zh.md)——承载 Session Intent 主视觉区选择器子 slot 的聊天界面。
 - [directory-picker-native](../../host/directory-picker-native/README.zh.md)——填充目录流子 slot 的 OS 选择器后端。
+- [ui-remote-hosts](../ui-remote-hosts/README.zh.md)——持有“新建工作区所用主机”选择结果的设置页。
 - [Workspace Controller](../../api/workspace-controller/README.zh.md)——负责 Workspace、成员关系与 Workspace 分组顺序的 Host 变更和框架无关 Client 投影。
 
 -----
@@ -117,6 +122,7 @@ Workspace 与 Session 悬浮卡片会复制对应行被截断的值：激活 Wor
 - **没有 Session 删除，取消归档位于设置中**：会话可以归档但绝不会被删除；已归档会话的查看与恢复由「已归档会话」设置页（[ui-settings-unarchive-sessions](../ui-settings-unarchive-sessions/README.zh.md)）负责，删除 Workspace 注册记录不会删除 Session。
 - **待处理的用户交互不会聚合到折叠的分组上**：折叠分组内正在等待的行不会点亮分组头指示，只有展开该分组后才可见。
 - **原生文件夹选择依赖本地 Host 载体**：在 `-native` 组合下，进程内部署或远程浏览器部署无法打开本地操作系统对话框；可远程的选取是 `-browse` 组合的应用内流程。
+- **已断开的远端执行世界只会被拒绝，不会被重新打开**：入口会报告执行世界已消失的所选主机，但不提供重新打开的操作；重新打开执行世界属于远程主机设置页的“移除后重新添加”流程。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -128,4 +134,4 @@ Workspace 与 Session 悬浮卡片会复制对应行被截断的值：激活 Wor
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。这是一个纯消费方插件，只向两个由宿主声明的 slot 注册展示组件，并注册自身的 locale dictionaries；inject face 由无状态 RPC 包装层和一次 create-and-open 调用组成；本插件不发出 Cordis 事件，也不持有跨插件可变状态。
+**运行时不变式：** 不发布伴生入口。这是一个纯消费方插件，只向两个由宿主声明的 slot 注册展示组件，并注册自身的 locale dictionaries；inject face 由无状态 RPC 包装层和一次 create-and-open 调用组成，其主机来自可选的 `ctx.get('remoteHostSelection')` 读取；本插件订阅该服务的注册变化，自身不发出 Cordis 事件，也不持有跨插件可变状态。

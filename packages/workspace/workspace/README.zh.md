@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用此包可以维护一个有序、持久的项目目录列表，以及在每个目录中运行的会话。宿主可以构建项目侧边栏、在不删除历史的情况下把会话从分组中隐藏，并在不删除文件夹、文件或会话的情况下移除项目。重新添加已移除的目录会创建一个全新项目，而目录无法校验的会话会保持 Ungrouped。需要持久项目分组的 GUI 或宿主工作流适合使用它；它对模型不可见，不增加提示词或请求上下文成本，但需要会话持久化与存储后端。
+使用此包可以维护一个有序、持久的项目目录列表——每个项目绑定拥有它的宿主——以及在每个目录中运行的会话。宿主可以构建项目侧边栏、在不删除历史的情况下把会话从分组中隐藏，并在不删除文件夹、文件或会话的情况下移除项目。重新添加已移除的目录会创建一个全新项目，而目录无法校验的会话会保持 Ungrouped。需要持久项目分组的 GUI 或宿主工作流适合使用它；它对模型不可见，不增加提示词或请求上下文成本，但需要会话持久化与存储后端。
 
 ## 目录
 
@@ -50,7 +50,7 @@ kind: "package-reference"
 
 ### 创建与排序项目
 
-从任何已存在的绝对目录路径创建项目：`C:\` 等文件系统根目录和普通目录都有效。相对路径、`C:work` 等 Windows 盘符相对路径、不存在的路径和文件都会被拒绝，且不会创建项目；为已有项目的目录再次创建会原样返回现有项目。你可以随时重命名项目，并把它移动到列表中的任意位置：
+从任何已存在的绝对目录路径创建本地项目：`C:\` 等文件系统根目录和普通目录都有效。相对路径、`C:work` 等 Windows 盘符相对路径、不存在的路径和文件都会被拒绝，且不会创建项目。非本机宿主的路径只做字符串规范化——必须是绝对 POSIX 拼写并去掉尾部斜杠——因此只有相对拼写会被拒绝，也不会发生 Harness 宿主的文件系统访问。为同一宿主上已有项目的目录再次创建会原样返回现有项目。你可以随时重命名项目，并把它移动到列表中的任意位置：
 
 ```text
 // Host consumer code, after the composition above is loaded:
@@ -58,6 +58,8 @@ const project = await ctx.workspaceRegistry.create('/path/to/dir', 'My Project')
 await project.setTitle('Renamed')
 ctx.workspaceRegistry.list() // shows the project, newest first
 ```
+
+`create(path, title?, hostId?)` 把项目限定到一个宿主。省略或传空 `hostId` 会选择内置本机宿主，该身份导出为 `LOCAL_HOST_ID`（`'local'`）；其他值命名由另一组合注册的宿主，同一路径在两个宿主上是两个项目。`resolveByPath(path, hostId?)` 使用同一配对。
 
 ### 将会话归入项目
 
@@ -79,7 +81,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 
 ### 设计理念
 
-- **每个规范路径一条记录。** `fs.realpath` 是唯一的一套唯一性规范：路径以规范化形式存储，因此指向已有记录目录的符号链接会与之冲突，唯一性即规范路径的字符串相等。
+- **每个宿主与规范路径一条记录。** 本机宿主的唯一性规范是 `fs.realpath`；非本机宿主的唯一性规范是字符串规范化（去掉尾部斜杠、要求绝对拼写），因为只有该宿主的执行世界才能进一步解析路径。唯一性即 `(hostId, 规范路径)` 的字符串相等。
 - **成员资格是所有权加实时 cwd 事实。** 记录的 `sessionIds` 顺序是所有权真源；启动时的头部索引校验它，`sessionIds` 在读取时过滤，下一次变更会持久化剪除无效项。
 - **仅读取头部。** 引导与 attach 校验只读取 `SessionHeader` 字段；事件正文绝不加载。
 - **两次写入的变更带显式标记。** 创建与删除在记录/顺序对可能分叉之前先持久化 `pendingMutation` 标记，因此启动只补全被中断的操作，未标记的分叉作为损坏明确报错。
@@ -87,7 +89,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 
 ### API 行为
 
-该 API 是一个由两个所有者构成的小家族：`WorkspaceRegistry` 负责创建、排序与删除项目、管理其会话记账，以及归档或恢复单个会话；`Workspace` 实体暴露显示标题、目录状态与会话投影。各方法的精确约定在代码中，而非本 README——参见 [src/index.ts](src/index.ts) 与 [src/entity.ts](src/entity.ts)。
+该 API 是一个由两个所有者构成的小家族：`WorkspaceRegistry` 负责在某个宿主上创建、排序与删除项目、管理其会话记账，以及归档或恢复单个会话；`Workspace` 实体暴露显示标题、宿主身份、目录状态与会话投影。各方法的精确约定在代码中，而非本 README——参见 [src/index.ts](src/index.ts) 与 [src/entity.ts](src/entity.ts)。
 
 ### 源码地图
 
@@ -97,12 +99,12 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 | [`src/entity.ts`](src/entity.ts) | 包私有 `Workspace` 实现及其唯一的 `mutate` 写入路径 |
 | [`src/spec.ts`](src/spec.ts) | 领域声明：记录 schema、注册表状态、`defineDomain` 规范 |
 | [`src/types.ts`](src/types.ts) | 公开 `Workspace` 接口与 `WorkspaceId` 品牌 |
-| [`src/paths.ts`](src/paths.ts) | `realpath` 唯一性规范 |
+| [`src/paths.ts`](src/paths.ts) | 本机 `realpath` 规范、远端字符串规范与内置宿主身份 |
 | [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：实体缓存镜像持久表 |
 
 ### 持久形态
 
-注册表打开 `workspace` 领域（版本 2）：一张以 `WorkspaceId` 为键的 `workspaces` 表，加上一个持有 `workspaceIds`（权威显示顺序）、`archivedSessionIds` 与可选 `pendingMutation` 标记的全局状态。在 `archivedSessionIds` 存在之前写入的记录会通过 schema 默认值解析为空集合。归档与取消归档都只重写该全局状态，因此恢复就是对同一字段的一次过滤写入；取消归档不做会话存在性探测，因为从集合中移除 id 不可能引入未知 id，而归档会在加入前校验会话。
+注册表打开 `workspace` 领域（版本 2）：一张以 `WorkspaceId` 为键的 `workspaces` 表，加上一个持有 `workspaceIds`（权威显示顺序）、`archivedSessionIds` 与可选 `pendingMutation` 标记的全局状态。在 `archivedSessionIds` 存在之前写入的记录会通过 schema 默认值解析为空集合，在 `hostId` 存在之前写入的记录会按内置本机宿主读取。携带空白或路径分隔符的 `hostId` 会在持久化边界被拒绝。归档与取消归档都只重写该全局状态，因此恢复就是对同一字段的一次过滤写入；取消归档不做会话存在性探测，因为从集合中移除 id 不可能引入未知 id，而归档会在加入前校验会话。
 
 ### 生命周期
 
@@ -158,7 +160,8 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 这些限制说明项目列表何时不合适，或何时需要特别的运维注意。它们是当前包约束，不是任务积压。
 
 - **移除绝不删除数据**——移除项目会保留其文件夹、文件与会话历史；这些会话变成 Ungrouped，而会话删除与文件夹移除是彼此独立且尚未提供的功能（参见[决策记录](../../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.zh.md)）。
-- **只有带记录目录的会话才能加入**——只有记录中带有可解析为项目路径的目录的会话才属于项目；没有目录的会话保持 Ungrouped，来自其他目录的会话无法移入。
+- **只有带记录目录的会话才能加入**——只有记录中带有能在项目宿主规范下规范化为项目路径的目录的会话才属于项目；没有目录的会话保持 Ungrouped，来自其他目录的会话无法移入。
+- **非本机宿主的路径只是一段字符串**——此包无法触达宿主的执行世界，因此非本机路径只做字符串规范化：去掉尾部斜杠，而 `..`、`.`、内部重复斜杠与符号链接都保持未解析。远端世界会视为同一目录的两种拼写，在宿主执行世界可寻址之前仍是两个项目，且 `status()` 报告的是 Harness 宿主文件系统而非远端。非本机 `hostId` 也不会对照已注册宿主校验。
 - **外部变更延迟可见**——如果另一进程删除或损坏目录，项目只能在下次刷新或重启后反映出来。
 - **归档与取消归档执行不同的会话校验**——恢复只是从归档集合中移除 id，因此会话已不存在的条目仍能取消归档，也不会留下未知引用；对未归档 id 执行恢复不写盘即完成，而 `archiveSession` 会拒绝既非实时也未持久化的会话。
 - **重新添加目录从空开始**——移除后再次添加同一目录会创建空会话列表的新项目；旧会话不会自动回来。

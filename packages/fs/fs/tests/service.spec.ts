@@ -13,6 +13,7 @@ import type {
   FsEditOutcome,
   FsEditRequest,
   FsInfo,
+  FsMkdirOutcome,
   FsPathInfo,
   FsTarget,
   FsWriteIntent,
@@ -22,6 +23,7 @@ import type {
 /** A minimal in-memory fake implementing the provider primitives. */
 class FakeFileSystem extends FileSystem {
   files = new Map<string, string>()
+  directories = new Set<string>()
 
   override async resolve(path: string): Promise<FsTarget> {
     return { targetKey: FsTargetKey(path), displayPath: path }
@@ -71,6 +73,14 @@ class FakeFileSystem extends FileSystem {
         version: FsVersion('v1'),
       },
     ]
+  }
+  override async mkdir(target: FsTarget): Promise<FsMkdirOutcome> {
+    if (this.files.has(target.targetKey)) {
+      throw new FsError(`not a directory: ${target.displayPath}`, 'FS_NOT_DIRECTORY')
+    }
+    if (this.directories.has(target.targetKey)) return { created: false }
+    this.directories.add(target.targetKey)
+    return { created: true }
   }
   override async writeText(target: FsTarget, content: string, _expected?: FsWriteIntent): Promise<FsWriteOutcome> {
     const before = this.files.get(target.targetKey) ?? null
@@ -156,6 +166,18 @@ describe('FileSystem provider seam', () => {
       size: 2,
       version: 'v1',
     }])
+  })
+
+  it('mkdir creates once, reports an existing directory, and refuses a file target', async () => {
+    const ctx = new Context()
+    await ctx.plugin(FakeFileSystem)
+    const fs = ctx.fs as FakeFileSystem
+    const target = await fs.resolve('new-dir')
+    expect(await fs.mkdir(target)).toEqual({ created: true })
+    expect(await fs.mkdir(target)).toEqual({ created: false })
+
+    fs.files.set('a.txt', 'hi')
+    await expect(fs.mkdir(await fs.resolve('a.txt'))).rejects.toMatchObject({ code: 'FS_NOT_DIRECTORY' })
   })
 
   it('stat returns undefined for an absent target', async () => {

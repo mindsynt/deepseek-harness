@@ -15,6 +15,7 @@ import type {
   FsEditOutcome,
   FsEditRequest,
   FsInfo,
+  FsMkdirOutcome,
   FsPathInfo,
   FsObservation,
   FsTarget,
@@ -34,6 +35,7 @@ export type {
   FsDirEntry,
   FsErrorCode,
   FsInfo,
+  FsMkdirOutcome,
   FsObservation,
   FsPathInfo,
   FsTarget,
@@ -234,6 +236,29 @@ export abstract class FileSystem extends Service {
    * @returns one entry per direct child, in stable name order.
    */
   abstract listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>
+
+  /**
+   * Create a directory, including every missing parent, idempotently. A target
+   * that already exists as a directory is left untouched and reports
+   * `created: false`, so repeated calls converge. A target — or a parent
+   * component — that exists as something else fails with `FS_NOT_DIRECTORY`;
+   * permission and other backend failures keep `FS_PERMISSION_DENIED` and
+   * `FS_IO_ERROR`. There is no `recursive` or mode argument: creation always
+   * includes parents. The provider's umask decides permissions, and a backend
+   * that cannot create directories must fail loudly rather than report success —
+   * the definition applies no fallback.
+   * @param target - the resolved directory target to create.
+   * @param signal - aborts before the directory takes effect.
+   * @param sandboxPolicy - the per-call mode and workspace root this creation
+   *   runs under; a sandboxing backend fences it by that policy, the bare
+   *   backend ignores it. Omit to leave the backend its own default.
+   * @returns whether this call created the directory.
+   */
+  abstract mkdir(
+    target: FsTarget,
+    signal?: AbortSignal,
+    sandboxPolicy?: SandboxExecutionPolicy,
+  ): Promise<FsMkdirOutcome>
 
   /**
    * Atomically create or replace UTF-8 text. `expected` guards intent and

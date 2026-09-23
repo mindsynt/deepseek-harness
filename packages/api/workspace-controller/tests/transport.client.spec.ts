@@ -347,6 +347,16 @@ describe('WorkspaceController', () => {
     expect(mock.log.requests('workspace/delete')).toEqual([{ workspaceId: 'one' }])
   })
 
+  it('forwards a requested host identity on create and projects it back', async ({ mock, start }) => {
+    const { remote, client } = await gatewayClient(mock, start)
+    const controller = new WorkspaceController(client.ctx, new ClientWorkspaceModel(remote.workspace))
+    await expect(controller.create({ path: '/srv/app', hostId: 'alpha' })).resolves.toMatchObject({
+      workspaceId: 'created',
+      hostId: 'alpha',
+    })
+    expect(mock.log.requests('workspace/create')).toEqual([{ path: '/srv/app', hostId: 'alpha' }])
+  })
+
   it('maps generated business failures to the command facade errors', async ({ mock, start }) => {
     const { remote, client } = await gatewayClient(mock, start)
     const controller = new WorkspaceController(client.ctx, new ClientWorkspaceModel(remote.workspace))

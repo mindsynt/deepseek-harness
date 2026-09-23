@@ -11,6 +11,7 @@ import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-tes
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from '../src/client/contract/slots.ts'
+import type { SelectedWorldState } from '../src/client/selected-host-world.ts'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 import { zh } from '../src/client/locales.ts'
 
@@ -27,7 +28,7 @@ const t: WorkspacePickerProps['t'] = makeTranslate(zh, commonZh)
 const wid = (id: string) => id as WorkspaceId
 function workspace(id: string, title = id): WorkspaceView {
   return {
-    workspaceId: wid(id), path: `/projects/${id}`, title, sessionIds: [],
+    workspaceId: wid(id), hostId: 'local', path: `/projects/${id}`, title, sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   }
 }
@@ -88,6 +89,8 @@ function mount(
   items: readonly WorkspaceView[] = [workspace('alpha', 'Alpha')],
   createWorkspace = vi.fn(),
   occupancy = occupancySource(),
+  selectedHost: { hostId?: string; hostLabel?: string } = {},
+  checkSelectedHostWorld: () => Promise<SelectedWorldState> = vi.fn(async (): Promise<SelectedWorldState> => 'addressable'),
 ) {
   const onPick = vi.fn()
   const onClose = vi.fn()
@@ -102,9 +105,11 @@ function mount(
       useSessionRetainInfo={() => undefined}
       usePanelInfo={usePanelInfo} useResource={useResource}
       useWorkspaces={hook(workspaceState(nextItems))}
+      useSelectedHost={hook(selectedHost)}
       onPick={onPick}
       onClose={onClose}
       createWorkspace={createWorkspace}
+      checkSelectedHostWorld={checkSelectedHostWorld}
       useDirectoryFlow={occupancy.useDirectoryFlow}
       renderSlot={renderSlot}
       t={t}
@@ -114,7 +119,7 @@ function mount(
     renderPicker(items),
   )
   return {
-    view, onPick, onClose, createWorkspace, probe, occupancy,
+    view, onPick, onClose, createWorkspace, checkSelectedHostWorld, probe, occupancy,
     rerenderItems: (nextItems: readonly WorkspaceView[]) => { view.rerender(renderPicker(nextItems)) },
   }
 }
@@ -140,10 +145,61 @@ describe('WorkspacePicker', () => {
     chooseAdd()
     expect(b.onClose).toHaveBeenCalled()
     expect(screen.getByTestId('directory-flow')).toBeTruthy()
+    // No remote host selected: the flow browses this machine.
+    expect(b.probe.owner!.hostLabel).toBe('本机')
     await act(async () => { b.probe.owner!.onPicked('/tmp/project') })
     expect(createWorkspace).toHaveBeenCalledWith({ path: '/tmp/project' })
     await waitFor(() => { expect(b.onPick).toHaveBeenCalledWith(created.workspaceId) })
     // Successful adoption withdraws the flow request.
+    expect(screen.queryByTestId('directory-flow')).toBeNull()
+  })
+
+  it('names the selected remote host on the add entry and in the flow it opens', async () => {
+    const b = mount([workspace('alpha', 'Alpha')], vi.fn(), occupancySource(), {
+      hostId: 'bravo', hostLabel: 'Bravo',
+    })
+    fireEvent.click(screen.getByRole('menuitem', { name: '在 Bravo 上添加工作区…' }))
+    // A remote entry samples the world before it opens the flow.
+    expect(b.checkSelectedHostWorld).toHaveBeenCalledTimes(1)
+    await waitFor(() => { expect(screen.getByTestId('directory-flow')).toBeTruthy() })
+    expect(b.probe.owner!.hostLabel).toBe('Bravo')
+  })
+
+  it('refuses to open a remote browse flow whose host no longer holds its world, and re-samples on retry', async () => {
+    const check = vi.fn(async (): Promise<SelectedWorldState> => 'disconnected')
+    const b = mount([workspace('alpha', 'Alpha')], vi.fn(), occupancySource(), {
+      hostId: 'bravo', hostLabel: 'Bravo',
+    }, check)
+    fireEvent.click(screen.getByRole('menuitem', { name: '在 Bravo 上添加工作区…' }))
+    expect(await screen.findByRole('dialog', { name: '无法打开文件夹' })).toBeTruthy()
+    expect(screen.getByRole('alert').textContent)
+      .toBe('所选远程主机的执行世界已断开，相关操作不可恢复。请移除后重新添加该主机，或改用本机。')
+    // No flow was raised over a world nobody can list.
+    expect(screen.queryByTestId('directory-flow')).toBeNull()
+    expect(b.createWorkspace).not.toHaveBeenCalled()
+
+    // The world came back (the host was removed and re-added): the retry
+    // samples again and opens the flow.
+    check.mockResolvedValueOnce('addressable')
+    fireEvent.click(screen.getByRole('button', { name: '重新选择' }))
+    await waitFor(() => { expect(screen.getByTestId('directory-flow')).toBeTruthy() })
+    expect(check).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses an adoption whose host world stopped after the flow opened', async () => {
+    const check = vi.fn(async (): Promise<SelectedWorldState> => 'addressable')
+    const b = mount([workspace('alpha', 'Alpha')], vi.fn(), occupancySource(), {
+      hostId: 'bravo', hostLabel: 'Bravo',
+    }, check)
+    fireEvent.click(screen.getByRole('menuitem', { name: '在 Bravo 上添加工作区…' }))
+    await waitFor(() => { expect(screen.getByTestId('directory-flow')).toBeTruthy() })
+
+    // The native chooser never listed the world, so the adoption samples it.
+    check.mockResolvedValueOnce('disconnected')
+    await act(async () => { b.probe.owner!.onPicked('/srv/work/project') })
+    expect(screen.getByRole('alert').textContent)
+      .toBe('所选远程主机的执行世界已断开，相关操作不可恢复。请移除后重新添加该主机，或改用本机。')
+    expect(b.createWorkspace).not.toHaveBeenCalled()
     expect(screen.queryByTestId('directory-flow')).toBeNull()
   })
 
@@ -225,6 +281,8 @@ describe('WorkspacePicker', () => {
         useSessionRetainInfo={() => undefined}
         usePanelInfo={usePanelInfo} useResource={useResource}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
+        checkSelectedHostWorld={vi.fn(async (): Promise<SelectedWorldState> => 'addressable')}
+        useSelectedHost={hook({})}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
       />,
     )
@@ -243,6 +301,8 @@ describe('WorkspacePicker', () => {
         useSessionRetainInfo={() => undefined}
         usePanelInfo={usePanelInfo} useResource={useResource}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
+        checkSelectedHostWorld={vi.fn(async (): Promise<SelectedWorldState> => 'addressable')}
+        useSelectedHost={hook({})}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
       />,
     )

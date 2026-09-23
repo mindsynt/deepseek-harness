@@ -902,15 +902,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the chosen absolute path, or null when the operator cancels.',
       },
       {
-        signature: '@Remote(\'list\') async list(path: string | undefined, signal: AbortSignal): Promise<DirectoryListing>',
+        signature: '@Remote(\'list\') async list(path: string | undefined, hostId: string | undefined, signal: AbortSignal): Promise<DirectoryListing>',
         description: 'List one directory level for a Remote caller\'s in-app browser.',
-        parameters: [{ name: 'path', description: 'absolute directory to list; absent lists the home directory.' }, { name: 'signal', description: 'caller lifetime; abort stops the backend\'s scan instead of letting it outlive a disconnected caller.' }],
+        parameters: [{ name: 'path', description: 'absolute directory to list; absent lists the addressed world\'s anchor.' }, { name: 'hostId', description: 'host whose filesystem is listed; absent or the built-in local identity addresses the Harness host, any other identity the open execution world of that remote host.' }, { name: 'signal', description: 'caller lifetime; abort stops the backend\'s scan instead of letting it outlive a disconnected caller.' }],
         returns: 'the level\'s listing with its ancestry.',
       },
       {
-        signature: '@Remote(\'createDirectory\') async createDirectory(path: string, name: string): Promise<string>',
+        signature: '@Remote(\'createDirectory\') async createDirectory(path: string, name: string, hostId: string | undefined): Promise<string>',
         description: 'Create one child directory for a Remote caller\'s in-app browser.',
-        parameters: [{ name: 'path', description: 'absolute existing parent directory.' }, { name: 'name', description: 'single non-blank path segment.' }],
+        parameters: [{ name: 'path', description: 'absolute existing parent directory.' }, { name: 'name', description: 'single non-blank path segment.' }, { name: 'hostId', description: 'host whose filesystem the child is created on; absent or the built-in local identity addresses the Harness host, any other identity the open execution world of that remote host.' }],
         returns: 'the created directory\'s absolute path.',
       },
     ],
@@ -1048,6 +1048,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'one entry per direct child, in stable name order.',
       },
       {
+        signature: 'abstract mkdir( target: FsTarget, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsMkdirOutcome>',
+        description: 'Create a directory, including every missing parent, idempotently. A target that already exists as a directory is left untouched and reports `created: false`, so repeated calls converge. A target — or a parent component — that exists as something else fails with `FS_NOT_DIRECTORY`; permission and other backend failures keep `FS_PERMISSION_DENIED` and `FS_IO_ERROR`. There is no `recursive` or mode argument: creation always includes parents. The provider\'s umask decides permissions, and a backend that cannot create directories must fail loudly rather than report success — the definition applies no fallback.',
+        parameters: [{ name: 'target', description: 'the resolved directory target to create.' }, { name: 'signal', description: 'aborts before the directory takes effect.' }, { name: 'sandboxPolicy', description: 'the per-call mode and workspace root this creation runs under; a sandboxing backend fences it by that policy, the bare backend ignores it. Omit to leave the backend its own default.' }],
+        returns: 'whether this call created the directory.',
+      },
+      {
         signature: 'abstract writeText( target: FsTarget, content: string, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteOutcome>',
         description: 'Atomically create or replace UTF-8 text. `expected` guards intent and staleness; omission allows unconditional overwrite.',
         parameters: [{ name: 'target', description: 'the resolved target to write.' }, { name: 'content', description: 'the full new file content.' }, { name: 'expected', description: 'the write intent guarding the write; omit for unconditional.' }, { name: 'signal', description: 'aborts before atomic publication takes effect.' }, { name: 'sandboxPolicy', description: 'the per-call mode and workspace root this write runs under; a sandboxing backend fences the write by it, the bare backend ignores it. Omit to leave the backend its own default.' }],
@@ -1162,6 +1168,45 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read direct module dependency URLs from the active Node loader.',
         parameters: [{ name: 'url', description: 'Module URL.' }],
         returns: 'Linked module URLs, or an empty list for an uncached module.',
+      },
+    ],
+  },
+  {
+    key: 'hostsController',
+    summary: 'Host service backing the generated `ctx.remote.hosts` namespace.',
+    description: 'Host service backing the generated `ctx.remote.hosts` namespace.\n\nReads and writes report through `RemoteError` codes: `hosts/unknown-host` when no stored login exists, `hosts/already-exists` when an id is taken, `hosts/add-failed` when adding failed and the message must say what happened to the partial state, and `hosts/no-login-identity` when an open host cannot be checked.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') list(): RemoteHostsListValue',
+        description: 'Read every registered host: its durable record plus whether this process currently holds an open execution world for it.',
+        parameters: [],
+        returns: 'every persisted record in id order, each with its open state.',
+      },
+      {
+        signature: '@Remote(\'add\') async add(request: RemoteHostAddRequest): Promise<RemoteHostAddValue>',
+        description: 'Store entered login material, install the helper from a local artifact manifest, and open the host\'s execution world.\n\nThese steps are one transaction: a failure removes the stored login, the persisted record and any realm the registry opened, and reports that outcome in a `hosts/add-failed` message. An id that a record or an open world already uses is refused before anything is stored, so a failed add never removes an existing host.',
+        parameters: [{ name: 'request', description: 'identity, remote paths, artifact manifest and entered login.' }],
+        returns: 'the registered host as this call opened it.',
+        throws: ['RemoteError when the id is taken or the add failed.'],
+      },
+      {
+        signature: '@Remote(\'delete\') async remove(request: RemoteHostRemoveRequest): Promise<RemoteHostRemoveValue>',
+        description: 'Remove one host\'s execution world, its persisted record and its stored login material. Removing an id that is already gone resolves the same way, so a repeated removal is safe.\n\nThe wire method is `delete`, not `remove`: the Gateway Client installs a namespace\'s methods on its namespace service, and `remove` is one of that service\'s own members, so an endpoint published as `remove` is refused at mount time.',
+        parameters: [{ name: 'request', description: 'identity of the host to remove.' }],
+        returns: 'removal confirmation.',
+      },
+      {
+        signature: '@Remote(\'testConnection\') async testConnection(request: RemoteHostTestRequest): Promise<RemoteHostTestValue>',
+        description: 'Check that one host\'s stored login still reaches its endpoint by trusting the host keys that endpoint currently publishes.\n\nA host with no open world is checked through a freshly materialized identity, which is removed again afterwards; an open world\'s own identity is borrowed instead, because the open handle owns those files and closing it is the one removal. The check never writes a stored login and never returns one.',
+        parameters: [{ name: 'request', description: 'identity of the host to check.' }],
+        returns: 'the checked endpoint and the host keys its `known_hosts` records.',
+        throws: ['RemoteError when no stored login exists, or when the open world was opened from a configured artifact rather than stored login material.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) follow(signal: AbortSignal): AsyncIterable<RemoteHostsFollowFrame>',
+        description: 'Stream a complete host baseline followed by ordered increments, so a browser list refreshes without polling.\n\nOnly durable record changes are announced; the open flag is read from the live registry at each baseline and upsert.',
+        parameters: [{ name: 'signal', description: 'generation cancellation.' }],
+        returns: 'baseline followed by ordered host increments.',
       },
     ],
   },
@@ -1618,6 +1663,72 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'remoteHosts',
+    summary: 'Registry owning one isolated execution realm per open remote host.',
+    description: 'Registry owning one isolated execution realm per open remote host.',
+    methods: [
+      {
+        signature: 'async open(spec: RemoteHostSpec): Promise<RemoteHostHandle>',
+        description: 'Open one host realm; a duplicate id fails loud.',
+        parameters: [{ name: 'spec', description: 'resolved connection and helper coordinates of the host.' }],
+        returns: 'the open handle.',
+        throws: ['when the id is already open, or when the composition fails to provide a world.'],
+      },
+      {
+        signature: 'async provision(request: RemoteHostProvisionRequest): Promise<RemoteHostHandle>',
+        description: 'Install the helper on a host, then open its realm from the returned coordinates.',
+        parameters: [{ name: 'request', description: 'host, remote root, workspace and artifact.' }],
+        returns: 'the opened handle.',
+        throws: ['when the id is already open, when no installer is mounted, or when the install fails.'],
+      },
+      {
+        signature: 'async provisionFromLogin(request: RemoteHostLoginProvisionRequest): Promise<RemoteHostHandle>',
+        description: 'Materialize entered login material, trust its host key, install the helper through that identity, then open the realm it addresses.\n\nThe returned handle owns the materialized identity: closing it releases the realm and then removes the identity\'s generated directory, once. A failure from host-key trust through composition removes the identity before the failure is rethrown; when that removal also fails, the failure is reported with the original provisioning error as its `cause`.\n\nA request carrying `manifest` persists one host record after the realm opens, with `host` taken from the materialized alias and `helperHash` from the installation. A record write that fails closes the opened realm and its identity before rethrowing, so a failed call leaves no open host. Without `manifest` the realm still opens and no record is written — the host then survives no restart.',
+        parameters: [{ name: 'request', description: 'identity, login material, remote root, workspace and artifact.' }],
+        returns: 'the opened handle.',
+        throws: ['when the id is already open, when no credentials service is reachable, or when trust, install, composition or record persistence fails.'],
+      },
+      {
+        signature: 'get(id: RemoteHostId): RemoteHostHandle | undefined',
+        description: 'The open handle for an id, or undefined.',
+        parameters: [{ name: 'id', description: 'the host id to look up.' }],
+        returns: 'the open handle, or `undefined` when that id is not open.',
+      },
+      {
+        signature: 'list(): readonly RemoteHostHandle[]',
+        description: 'Every open handle.',
+        parameters: [],
+        returns: 'the open handles in the order they were opened.',
+      },
+      {
+        signature: 'async close(id: RemoteHostId): Promise<void>',
+        description: 'Close one host realm; unknown ids are a no-op.',
+        parameters: [{ name: 'id', description: 'the host id to close.' }],
+        returns: 'a promise settling once the realm and its providers are released.',
+      },
+      {
+        signature: 'records(): readonly RemoteHostRecord[]',
+        description: 'Every persisted host record, in id order.',
+        parameters: [],
+        returns: 'a fresh array of records sorted by id.',
+        throws: ['when the domain is not open, so a caller never reads an empty registry for a missing store.'],
+      },
+      {
+        signature: 'async save(record: RemoteHostRecord): Promise<void>',
+        description: 'Persist one host record, replacing any record with the same id.',
+        parameters: [{ name: 'record', description: 'the record to write.' }],
+        returns: 'a promise settling once the record is durable.',
+      },
+      {
+        signature: 'async forget(id: RemoteHostId): Promise<void>',
+        description: 'Close one host, remove its persisted record, and forget its stored login material.\n\nThe order matters: the realm — and the identity its handle owns — is gone before the record and the stored login are removed. A repeat for an id that is closed and already unrecorded resolves, and still asks the credentials service to forget the id.',
+        parameters: [{ name: 'id', description: 'the host to remove.' }],
+        returns: 'a promise settling once the realm, record and stored login are removed.',
+        throws: ['when no credentials service is reachable, or when record removal or credential removal fails.'],
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -1656,6 +1767,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read the session override without applying the deployment default.',
         parameters: [{ name: 'session', description: 'session whose log supplies the override.' }],
         returns: 'the last logged mode, or `undefined` without one.',
+      },
+      {
+        signature: 'provisioningPolicy(root: string): SandboxExecutionPolicy',
+        description: 'Resolve the policy for harness provisioning of one Session\'s own working directory. Session creation provisions that directory before the Session exists, so no session mode can select this call and the deployment default must not deny it: a `read-only` deployment still has to create the directory a read-only Session will read. The destination root authorizes exactly its own subtree under `workspace-write` — the same boundary resolve assigns once the Session exists, because a Session cwd IS its `workspace-write` root — so provisioning adds no writable range beyond the directory being created. The enforcing backend still canonicalizes the root and fails loud when containment does not hold.',
+        parameters: [{ name: 'root', description: 'absolute destination directory in its execution world.' }],
+        returns: 'the provisioning policy: `workspace-write` bounded to `root`.',
+        throws: ['when `root` is not an absolute execution-world path.'],
       },
     ],
   },
@@ -2471,6 +2589,65 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'sshHelperInstaller',
+    summary: 'Installer service: places one verified helper artifact on a host, or confirms an identical install already there.',
+    description: 'Installer service: places one verified helper artifact on a host, or confirms an identical install already there. Every remote command is single-line and single-quotes each interpolated path.',
+    methods: [
+      {
+        signature: 'async install(request: HelperInstallRequest): Promise<HelperInstallation>',
+        description: 'Provision one host, or confirm an identical install already exists.',
+        parameters: [{ name: 'request', description: 'host, remote root, workspace, artifact and optional local SSH client configuration.' }],
+        returns: 'verified coordinates for the SSH connection config.',
+        throws: ['when the host cannot run the engine range, a remote command fails, or the installed entry digest differs from the artifact.'],
+      },
+    ],
+  },
+  {
+    key: 'sshHostCredentials',
+    summary: 'Store one host\'s login material and materialize its DSH-controlled OpenSSH identity on demand.',
+    description: 'Store one host\'s login material and materialize its DSH-controlled OpenSSH identity on demand.\n\nValidation happens before any file or record write, so a rejected login leaves both the credential store and the state directory untouched.',
+    methods: [
+      {
+        signature: 'async materialize(login: RemoteHostLogin): Promise<ControlledSshIdentity>',
+        description: 'Write one host\'s controlled configuration and identity.',
+        parameters: [{ name: 'login', description: 'host, port, user and optional private key.' }],
+        returns: 'the identity whose alias addresses that host.',
+        throws: ['when a field is malformed, or a generated file cannot be written.'],
+      },
+      {
+        signature: 'async store(id: string, login: RemoteHostLogin): Promise<void>',
+        description: 'Store one host\'s login material so later sessions reuse it without prompting.',
+        parameters: [{ name: 'id', description: 'the host\'s registry id.' }, { name: 'login', description: 'host, port, user and optional private key.' }],
+        throws: ['when the id or a login field is malformed, or the credential store rejects the write.'],
+      },
+      {
+        signature: 'async load(id: string): Promise<RemoteHostLogin | undefined>',
+        description: 'The stored login material, or undefined while none is stored.',
+        parameters: [{ name: 'id', description: 'the host\'s registry id.' }],
+        returns: 'the stored login, or `undefined` when this id has no record.',
+        throws: ['when the id is malformed or the stored record is not this package\'s payload.'],
+      },
+      {
+        signature: 'async forget(id: string): Promise<void>',
+        description: 'Remove stored material and any materialized files for that id.',
+        parameters: [{ name: 'id', description: 'the host\'s registry id.' }],
+        throws: ['when the id is malformed or the stored record is not this package\'s payload.'],
+      },
+      {
+        signature: 'async pinHostKey(identity: ControlledSshIdentity, line: string): Promise<void>',
+        description: 'Append one confirmed host-key line to a materialized identity\'s `known_hosts`.',
+        parameters: [{ name: 'identity', description: 'the identity whose `known_hosts` receives the line.' }, { name: 'line', description: 'one non-empty, single-line `known_hosts` entry.' }],
+        throws: ['when the line is empty, spans lines, carries a NUL character, or holds fewer than two fields.'],
+      },
+      {
+        signature: 'async trustFirstUse(identity: ControlledSshIdentity, endpoint: HostKeyEndpoint): Promise<void>',
+        description: 'Trust a host\'s published keys for the first time by scanning the real endpoint and recording what it publishes. Only lines the identity\'s `known_hosts` does not already carry are appended, so repeated calls for one endpoint change nothing and earlier lines survive untouched.',
+        parameters: [{ name: 'identity', description: 'the identity whose `known_hosts` receives the keys.' }, { name: 'endpoint', description: 'real host and port whose keys are scanned.' }],
+        throws: ['when the endpoint is malformed, the scan fails, a scanned line is malformed, or the host publishes no key.'],
+      },
+    ],
+  },
+  {
     key: 'storage',
     summary: 'The storage hub service.',
     description: 'The storage hub service. Backends register under `backend`; data forms mount under their `StorageForms` key and are reached as `ctx.storage.<form>`.',
@@ -3229,7 +3406,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: '@Remote(\'create\') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>',
         description: 'Create or idempotently resolve one Workspace over an existing directory.',
-        parameters: [{ name: 'request', description: 'directory path to register.' }],
+        parameters: [{ name: 'request', description: 'directory path to register and the host that interprets it.' }],
         returns: 'the Workspace and whether this call created it.',
       },
       {
@@ -3270,7 +3447,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'branches\') async branches(): Promise<WorkspaceBranchesValue>',
-        description: 'Read the checked-out git branch of every registered Workspace.\n\nA branch is external checkout state that no Workspace mutation announces, so it stays out of the durable projection and is read on demand instead.',
+        description: 'Read the checked-out git branch of every registered Workspace, each in the execution world its host identity addresses.\n\nA branch is external checkout state that no Workspace mutation announces, so it stays out of the durable projection and is read on demand instead. A Workspace whose world this Host cannot reach contributes no label: the branch is decorative, and reading the Harness host\'s own filesystem instead would name a branch the Workspace does not have.',
         parameters: [],
         returns: 'one entry per registered Workspace, each omitting `branch` when its path is not a checkout.',
       },
@@ -3334,12 +3511,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'workspaceRegistry',
     summary: 'Durable workspace registry.',
-    description: 'Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-cwd header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.',
+    description: 'Durable workspace registry. Startup waits for `sessionPersistence`, builds one header index carrying each session\'s local and non-local path canons, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.',
     methods: [
       {
-        signature: 'async create(path: string, title?: string): Promise<Workspace>',
-        description: 'Create or reuse a workspace for an existing directory. The fully qualified path is canonicalized through `fs.realpath`; a relative, nonexistent, or non-directory path rejects. Repeated calls for the same canonical path return the existing entity without changing its title. A newly created workspace is prepended to the durable registry order. Different canonical paths may share a display title.',
-        parameters: [{ name: 'path', description: 'Existing directory to own, in a fully qualified path spelling.' }, { name: 'title', description: 'Display title used only when a new record is created.' }],
+        signature: 'async create(path: string, title?: string, hostId?: string): Promise<Workspace>',
+        description: 'Create or reuse a workspace for a directory on one host. On the built-in local host the fully qualified path is canonicalized through `fs.realpath` and must name an existing directory, so a relative, nonexistent, or non-directory path rejects. On any other host the path is canonicalized by string alone (absolutely rooted POSIX spelling, trailing slashes removed) and no Harness-host filesystem access happens, because that host\'s execution world owns the directory. Repeated calls for the same `(hostId, canonical path)` pair return the existing entity without changing its title; the same canonical path on two hosts is two workspaces. A newly created workspace is prepended to the durable registry order. Different canonical paths may share a display title. The registry does not verify that a non-local `hostId` names a registered host.',
+        parameters: [{ name: 'path', description: 'Directory to own, in a fully qualified path spelling.' }, { name: 'title', description: 'Display title used only when a new record is created.' }, { name: 'hostId', description: 'Identity of the host that interprets `path`; omitted or empty names the built-in local host.' }],
         returns: 'the existing or newly durable workspace.',
       },
       {
@@ -3379,10 +3556,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'resolution after durability.',
       },
       {
-        signature: 'async resolveByPath(path: string): Promise<Workspace | undefined>',
-        description: 'Resolve by canonical directory path without creating or mutating a workspace. A missing path rejects during `realpath`; an existing unowned directory returns `undefined`.',
-        parameters: [{ name: 'path', description: 'Existing directory path in a fully qualified spelling.' }],
-        returns: 'the workspace owning the canonical path, when one exists.',
+        signature: 'async resolveByPath(path: string, hostId?: string): Promise<Workspace | undefined>',
+        description: 'Resolve by canonical directory path on one host without creating or mutating a workspace. On the built-in local host a missing path rejects during `realpath`; a non-local host canonicalizes the path string alone, so no Harness-host filesystem access happens. An existing unowned directory — or, on a non-local host, any unowned canonical spelling — returns `undefined`.',
+        parameters: [{ name: 'path', description: 'Directory path in a fully qualified spelling.' }, { name: 'hostId', description: 'Identity of the host that interprets `path`; omitted or empty means the built-in local host.' }],
+        returns: 'the workspace owning the canonical path on that host, when one exists.',
       },
     ],
   },
@@ -4427,6 +4604,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly agentProvider?: string;\n    readonly agentModel?: string;\n    readonly agentReasoningEffort?: ReasoningEffortId;\n    readonly persona?: string;\n    readonly toolFilter?: ToolRestriction;\n}',
   },
   {
+    name: 'ControlledSshIdentity',
+    declaration: 'export interface ControlledSshIdentity {\n    readonly alias: string;\n    readonly configPath: string;\n    readonly directory: string;\n    readonly knownHostsPath: string;\n    dispose(): Promise<void>;\n}',
+  },
+  {
     name: 'CordisDynamicPackageId',
     declaration: 'export type CordisDynamicPackageId = Branded<\'CordisDynamicPackageId\'>;',
   },
@@ -4572,7 +4753,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DirectoryPickerBrowseCapability',
-    declaration: 'export interface DirectoryPickerBrowseCapability {\n    kind: \'browse\';\n    list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>;\n    createDirectory(path: string, name: string): Promise<string>;\n}',
+    declaration: 'export interface DirectoryPickerBrowseCapability {\n    kind: \'browse\';\n    list(path?: string, hostId?: string, signal?: AbortSignal): Promise<DirectoryListing>;\n    createDirectory(path: string, name: string, hostId?: string): Promise<string>;\n}',
   },
   {
     name: 'DirectoryPickerCapabilities',
@@ -4707,6 +4888,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface FileReferenceCandidate {\n    path: string;\n    kind: \'file\' | \'directory\';\n}',
   },
   {
+    name: 'FileSystem',
+    declaration: 'export abstract class FileSystem extends Service {\n    constructor(ctx: Context);\n    get sandboxMode(): SandboxMode | undefined;\n    abstract resolve(path: string, opts?: {\n        cwd?: string;\n        signal?: AbortSignal;\n    }): Promise<FsTarget>;\n    abstract processPath(target: FsTarget): string;\n    processPathFromHostPath(hostPath: string): string | undefined;\n    abstract fileUrl(target: FsTarget): string;\n    abstract contains(parent: FsTarget, child: FsTarget): boolean;\n    abstract stat(target: FsTarget, signal?: AbortSignal): Promise<FsInfo | undefined>;\n    abstract lstat(path: string, opts?: {\n        cwd?: string;\n    }, signal?: AbortSignal): Promise<FsPathInfo | undefined>;\n    abstract readText(target: FsTarget, signal?: AbortSignal): Promise<string>;\n    abstract streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>>;\n    abstract readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>;\n    abstract readByteRange(target: FsTarget, range: {\n        offset: number;\n        length: number;\n    }, signal?: AbortSignal): Promise<Uint8Array>;\n    abstract listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>;\n    abstract mkdir(target: FsTarget, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy): Promise<FsMkdirOutcome>;\n    abstract writeText(target: FsTarget, content: string, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy /* …truncated — full shape in source */',
+  },
+  {
     name: 'FileUploadReceiptId',
     declaration: 'export type FileUploadReceiptId = Branded<\'file-upload-receipt-id\'>;',
   },
@@ -4737,6 +4922,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FsInfo',
     declaration: 'export interface FsInfo {\n    version: FsVersion;\n    type: \'file\' | \'directory\' | \'other\';\n    size?: number;\n}',
+  },
+  {
+    name: 'FsMkdirOutcome',
+    declaration: 'export interface FsMkdirOutcome {\n    created: boolean;\n}',
   },
   {
     name: 'FsObservation',
@@ -4823,12 +5012,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface GrantRecord {\n    readonly kind: \'grant\';\n    readonly payload: unknown;\n}',
   },
   {
+    name: 'HelperInstallation',
+    declaration: 'export interface HelperInstallation {\n    readonly node: string;\n    readonly helper: string;\n    readonly helperHash: string;\n    readonly workspace: string;\n}',
+  },
+  {
+    name: 'HelperInstallRequest',
+    declaration: 'export interface HelperInstallRequest {\n    readonly host: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly artifact: RemoteHelperArtifact;\n    readonly sshConfigFile?: string;\n}',
+  },
+  {
     name: 'HostConnectionFetch',
     declaration: 'export interface HostConnectionFetch {\n    register(route: ConnectionFetchRoute): () => Promise<void>;\n}',
   },
   {
     name: 'HostConnectionRpc',
     declaration: 'export interface HostConnectionRpc {\n    handle(channel: string, handler: ConnectionRpcHandler): () => Promise<void>;\n    intercept(channel: \'/api\', matches: ConnectionRpcEndpointMatcher, handler: ConnectionRpcHandler): () => Promise<void>;\n}',
+  },
+  {
+    name: 'HostKeyEndpoint',
+    declaration: 'export interface HostKeyEndpoint {\n    readonly host: string;\n    readonly port: number;\n}',
   },
   {
     name: 'ImageAttachmentLimits',
@@ -5531,6 +5732,86 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RemoteEventHostInfo {\n    readonly home: string;\n}',
   },
   {
+    name: 'RemoteHelperArtifact',
+    declaration: 'export interface RemoteHelperArtifact {\n    readonly archive: Uint8Array;\n    readonly entry: string;\n    readonly digest: string;\n}',
+  },
+  {
+    name: 'RemoteHostAddRequest',
+    declaration: 'export interface RemoteHostAddRequest {\n    readonly id: string;\n    readonly label: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly manifest: string;\n    readonly login: RemoteHostLogin;\n}',
+  },
+  {
+    name: 'RemoteHostAddValue',
+    declaration: 'export interface RemoteHostAddValue {\n    readonly host: RemoteHostView;\n}',
+  },
+  {
+    name: 'RemoteHostHandle',
+    declaration: 'export interface RemoteHostHandle {\n    readonly spec: RemoteHostSpec;\n    readonly world: RemoteHostWorld;\n    readonly closed: Promise<void>;\n    close(): Promise<void>;\n}',
+  },
+  {
+    name: 'RemoteHostId',
+    declaration: 'export type RemoteHostId = Branded<\'RemoteHostId\'>;',
+  },
+  {
+    name: 'RemoteHostLoginProvisionRequest',
+    declaration: 'export interface RemoteHostLoginProvisionRequest {\n    readonly id: RemoteHostId;\n    readonly label: string;\n    readonly login: RemoteHostLogin;\n    readonly root: string;\n    readonly workspace: string;\n    readonly artifact: RemoteHelperArtifact;\n    readonly manifest?: string;\n}',
+  },
+  {
+    name: 'RemoteHostProvisionRequest',
+    declaration: 'export interface RemoteHostProvisionRequest {\n    readonly id: RemoteHostId;\n    readonly label: string;\n    readonly host: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly artifact: RemoteHelperArtifact;\n}',
+  },
+  {
+    name: 'RemoteHostRecord',
+    declaration: 'export interface RemoteHostRecord {\n    readonly id: string;\n    readonly label: string;\n    readonly host: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly manifest: string;\n    readonly helperHash: string;\n}',
+  },
+  {
+    name: 'RemoteHostRecordView',
+    declaration: 'export interface RemoteHostRecordView {\n    readonly id: string;\n    readonly label: string;\n    readonly host: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly manifest: string;\n    readonly helperHash: string;\n}',
+  },
+  {
+    name: 'RemoteHostRemoveRequest',
+    declaration: 'export interface RemoteHostRemoveRequest {\n    readonly id: string;\n}',
+  },
+  {
+    name: 'RemoteHostRemoveValue',
+    declaration: 'export interface RemoteHostRemoveValue {\n    readonly removed: true;\n}',
+  },
+  {
+    name: 'RemoteHostsBaseline',
+    declaration: 'export interface RemoteHostsBaseline {\n    readonly items: readonly RemoteHostView[];\n}',
+  },
+  {
+    name: 'RemoteHostsFollowFrame',
+    declaration: 'export type RemoteHostsFollowFrame = {\n    readonly type: \'baseline\';\n    readonly value: RemoteHostsBaseline;\n} | RemoteHostsFollowIncrement;',
+  },
+  {
+    name: 'RemoteHostsFollowIncrement',
+    declaration: 'export type RemoteHostsFollowIncrement = {\n    readonly type: \'upsert\';\n    readonly host: RemoteHostView;\n} | {\n    readonly type: \'remove\';\n    readonly hostId: string;\n};',
+  },
+  {
+    name: 'RemoteHostsListValue',
+    declaration: 'export interface RemoteHostsListValue {\n    readonly items: readonly RemoteHostView[];\n}',
+  },
+  {
+    name: 'RemoteHostSpec',
+    declaration: 'export interface RemoteHostSpec {\n    readonly id: RemoteHostId;\n    readonly label: string;\n    readonly host: string;\n    readonly sshConfigFile?: string;\n    readonly node: string;\n    readonly helper: string;\n    readonly helperHash: string;\n    readonly workspace: string;\n    readonly bootstrapPath?: string;\n    readonly bootstrapHash?: string;\n    readonly requestTimeoutMs?: number;\n    readonly maxFrameBytes?: number;\n    readonly maxPending?: number;\n    readonly leaseMs?: number;\n}',
+  },
+  {
+    name: 'RemoteHostTestRequest',
+    declaration: 'export interface RemoteHostTestRequest {\n    readonly id: string;\n}',
+  },
+  {
+    name: 'RemoteHostTestValue',
+    declaration: 'export interface RemoteHostTestValue {\n    readonly host: string;\n    readonly port: number;\n    readonly hostKeys: readonly string[];\n}',
+  },
+  {
+    name: 'RemoteHostView',
+    declaration: 'export interface RemoteHostView {\n    readonly record: RemoteHostRecordView;\n    readonly open: boolean;\n}',
+  },
+  {
+    name: 'RemoteHostWorld',
+    declaration: 'export interface RemoteHostWorld {\n    readonly ssh: SshConnection;\n    readonly fs: FileSystem;\n    readonly subprocess: SubprocessRuntime;\n    readonly sandbox: SandboxProvider;\n}',
+  },
+  {
     name: 'RenderedDocumentBytes',
     declaration: 'export interface RenderedDocumentBytes extends WorkspaceFileBytes {\n    readonly missingFonts: string[];\n    readonly generation: OfficeToPdfGeneration;\n}',
   },
@@ -5617,6 +5898,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SandboxPolicyRequest',
     declaration: 'export interface SandboxPolicyRequest {\n    session?: Session;\n    mode?: SandboxMode;\n}',
+  },
+  {
+    name: 'SandboxProvider',
+    declaration: 'export abstract class SandboxProvider extends Service {\n    constructor(ctx: Context);\n    abstract confine(argv: readonly string[], policy: SandboxPolicy, signal?: AbortSignal): Promise<ConfinedArgv>;\n}',
   },
   {
     name: 'SaveFileAttachment',
@@ -6343,6 +6628,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SpillSource = {\n    kind: \'tool\';\n    toolName: string;\n    callId: ToolCallId;\n    label: string;\n} | {\n    kind: \'session-reference\';\n    sessionId: SessionId;\n    label: string;\n};',
   },
   {
+    name: 'SshConnection',
+    declaration: 'export class SshConnection extends Service {\n    static Config: schema<Config>;\n    readonly ready: Promise<Hello>;\n    constructor(ctx: Context, config: Config);\n    async [Service.init](): Promise<void>;\n    get nodeExecutable(): string;\n    get bootstrapPath(): string;\n    async request<T>(method: string, params: unknown, result: z.ZodType<T>, signal?: AbortSignal, wait: boolean = false): Promise<T>;\n    async connectStream(endpoint: SshStreamEndpoint, signal?: AbortSignal): Promise<Socket>;\n    dispose(): Promise<void>;\n}',
+  },
+  {
     name: 'SshStreamEndpoint',
     declaration: 'export type SshStreamEndpoint = z.infer<typeof streamEndpointSchema>;',
   },
@@ -6473,6 +6762,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SubprocessOutputReader',
     declaration: 'export interface SubprocessOutputReader {\n    readFrom(fromByte: number): SubprocessOutputRead;\n}',
+  },
+  {
+    name: 'SubprocessRuntime',
+    declaration: 'export abstract class SubprocessRuntime extends Service {\n    constructor(ctx: Context);\n    abstract resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal): Promise<string>;\n    abstract terminalEnvironment(signal?: AbortSignal): Promise<SubprocessTerminalEnvironment>;\n    abstract spawn(spec: SubprocessSpawnSpec): SubprocessHandle;\n    abstract spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle>;\n}',
   },
   {
     name: 'SubprocessSpawnSpec',
@@ -7112,7 +7405,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Workspace',
-    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly sessionIds: readonly SessionId[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
+    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly hostId: string;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly sessionIds: readonly SessionId[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
   },
   {
     name: 'WorkspaceArchiveSessionRequest',
@@ -7148,7 +7441,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkspaceCreateRequest',
-    declaration: 'export interface WorkspaceCreateRequest {\n    readonly path: string;\n}',
+    declaration: 'export interface WorkspaceCreateRequest {\n    readonly path: string;\n    readonly hostId?: string;\n}',
   },
   {
     name: 'WorkspaceCreateValue',
@@ -7192,7 +7485,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkspaceFileScope',
-    declaration: 'export interface WorkspaceFileScope {\n    readonly sessionId: SessionId;\n    readonly workspaceRoot: string;\n}',
+    declaration: 'export interface WorkspaceFileScope {\n    readonly sessionId: SessionId;\n    readonly workspaceRoot: string;\n    readonly hostId?: string;\n}',
   },
   {
     name: 'WorkspaceFileStat',
@@ -7240,7 +7533,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkspaceView',
-    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly hostId: string;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
   },
 ]
 

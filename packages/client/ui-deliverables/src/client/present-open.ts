@@ -5,12 +5,30 @@ import { changedFileUrl } from '../changes.ts'
 import { presentedFileUrl, PRESENT_HOST_PATH, isPresentedHost, type PresentedAction, type PresentedHost } from '../presented.ts'
 
 /** State of the latest explicit open gesture for one saved file. */
-export type PresentedOpenPhase = 'opening' | 'opened' | 'revealing' | 'revealed' | 'error' | 'revealError' | 'nativeUnavailable'
+export type PresentedOpenPhase = 'opening' | 'opened' | 'revealing' | 'revealed' | 'error' | 'revealError' | 'nativeUnavailable' | 'remoteUnavailable'
+
+/**
+ * One open gesture's result. A remote-world refusal carries the host that owns
+ * the file, so the card can say which host's desktop could open it.
+ */
+export type PresentedOpenState =
+  | PresentedOpenPhase
+  | { readonly phase: 'remoteUnavailable'; readonly hostId: string }
+
+/** Phase of one open state, whether or not it carries a remote host. */
+export function presentedOpenPhase(state: PresentedOpenState | undefined): PresentedOpenPhase | undefined {
+  return typeof state === 'string' ? state : state?.phase
+}
+
+/** The remote host a remote-world refusal names, absent for every other state. */
+export function presentedOpenRemoteHost(state: PresentedOpenState | undefined): { readonly hostId: string } | undefined {
+  return typeof state === 'object' ? state : undefined
+}
 
 /** One browser plugin's file-open requests, cancelled when that plugin is disposed. */
 export class PresentedOpenController {
   /** File action URLs key the state across Sessions, turns, and both clickable surfaces. */
-  readonly state = createSnapshotStore<Record<string, PresentedOpenPhase | undefined>>({})
+  readonly state = createSnapshotStore<Record<string, PresentedOpenState | undefined>>({})
   /** Native destination metadata, or a retryable read failure. */
   readonly host = createSnapshotStore<PresentedHost | 'error' | null>(null)
   private loading: Promise<void> | undefined
@@ -105,14 +123,32 @@ export class PresentedOpenController {
 
   private async request(url: string, action: PresentedAction): Promise<void> {
     const failure = action === 'open' ? 'error' : 'revealError'
-    let phase: PresentedOpenPhase = action === 'open' ? 'opened' : 'revealed'
+    let state: PresentedOpenState = action === 'open' ? 'opened' : 'revealed'
     try {
       const response = await fetch(action === 'open' ? url : `${url}&action=reveal`, { method: 'POST', signal: this.lifetime.signal })
-      if (!response.ok) phase = response.status === 422 ? 'nativeUnavailable' : failure
+      if (!response.ok) state = await refusalState(response, failure)
     } catch {
       // Transport failures share the retryable card state with Host open failures.
-      phase = failure
+      state = failure
     }
-    if (!this.lifetime.signal.aborted) this.state.update((state) => { state[url] = phase })
+    if (!this.lifetime.signal.aborted) this.state.update((states) => { states[url] = state })
   }
+}
+
+/**
+ * Classify one failed open: a remote-world refusal keeps the host it names so
+ * the card can say whose desktop could open the file, a missing Host mapping
+ * keeps the retryable native-unavailable copy, and every other failure stays
+ * retryable.
+ * @param response - the failed route response.
+ * @param failure - the retryable phase for this gesture's action.
+ * @returns the state to publish for the gesture.
+ */
+async function refusalState(response: Response, failure: PresentedOpenPhase): Promise<PresentedOpenState> {
+  if (response.status !== 409) return response.status === 422 ? 'nativeUnavailable' : failure
+  const body: unknown = await response.json().catch(() => undefined)
+  const hostId = typeof body === 'object' && body !== null && typeof (body as { hostId?: unknown }).hostId === 'string'
+    ? (body as { hostId: string }).hostId
+    : undefined
+  return hostId === undefined ? failure : { phase: 'remoteUnavailable', hostId }
 }

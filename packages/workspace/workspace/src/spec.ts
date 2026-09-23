@@ -9,17 +9,36 @@ import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
+import { LOCAL_HOST_ID } from './paths.ts'
 import type { WorkspaceId } from './types.ts'
 
 /** Workspace id schema at the durable boundary; branding has no runtime representation. */
 const workspaceId = z.string().transform(value => value as WorkspaceId)
 
 /**
- * Durable shape of one workspace record. `path` is the `fs.realpath` canon
- * stamped at create; `sessionIds` is the ordered ownership account (array
- * order is display order); timestamps are ISO-8601 strings.
+ * Host identity of one workspace record. An omitted field defaults to
+ * {@link LOCAL_HOST_ID} and an empty string normalizes to it, so media written
+ * before the field existed reads as the built-in local host. The identifier
+ * mirrors the remote-host registry's token rule — no path separator — and
+ * additionally rejects whitespace.
+ */
+const workspaceHostId = z.string()
+  .default(LOCAL_HOST_ID)
+  .transform(value => (value === '' ? LOCAL_HOST_ID : value))
+  .refine(value => !/[\s/\\]/.test(value), {
+    message: 'hostId must be a non-empty token without whitespace or a path separator',
+  })
+
+/**
+ * Durable shape of one workspace record. `hostId` is the execution world that
+ * interprets `path` and this record's session cwd checks, defaulting to the
+ * built-in local host; `path` is that host's canonical directory spelling
+ * (`fs.realpath` on the local host, string canon otherwise); `sessionIds` is
+ * the ordered ownership account (array order is display order); timestamps are
+ * ISO-8601 strings.
  */
 export const workspaceRecord = z.object({
+  hostId: workspaceHostId,
   path: z.string(),
   title: z.string(),
   sessionIds: z.array(z.string().transform(value => brandString<SessionId>(value))),

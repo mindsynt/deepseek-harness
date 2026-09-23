@@ -16,6 +16,7 @@ import { changedFileUrl, changesDiffUrl, changesSummaryUrl, parseChangesReviewAd
 import type { ChangesDiffStore } from './changes-diff.ts'
 import type { ChangesSummaryStore } from './changes-summary.ts'
 import type { PresentedOpenController } from './present-open.ts'
+import { presentedOpenPhase } from './present-open.ts'
 import type { ChangesReviewParams } from './review-definition.ts'
 import type { createReviewStore } from './review-store.ts'
 import type { NS } from './locales.ts'
@@ -191,11 +192,12 @@ export function ReviewTab({
   useEffect(() => {
     if (file !== undefined && diffState === undefined) void loadChangesDiff(sessionId, seq, index)
   }, [file, diffState, sessionId, seq, index, loadChangesDiff])
-  const phase = usePresentedOpen(value => file === undefined ? undefined : value[changedFileUrl(sessionId, seq, index)])
+  const phase = usePresentedOpen(value => file === undefined ? undefined : presentedOpenPhase(value[changedFileUrl(sessionId, seq, index)]))
   const [menuOpen, setMenuOpen] = useState(false)
   const split = state?.split === true
   const wrap = state?.wrap === true
-  const native = host !== null && host !== 'error' && host.available && phase !== 'nativeUnavailable'
+  const native = host !== null && host !== 'error' && host.available
+    && phase !== 'nativeUnavailable' && phase !== 'remoteUnavailable'
   const summaryState = summary === undefined || summary === 'loading' ? 'loading' : summary === 'missing' ? 'missing' : 'ready'
   return (
     <div className={css.root} data-changes-review data-review-state={summaryState}>

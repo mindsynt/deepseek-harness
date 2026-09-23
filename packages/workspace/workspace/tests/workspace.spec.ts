@@ -13,12 +13,14 @@ import { SessionPersistenceRevision } from '@deepseek-ai/dsh-session-persistence
 import type { SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import WorkspaceRegistry, {
+  LOCAL_HOST_ID,
   WorkspaceId,
   WorkspaceMoveInvalidError,
   WorkspaceOrderInvalidError,
+  workspaceRecord,
 } from '../src/index.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from '../src/index.ts'
-import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath } from '../src/paths.ts'
+import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath, resolveWorkspaceHostId } from '../src/paths.ts'
 
 const DOMAIN_VERSION = 2
 
@@ -55,6 +57,7 @@ async function harness(options: HarnessOptions = {}) {
   const stat = vi.fn(() => { throw new Error('per-session stat must not be needed') })
   ctx.provide('sessionPersistence', { list, open, stat } as never)
 
+  let liveHook: (headers: SessionHeader[]) => void = () => {}
   if (options.sessionStore === true) {
     await ctx.plugin(SessionStore)
   } else if (options.liveSessions !== undefined) {
@@ -63,6 +66,10 @@ async function harness(options: HarnessOptions = {}) {
       get: (id: SessionId) => live.get(id),
       list: () => [...live.values()],
     } as never)
+    liveHook = (headers) => {
+      live.clear()
+      for (const meta of headers) live.set(meta.id, { header: meta })
+    }
   }
 
   const changes: DomainChanged[] = []
@@ -81,6 +88,7 @@ async function harness(options: HarnessOptions = {}) {
     open,
     stat,
     setSessions: (headers: SessionHeader[]) => { listed = headers },
+    setLiveSessions: (headers: SessionHeader[]) => { liveHook(headers) },
   }
 }
 
@@ -134,8 +142,21 @@ function selectiveFailureBackend(
   }
 }
 
-function record(path: string, sessionIds: string[], createdAt = '2026-07-24T00:00:00.000Z'): WorkspaceRecord {
+/**
+ * Media written before hostId existed omits the field; keeping fixtures in
+ * that shape continuously proves the schema default upgrades them to the
+ * built-in local host.
+ */
+type StoredRecord = Omit<WorkspaceRecord, 'hostId'> & { hostId?: string }
+
+function record(
+  path: string,
+  sessionIds: string[],
+  createdAt = '2026-07-24T00:00:00.000Z',
+  hostId?: string,
+): StoredRecord {
   return {
+    ...(hostId === undefined ? {} : { hostId }),
     path,
     title: basename(path),
     sessionIds: sessionIds.map(SessionId),
@@ -152,7 +173,7 @@ type StoredDomainState = Omit<WorkspaceDomainState, 'archivedSessionIds'>
   & Partial<Pick<WorkspaceDomainState, 'archivedSessionIds'>>
 
 function storedPool(
-  entries: Array<[string, WorkspaceRecord]>,
+  entries: Array<[string, StoredRecord]>,
   state: StoredDomainState,
 ): MemoryMediaPool {
   const pool = new MemoryMediaPool()
@@ -164,8 +185,8 @@ function storedPool(
   return pool
 }
 
-function storedRecord(pool: MemoryMediaPool, id: string): WorkspaceRecord {
-  return pool.media.get('workspace')!.tables.get('workspaces')!.get(id) as WorkspaceRecord
+function storedRecord(pool: MemoryMediaPool, id: string): StoredRecord {
+  return pool.media.get('workspace')!.tables.get('workspaces')!.get(id) as StoredRecord
 }
 
 function storedState(pool: MemoryMediaPool): WorkspaceDomainState {
@@ -330,7 +351,7 @@ describe('WorkspaceRegistry lifecycle and bootstrap', () => {
     const second = await makeDir('fallback-second')
     const firstId = WorkspaceId('00000000-0000-4000-8000-000000000020')
     const secondId = WorkspaceId('00000000-0000-4000-8000-000000000021')
-    const entries: Array<[string, WorkspaceRecord]> = [
+    const entries: Array<[string, StoredRecord]> = [
       [secondId, record(second, [], '2026-07-24T00:00:00.000Z')],
       [firstId, record(first, [], '2026-07-24T00:00:00.000Z')],
     ]
@@ -603,6 +624,147 @@ describe('WorkspaceRegistry create and lookup', () => {
   })
 })
 
+describe('Workspace host identity', () => {
+  it('defaults an omitted or empty hostId to local and rejects malformed identities', () => {
+    const parse = (hostId?: string) => workspaceRecord.parse({
+      ...(hostId === undefined ? {} : { hostId }),
+      path: '/stored',
+      title: 'stored',
+      sessionIds: [],
+      createdAt: 'c',
+      updatedAt: 'u',
+    })
+    expect(parse().hostId).toBe(LOCAL_HOST_ID)
+    expect(parse('').hostId).toBe(LOCAL_HOST_ID)
+    expect(parse('remote-a').hostId).toBe('remote-a')
+    for (const hostId of ['a/b', 'a\\b', 'a b', ' a', 'a\tb']) {
+      expect(() => parse(hostId)).toThrow(/hostId/)
+    }
+    expect(resolveWorkspaceHostId(undefined)).toBe(LOCAL_HOST_ID)
+    expect(resolveWorkspaceHostId('')).toBe(LOCAL_HOST_ID)
+    expect(resolveWorkspaceHostId('remote-a')).toBe('remote-a')
+  })
+
+  it('opens a legacy record without hostId as a local workspace and leaves the medium untouched', async () => {
+    const dir = await makeDir('legacy-host')
+    const id = WorkspaceId('00000000-0000-4000-8000-000000000030')
+    const pool = storedPool([[id, record(dir, [])]], { initialized: true, workspaceIds: [id] })
+    const result = await harness({ pool })
+    const workspace = result.registry.get(id)!
+    expect(workspace.hostId).toBe(LOCAL_HOST_ID)
+    expect(workspace.path).toBe(dir)
+    expect(await result.registry.resolveByPath(dir)).toBe(workspace)
+    expect(await result.registry.resolveByPath(dir, 'remote-a')).toBeUndefined()
+    // The upgrade happens on read; the stored bytes still omit the field.
+    expect(storedRecord(pool, id).hostId).toBeUndefined()
+  })
+
+  it('keeps one path on two hosts as two workspaces and resolves each per host', async () => {
+    const dir = await makeDir('dual-host')
+    const { registry, pool } = await harness()
+    const local = await registry.create(dir, 'Local')
+    const remote = await registry.create(dir, 'Remote', 'remote-a')
+    expect(local.hostId).toBe(LOCAL_HOST_ID)
+    expect(remote.hostId).toBe('remote-a')
+    expect(remote.id).not.toBe(local.id)
+    expect(registry.list()).toEqual([remote, local])
+    expect(await registry.resolveByPath(dir)).toBe(local)
+    expect(await registry.resolveByPath(dir, 'remote-a')).toBe(remote)
+    expect(await registry.resolveByPath(dir, '')).toBe(local)
+    expect(await registry.create(dir, 'Ignored', 'remote-a')).toBe(remote)
+    expect(await registry.create(dir, 'Ignored', '')).toBe(local)
+    expect(storedRecord(pool, remote.id)).toMatchObject({ hostId: 'remote-a', path: dir })
+  })
+
+  it('canonicalizes a non-local path by string without requiring it on the Harness host', async () => {
+    const dir = await makeDir('remote-canon')
+    const missing = join(dir, 'does-not-exist')
+    const { registry } = await harness()
+    const workspace = await registry.create(`${missing}/`, 'Remote', 'remote-a')
+    expect(workspace.path).toBe(missing)
+    expect(workspace.title).toBe('Remote')
+    expect(await registry.resolveByPath(`${missing}//`, 'remote-a')).toBe(workspace)
+    // The same string keeps local semantics when no host is named.
+    await expect(registry.create(missing)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(registry.resolveByPath(missing)).rejects.toMatchObject({ code: 'ENOENT' })
+    const root = await registry.create('/', 'Root', 'remote-a')
+    expect(root.path).toBe('/')
+    await expect(registry.create('relative/dir', undefined, 'remote-a'))
+      .rejects.toThrow(/not fully qualified/)
+    await expect(registry.resolveByPath('.', 'remote-a')).rejects.toThrow(/not fully qualified/)
+    expect(registry.list().map(item => item.path)).toEqual(['/', missing])
+  })
+
+  it('keeps remote session membership through string canon across a restart', async () => {
+    const remotePath = await makeDir('remote-restart')
+    await rm(remotePath, { recursive: true })
+    const pool = new MemoryMediaPool()
+    const sessions = [header('remote-session', remotePath, 100)]
+    const first = await harness({ pool, sessions })
+    const workspace = await first.registry.create(remotePath, 'Remote', 'remote-a')
+    await workspace.attachSession(SessionId('remote-session'))
+    expect(workspace.sessionIds).toEqual(['remote-session'])
+    await first.fiber.dispose()
+
+    const restarted = await harness({ pool, sessions })
+    const reopened = restarted.registry.list()[0]!
+    expect(reopened.hostId).toBe('remote-a')
+    expect(reopened.path).toBe(remotePath)
+    expect(reopened.sessionIds).toEqual(['remote-session'])
+  })
+
+  it('validates non-local attaches by string canon and rejects relative or mismatching cwds', async () => {
+    const project = await makeDir('remote-attach')
+    const other = await makeDir('remote-attach-other')
+    const result = await harness({
+      sessions: [
+        header('trailing', `${project}/`, 1),
+        header('mismatch', other, 2),
+        header('relative', 'relative/dir', 3),
+        header('unknown-cwd', undefined, 4),
+      ],
+    })
+    const workspace = await result.registry.create(project, 'Remote', 'remote-a')
+    await workspace.attachSession(SessionId('trailing'))
+    expect(workspace.sessionIds).toEqual(['trailing'])
+    await expect(workspace.attachSession(SessionId('mismatch')))
+      .rejects.toThrow(/canonicalizes to '.*' on host 'remote-a'/)
+    await expect(workspace.attachSession(SessionId('relative')))
+      .rejects.toThrow(/is not a fully qualified path on host 'remote-a'/)
+    await expect(workspace.attachSession(SessionId('unknown-cwd'))).rejects.toThrow(/no cwd/)
+    expect(workspace.sessionIds).toEqual(['trailing'])
+  })
+
+  it('bootstraps a local workspace beside a remote record on the same path', async () => {
+    const dir = await makeDir('shadowed-path')
+    const remoteId = WorkspaceId('00000000-0000-4000-8000-000000000031')
+    const pool = storedPool(
+      [[remoteId, record(dir, [], undefined, 'remote-a')]],
+      { initialized: false, workspaceIds: [] },
+    )
+    const result = await harness({ pool, sessions: [header('local-session', dir, 100)] })
+    expect(result.registry.list()).toHaveLength(2)
+    const remote = result.registry.get(remoteId)!
+    const local = result.registry.list().find(item => item.hostId === LOCAL_HOST_ID)!
+    expect(remote.hostId).toBe('remote-a')
+    expect(remote.sessionIds).toEqual([])
+    expect(local.id).not.toBe(remoteId)
+    expect(local.path).toBe(dir)
+    expect(local.sessionIds).toEqual(['local-session'])
+  })
+
+  it('indexes a relative header cwd with neither canon and filters it from a remote account', async () => {
+    const workspacePath = await makeDir('relative-cwd-remote')
+    const id = WorkspaceId('00000000-0000-4000-8000-000000000032')
+    const pool = storedPool(
+      [[id, record(workspacePath, ['relative-session'], undefined, 'remote-a')]],
+      { initialized: true, workspaceIds: [id] },
+    )
+    const result = await harness({ pool, sessions: [header('relative-session', 'relative/dir', 100)] })
+    expect(result.registry.list()[0]!.sessionIds).toEqual([])
+  })
+})
+
 describe('Workspace registry ordering', () => {
   it('moves a workspace before an anchor or to the end and restores that order after restart', async () => {
     const firstDir = await makeDir('order-first')
@@ -719,6 +881,16 @@ describe('Workspace session ordering', () => {
     const workspace = await result.registry.create(dir)
     await workspace.attachSession(SessionId('live'))
     expect(workspace.sessionIds).toEqual(['live'])
+    expect(result.list).toHaveBeenCalledTimes(1)
+  })
+
+  it('validates a live session that first appears after startup and remembers its canon', async () => {
+    const dir = await makeDir('late-live')
+    const result = await harness({ sessions: [], liveSessions: [] })
+    result.setLiveSessions([header('late-live', dir, 1)])
+    const workspace = await result.registry.create(dir)
+    await workspace.attachSession(SessionId('late-live'))
+    expect(workspace.sessionIds).toEqual(['late-live'])
     expect(result.list).toHaveBeenCalledTimes(1)
   })
 

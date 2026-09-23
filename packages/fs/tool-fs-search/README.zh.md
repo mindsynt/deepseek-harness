@@ -70,11 +70,11 @@ kind: "package-reference"
 
 ### 部署要求
 
-Node 部署在受支持的 macOS、Linux 与 Windows 目标上获得 `@vscode/ripgrep` 平台包；Python SDK 的 wheel 包把目标原生二进制复制到单文件运行时旁，作为 `-rg` 伴随文件。两种载体均不要求宿主安装 `rg`。返回路径相对于解析后的工作目录显示（有会话 cwd 时使用会话 cwd），只有该工作目录与文件系统根目录是同一工作区时，才能用 `read` 继续读取。
+Node 部署在受支持的 macOS、Linux 与 Windows 目标上获得 `@vscode/ripgrep` 平台包；Python SDK 的 wheel 包把目标原生二进制复制到单文件运行时旁，作为 `-rg` 伴随文件。每次调用经 subprocess seam 在运行搜索的执行世界中解析 ripgrep：该世界能看到随包二进制时用它，否则用该世界 `PATH` 上的 `rg`。返回路径相对于解析后的工作目录显示（有会话 cwd 时使用会话 cwd），只有该工作目录与文件系统根目录是同一工作区时，才能用 `read` 继续读取。
 
 ### 失败与恢复
 
-搜索失败携带本包定义的错误码：`SEARCH_INVALID_PATTERN`（ripgrep 拒绝正则或 glob）、`SEARCH_FAILED`（启动失败、目标不可访问、信号终止或 `--json` 输出格式错误）、`SEARCH_RAW_OUTPUT_OVERFLOW`（原始输出超过上限）与 `SEARCH_ABORTED`（协作式超时或调用方取消）。退出 0 表示成功且有结果，退出 1 表示成功的空搜索；模型参数错误仍是普通工具参数错误。
+搜索失败携带本包定义的错误码：`SEARCH_INVALID_PATTERN`（ripgrep 拒绝正则或 glob）、`SEARCH_FAILED`（可执行文件解析失败或启动失败、目标不可访问、信号终止或 `--json` 输出格式错误）、`SEARCH_RAW_OUTPUT_OVERFLOW`（原始输出超过上限）与 `SEARCH_ABORTED`（协作式超时或调用方取消）。退出 0 表示成功且有结果，退出 1 表示成功的空搜索；模型参数错误仍是普通工具参数错误。
 
 -----
 
@@ -97,13 +97,13 @@ Node 部署在受支持的 macOS、Linux 与 Windows 目标上获得 `@vscode/ri
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config`、工具组合、上限校验 |
 | [`src/glob.ts`](src/glob.ts) | `glob` schema、argv、解析、内联采样、格式化 |
 | [`src/grep.ts`](src/grep.ts) | `grep` schema、argv、`--json` 解析、预览保留、格式化 |
-| [`src/search-core.ts`](src/search-core.ts) | 共享 spawn 助手、`SEARCH_*` 错误、spill 交接、工作目录相对展示 |
+| [`src/search-core.ts`](src/search-core.ts) | 共享 spawn 助手、可执行文件解析、`SEARCH_*` 错误、spill 交接、工作目录相对展示 |
 | [`src/presentation.ts`](src/presentation.ts) | 搜索卡片元数据投影 |
 | [`src/direct-call.ts`](src/direct-call.ts) | spill 后处理的直接调用结果接受 |
 
 ### 搜索如何运行
 
-每次调用解析打包二进制（`@vscode/ripgrep`，或 pkg 单文件运行时中可执行程序的 `-rg` 伴随文件），前置 `--no-config`，使宿主的 `RIPGREP_CONFIG_PATH` 无法向不受约束的 spawn 注入 `--pre` 预处理器，并把每个模型控制的值作为普通 argv 元素传入——不存在 shell 层，因此不涉及 shell 引号处理。collect 模式预算限制完整 stdout 与 stderr 尾部；lossy stdout 读取以 `SEARCH_RAW_OUTPUT_OVERFLOW` 失败，而不是解析静默不完整的流。工具从不读取原始 spill 路径。
+每次调用在 spawn 所在的执行世界中解析 ripgrep——该世界能看到随包二进制（`@vscode/ripgrep`，或 pkg 单文件运行时中可执行程序的 `-rg` 伴随文件）时用它，否则用该世界 `PATH` 上的 `rg`——前置 `--no-config`，使宿主的 `RIPGREP_CONFIG_PATH` 无法向不受约束的 spawn 注入 `--pre` 预处理器，并把每个模型控制的值作为普通 argv 元素传入——不存在 shell 层，因此不涉及 shell 引号处理。宿主侧的随包路径只是解析候选：缺少它的执行世界以 `SEARCH_FAILED` 显式失败，而不会把该宿主拼写当作 `argv[0]` 收到。collect 模式预算限制完整 stdout 与 stderr 尾部；lossy stdout 读取以 `SEARCH_RAW_OUTPUT_OVERFLOW` 失败，而不是解析静默不完整的流。工具从不读取原始 spill 路径。
 
 ### 两类预算、两类产物
 
@@ -212,7 +212,7 @@ glob 描述声明了配置的超过上限排序方式。生成的 [`glob` 和 `g
 这些限制说明搜索工具何时不合适，或何时需要特别的运维注意。它们是当前包约束，不是通用搜索对比或任务积压。
 
 - **搜索与文件访问没有共享工作区证明**——只有当工作目录与文件系统根目录指向同一工作区时，返回路径才可继续读取；本包不执行运行时跨服务校验。
-- **打包二进制固定在依赖版本上**——Node 部署使用 `@vscode/ripgrep` 选择的版本；Python 单文件运行时将对应目标的原生版本复制为必需的 `-rg` 伴随文件。不支持的平台或损坏的安装会以 `SEARCH_FAILED` 使调用失败，Python 运行时包则会在启动前拒绝缺少伴随文件的安装。远程或虚拟文件系统需要共置的工作区或另一个搜索消费方。
+- **打包二进制在可见处固定于依赖版本**——Node 部署使用 `@vscode/ripgrep` 选择的版本；Python 单文件运行时将对应目标的原生版本复制为必需的 `-rg` 伴随文件。不支持的平台或损坏的安装会以 `SEARCH_FAILED` 使调用失败，Python 运行时包则会在启动前拒绝缺少伴随文件的安装。远程或虚拟文件系统改用其 `PATH` 上的 `rg`，该版本由部署自行负责；两者都不具备的执行世界以 `SEARCH_FAILED` 失败。
 - **schema 只暴露一个有界页面**——偏移分页、大小写开关、替代输出模式与提供方支撑的发现仍不在本包范围内；达到上限的完整输出需要 spill 后端。
 - **启用采样时仅按搜索根正下方的第一段路径分组**——超过上限的 `glob` 页面在这些顶层条目之间平衡，因此集中在更深处的结果在该层级之下仍会呈现不均；递归平衡被延期。
 

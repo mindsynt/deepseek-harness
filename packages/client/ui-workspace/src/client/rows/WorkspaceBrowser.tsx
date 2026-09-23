@@ -779,14 +779,19 @@ export function WorkspaceBrowser({
   insertWorkspaceBefore,
   archiveSession,
   createWorkspace,
+  checkSelectedHostWorld,
   searchSessions,
   searchResultLimit,
   useDirectoryFlow,
   useHostInfo,
+  useSelectedHost,
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
   const home = useHostInfo(info => info.home)
+  // The selected workspace-creation host names the world this region's add
+  // flow addresses; absent means the Harness host.
+  const remoteHostLabel = useSelectedHost(value => value.hostLabel)
   // Ordering remains live while the rail or search replaces the list body.
   const list = useSessions(state => state)
   const workspaces = useWorkspaces(state => state.items)
@@ -1215,7 +1220,9 @@ export function WorkspaceBrowser({
           anchorRef={wsPlusRef}
           useWorkspaces={useWorkspaces}
           createWorkspace={createWorkspace}
+          checkSelectedHostWorld={checkSelectedHostWorld}
           useDirectoryFlow={useDirectoryFlow}
+          remoteHostLabel={remoteHostLabel}
           renderDirectoryFlow={owner => renderSlot('sidebar.workspaces.directoryFlow', owner)}
           addOnly
           side="right"

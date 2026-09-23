@@ -45,7 +45,7 @@ async function bench() {
 
 function owner(overrides: Partial<DirectoryFlowOwnerProps> = {}): DirectoryFlowOwnerProps {
   return {
-    open: true, busy: false,
+    open: true, busy: false, hostLabel: 'This machine',
     onPicked: vi.fn(), onCancel: vi.fn(), onError: vi.fn(),
     ...overrides,
   }
@@ -169,6 +169,7 @@ describe('directory-picker-browse client half', () => {
     const injected = (entry.inject as () => { t: (key: string) => string })()
     // zh is the shipped default locale.
     expect(injected.t('browser.title')).toBe('选择工作区目录')
+    expect(injected.t('browser.host')).toBe('目标主机：{name}')
     expect(injected.t('browser.newFolder')).toBe('新建文件夹')
     expect(injected.t('browser.showHidden')).toBe('显示隐藏文件')
   })
@@ -201,6 +202,7 @@ describe('directory-picker-browse client half', () => {
       />,
     )
     // The dialog opened at home; its confirm (browser.open) adopts the listed level.
+    expect(screen.getByText('browser.host')).toBeTruthy()
     const openButton = screen.getByRole<HTMLButtonElement>('button', { name: 'browser.open' })
     await waitFor(() => { expect(openButton.disabled).toBe(false) })
     fireEvent.click(openButton)

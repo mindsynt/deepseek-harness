@@ -33,11 +33,11 @@ web GUI 让操作者通过 OS 选择器或应用内浏览器选择工作区目�
 
 ### 能力约定
 
-`capability()` 返回一个可辨识联合类型，说明操作者如何选择目录：OS 选择器为 `{ kind: 'native', pick(signal) }`，应用内浏览器为 `{ kind: 'browse', list(path?), createDirectory(path, name) }`。消费方按 `kind` 分支；遇到未知能力类型时，界面会隐藏选择入口，而不是失败。浏览失败抛出带类型的 `DirectoryPickerError`，其错误码集合是封闭的——`directory-unreadable`、`directory-exists` 或 `directory-create-failed`——每个都携带出错对象的路径，目录选择 Remote 控制器将其 1:1 映射为协议错误码。
+`capability()` 返回一个可辨识联合类型，说明操作者如何选择目录：OS 选择器为 `{ kind: 'native', pick(signal) }`，应用内浏览器为 `{ kind: 'browse', list(path?, hostId?), createDirectory(path, name, hostId?) }`。消费方按 `kind` 分支；遇到未知能力类型时，界面会隐藏选择入口，而不是失败。`hostId` 用于寻址该远程主机已打开的 execution world：省略或使用内置本机身份时指向 Harness 主机自身的文件系统，而指定了未打开的主机会在读取或创建任何目录之前以 `directory-unreadable` 失败并带上主机 id。浏览失败抛出带类型的 `DirectoryPickerError`，其错误码集合是封闭的——`directory-unreadable`、`directory-exists` 或 `directory-create-failed`——每个都携带出错对象的路径，目录选择 Remote 控制器将其 1:1 映射为协议错误码。
 
 ### 行携带什么
 
-`DirectoryEntry` 行暴露绝对 `path` 与宿主判定的 `hidden` 标志（POSIX 上为点前缀约定），展示策略留在客户端；客户端绝不自行拼接路径段。`DirectoryListing.crumbs` 是从文件系统根到被列举目录的祖先链——每个 crumb 都是跳转目标，根 crumb 以完整路径标注。
+`DirectoryEntry` 行暴露绝对 `path` 与宿主判定的 `hidden` 标志（POSIX 上为点前缀约定），展示策略留在客户端；客户端绝不自行拼接路径段。`DirectoryListing.crumbs` 是从文件系统根到被列举目录的祖先链——每个 crumb 都是跳转目标，根 crumb 以完整路径标注。`DirectoryListing.home` 是该祖先链的锚点：本机世界为宿主账户主目录，远程 realm 则为其文件系统根。
 
 -----
 

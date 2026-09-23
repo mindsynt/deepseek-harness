@@ -70,6 +70,26 @@ function failureStatus(error: unknown): number {
 }
 
 /**
+ * Refuse a native handoff for a Session whose paths belong to a remote
+ * execution world: the serving desktop is this machine's, so only that host's
+ * own desktop can open the path. The refusal names the host and the recorded
+ * path instead of letting the Host mapping answer with its generic "no Host
+ * path", which cannot tell a remote world apart from a missing local file.
+ * @param ctx - Host context carrying the Session controller.
+ * @param sessionId - Session whose execution world is resolved.
+ * @param path - Session-relative path the caller asked to open.
+ * @returns the 409 to answer with, or undefined for a Session on this Host.
+ */
+async function remoteHostRefusal(ctx: Context, sessionId: string, path: string): Promise<Response | undefined> {
+  const hostId = await ctx.sessionController.remoteHostOf(sessionId as SessionId)
+  if (hostId === undefined) return undefined
+  return Response.json({
+    hostId,
+    message: `"${path}" lives in remote host "${hostId}"'s execution world, so this Harness host's desktop cannot open it; open it on "${hostId}"`,
+  }, { status: 409, headers: { 'cache-control': 'no-store' } })
+}
+
+/**
  * Read the addressed event once the Host desktop is known to be available.
  * @returns the event with its Session header, or the refusal to answer with.
  */
@@ -110,6 +130,8 @@ async function handlePresentOpen(ctx: Context, request: Request): Promise<Respon
     const file = target.type === 'deliverables/presented' && isPresentedData(target.data) ? target.data.files[index] : undefined
     if (!isPresentedFile(file)) return new Response('Presented file not found in this Session result.', { status: 404 })
     request.signal.throwIfAborted()
+    const refusal = await remoteHostRefusal(ctx, id, file.path)
+    if (refusal !== undefined) return refusal
     const { absolutePath: path } = await ctx.workspaceFiles.stat({
       sessionId: id as SessionId,
       workspaceRoot: session.cwd ?? ctx.sandboxPolicy.workspaceRoot,
@@ -170,6 +192,8 @@ async function handleChangesOpen(ctx: Context, request: Request): Promise<Respon
     const workspaceRoot = changes.cwd
     const file = changes.files[index]
     if (file === undefined) return new Response('Changed file not found in this summary.', { status: 404 })
+    const refusal = await remoteHostRefusal(ctx, id, file.path)
+    if (refusal !== undefined) return refusal
     const { absolutePath: path } = await ctx.workspaceFiles.stat({ sessionId: id, workspaceRoot }, file.path, request.signal)
     return await openVerified(ctx, request, path, 'open')
   } catch (error: unknown) {

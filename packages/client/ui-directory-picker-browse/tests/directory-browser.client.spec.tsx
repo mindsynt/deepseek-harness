@@ -92,6 +92,7 @@ function mount(overrides: Partial<Parameters<typeof DirectoryBrowser>[0]> = {}) 
   const onClose = vi.fn()
   const props = {
     open: true,
+    hostLabel: 'This machine',
     listDirectory,
     createDirectory,
     onOpen,
@@ -1310,6 +1311,41 @@ describe('DirectoryBrowser', () => {
     })
     mount({ listDirectory })
     await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('home unavailable') })
+  })
+
+  it('names the addressed world and reports a closed host world verbatim', async () => {
+    const listDirectory = vi.fn(async (): Promise<DirectoryListing> => {
+      throw Object.assign(new Error('directory browse failed: directory-picker/unreadable: closed world'), {
+        rpcError: {
+          code: 'directory-picker/unreadable',
+          message: 'host "alpha" has no open execution world on this Host',
+          details: {},
+        },
+      })
+    })
+    mount({ listDirectory, hostLabel: 'Alpha' })
+    // A remote realm lists absolute POSIX paths like the Harness host's own
+    // filesystem: the header is what says which world the paths came from.
+    expect(screen.getByText('browser.host:Alpha')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent)
+        .toBe('host "alpha" has no open execution world on this Host')
+    })
+  })
+
+  it('keeps the addressed world beside the heading name and still announces it as a description', async () => {
+    mount({ hostLabel: 'Alpha' })
+    // The heading answers to the title alone: the world label is chrome beside
+    // it, never part of the name a screen reader reads for the heading.
+    const heading = screen.getByRole('heading', { name: 'browser.title' })
+    expect(screen.queryByRole('heading', { name: /browser\.host/ })).toBeNull()
+    // The world stays visible on screen and stays announced through the
+    // heading's description.
+    const describedBy = heading.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    const label = document.getElementById(describedBy!)
+    expect(label?.textContent).toBe('browser.host:Alpha')
+    expect(label?.getAttribute('aria-hidden')).toBe('true')
   })
 
   it('disables Open and New folder while a path draft is uncommitted', async () => {

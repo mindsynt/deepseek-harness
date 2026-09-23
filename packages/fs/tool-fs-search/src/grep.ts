@@ -1,7 +1,7 @@
 /**
  * The model-facing `grep` tool: search file contents with a ripgrep regular
- * expression. Execution spawns the packaged ripgrep binary
- * (`@vscode/ripgrep`) directly through the subprocess seam with a plain argv
+ * expression. Execution spawns a ripgrep executable resolved in the spawn's
+ * execution world through the subprocess seam with a plain argv
  * vector using a fixed line-oriented `rg --json` command so file path, line
  * number, and line text parse without colon-splitting ambiguity — this module
  * owns the model-facing schema, argument validation, argv construction,

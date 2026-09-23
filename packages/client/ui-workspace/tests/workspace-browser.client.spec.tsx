@@ -61,7 +61,7 @@ const sessionState = (
   }
 }
 const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView => ({
-  workspaceId: wid(id), path: `/projects/${id}`, title,
+  workspaceId: wid(id), hostId: 'local', path: `/projects/${id}`, title,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 })
 const workspaceState = (
@@ -108,8 +108,10 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     archiveSession: vi.fn(async () => {}),
     insertWorkspaceBefore: vi.fn(async () => {}),
     createWorkspace: vi.fn(async () => workspace('created', [])),
+    checkSelectedHostWorld: vi.fn(async () => 'addressable' as const),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
     useHostInfo: selector => selector({ home: undefined, isLoopback: true }),
+    useSelectedHost: hook({}),
     renderSlot: ((_name: string, owner: { open: boolean }) => (owner.open ? <div data-testid="directory-flow" /> : null)) as never,
     t,
     ...overrides,
@@ -1689,6 +1691,24 @@ describe('WorkspaceBrowser', () => {
     fireEvent.change(screen.getByPlaceholderText('搜索会话…'), { target: { value: 'needle' } })
     const row = screen.getByText('Needle A').closest('[role="treeitem"]') as HTMLElement
     expect(row.hasAttribute('draggable')).toBe(false)
+  })
+
+  it('tells the picking flow which world it browses: the selected host, else this machine', async () => {
+    let owner: DirectoryFlowOwnerProps | undefined
+    const capture = ((_name: string, conversation: DirectoryFlowOwnerProps) => {
+      owner = conversation
+      return conversation.open ? <div data-testid="directory-flow" /> : null
+    }) as never
+    mount({ useSelectedHost: hook({ hostId: 'alpha', hostLabel: 'Alpha' }), renderSlot: capture })
+    fireEvent.click(screen.getByRole('button', { name: '添加工作区' }))
+    // A remote entry samples the world before it raises the flow.
+    await waitFor(() => { expect(screen.getByTestId('directory-flow')).toBeTruthy() })
+    expect(owner?.hostLabel).toBe('Alpha')
+    cleanup()
+
+    mount({ renderSlot: capture })
+    fireEvent.click(screen.getByRole('button', { name: '添加工作区' }))
+    expect(owner?.hostLabel).toBe('本机')
   })
 })
 

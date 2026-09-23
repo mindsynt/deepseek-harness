@@ -111,6 +111,21 @@ interface FsDirEntry {
 }
 ```
 
+## Directory creation (provider contract)
+
+`mkdir` creates the target directory together with every missing parent, and it is idempotent: an existing directory is left untouched and reports `created: false`. A target or parent component that exists as something else fails with `FS_NOT_DIRECTORY`; permission failures keep `FS_PERMISSION_DENIED`, and other backend faults keep `FS_IO_ERROR`. There is no recursive or mode argument — creation always includes parents and the provider's umask decides permissions — and no version guard, because repeating the operation is safe by construction. A backend that cannot create directories fails loudly rather than reporting success. A confining provider fences creation by the same per-call policy as `writeText`, so the policy argument is optional here exactly as it is for a write.
+
+```ts type-equiv
+/** Outcome of one directory creation. */
+interface FsMkdirOutcome {
+  /**
+   * Whether this call created the directory. `false` means the target already
+   * existed as a directory, so the call was an idempotent no-op.
+   */
+  created: boolean
+}
+```
+
 ## Write and edit guards (provider contract)
 
 Both `writeText` and `editText` take their version guard OPTIONALLY: omit it for an unconditional (bare-provider) mutation, supply it to guard. `writeText`'s guard is an `FsWriteIntent` — `createIfAbsent` creates a missing target and rejects an existing one with `FS_NOT_OBSERVED`, including a target that appears after the provider's initial probe because publication itself must be no-replace; `replaceIfVersion` replaces only when the target exists at the observed version, else `FS_STALE_VERSION`. Omitting `expected` unconditionally creates-or-overwrites. The union itself carries only the two guarded intents; "no guard" is expressed by omission, so write and edit both use the same optional `expected` field.
@@ -275,7 +290,7 @@ type FsErrorCode =
 
 ## The service and the plugin
 
-`FileSystem` (`ctx.fs`, abstract) owns the provider primitives: `resolve`, `processPath`, `processPathFromHostPath`, `fileUrl`, `contains`, `stat`, `lstat`, `readText`, `streamText`, `readBytes`, `listDir`, `writeText`, and `editText`. `dsh-fs-observation-policy` registers **no service** — it is a plugin that adds policy through the `fs/*` event gate: it decides the write/edit intent waterfalls from unseen/absent/present state and records `FsObservation` values. The executor is `dsh-tool-fs`: it reads/writes/edits through `ctx.fs`, dispatches the waterfalls, and emits the recording event. The generated [`ctx.fs` section](#ctxfs--filesystem-abstract-seam) below shows the exact signatures.
+`FileSystem` (`ctx.fs`, abstract) owns the provider primitives: `resolve`, `processPath`, `processPathFromHostPath`, `fileUrl`, `contains`, `stat`, `lstat`, `readText`, `streamText`, `readBytes`, `listDir`, `mkdir`, `writeText`, and `editText`. `dsh-fs-observation-policy` registers **no service** — it is a plugin that adds policy through the `fs/*` event gate: it decides the write/edit intent waterfalls from unseen/absent/present state and records `FsObservation` values. The executor is `dsh-tool-fs`: it reads/writes/edits through `ctx.fs`, dispatches the waterfalls, and emits the recording event. The generated [`ctx.fs` section](#ctxfs--filesystem-abstract-seam) below shows the exact signatures.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -419,6 +434,25 @@ abstract readByteRange(target: FsTarget, range: { offset: number; length: number
  * @returns one entry per direct child, in stable name order.
  */
 abstract listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>
+
+/**
+ * Create a directory, including every missing parent, idempotently. A target
+ * that already exists as a directory is left untouched and reports
+ * `created: false`, so repeated calls converge. A target — or a parent
+ * component — that exists as something else fails with `FS_NOT_DIRECTORY`;
+ * permission and other backend failures keep `FS_PERMISSION_DENIED` and
+ * `FS_IO_ERROR`. There is no `recursive` or mode argument: creation always
+ * includes parents. The provider's umask decides permissions, and a backend
+ * that cannot create directories must fail loudly rather than report success —
+ * the definition applies no fallback.
+ * @param target - the resolved directory target to create.
+ * @param signal - aborts before the directory takes effect.
+ * @param sandboxPolicy - the per-call mode and workspace root this creation
+ *   runs under; a sandboxing backend fences it by that policy, the bare
+ *   backend ignores it. Omit to leave the backend its own default.
+ * @returns whether this call created the directory.
+ */
+abstract mkdir( target: FsTarget, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsMkdirOutcome>
 
 /**
  * Atomically create or replace UTF-8 text. `expected` guards intent and

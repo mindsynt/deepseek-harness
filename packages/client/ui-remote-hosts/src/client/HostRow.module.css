@@ -1,0 +1,112 @@
+/* One remote host row: identity head, endpoint facts, actions, and the last check. */
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+/* The selected workspace-creation world: the row border carries the state
+ * beside its pressed Select control. */
+.row[data-selected='true'] {
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.id {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.value[data-open='true'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+/* A world this connection held and no longer holds: the row states that its
+ * pending operations are unrecoverable instead of leaving the closed value
+ * alone to read as "not opened yet". */
+.worldClosed {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.term {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.value {
+  margin: 0;
+  word-break: break-all;
+  color: var(--dsw-alias-label-primary);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ok {
+  margin: 0;
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.error {
+  margin: 0;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.detail {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.keys {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.keysLabel {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.keyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

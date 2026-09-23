@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-tool-str-replace-editor
  */
 
-import { isAbsolute } from 'node:path'
+import { isAbsolute, posix, win32 } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { FsError } from '@deepseek-ai/dsh-fs'
@@ -11,6 +11,7 @@ import type { FsInfo, FsTarget, FsWriteIntent } from '@deepseek-ai/dsh-fs'
 import { sandboxDenialMarker } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
+import type {} from '@deepseek-ai/dsh-subprocess'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolCallView, ToolRunContext } from '@deepseek-ai/dsh-tools'
 
@@ -86,13 +87,44 @@ class MutationPolicy {
   }
 }
 
+/** Path flavor of one execution world, as its process provider reports it. */
+type PathFlavor = 'posix' | 'windows'
+
+/**
+ * Judge an absolute path in one execution world's syntax. A POSIX realm
+ * accepts `/a/b`; a Windows world accepts a drive or UNC path. The Harness
+ * host's platform never decides this, so a Windows Host editing a POSIX remote
+ * workspace judges the model's remote path correctly.
+ * @param flavor - the addressed execution world's path flavor.
+ * @param path - model-supplied path.
+ * @returns whether `path` is absolute in that world.
+ */
+function absoluteInWorld(flavor: PathFlavor, path: string): boolean {
+  return flavor === 'posix' ? posix.isAbsolute(path) : win32.isAbsolute(path)
+}
+
+/**
+ * Whether one path is absolute in the addressed execution world. The process
+ * provider answers for its own world; a composition without one addresses only
+ * the Harness host, whose own syntax stays authoritative.
+ * @param ctx - plugin context carrying the addressed `fs` and any `subprocess`.
+ * @param path - model-supplied path.
+ * @param signal - tool-call cancellation.
+ * @returns whether `path` is absolute in that world.
+ */
+async function isAbsoluteInWorld(ctx: Context, path: string, signal: AbortSignal): Promise<boolean> {
+  const subprocess = ctx.get('subprocess')
+  if (subprocess === undefined) return isAbsolute(path)
+  return absoluteInWorld((await subprocess.terminalEnvironment(signal)).platform, path)
+}
+
 async function resolveTarget(
   ctx: Context,
   path: string,
   signal: AbortSignal,
 ): Promise<FsTarget> {
   if (path.trim().length === 0) throw new Error('path must be a non-empty string')
-  if (!isAbsolute(path)) {
+  if (!await isAbsoluteInWorld(ctx, path, signal)) {
     throw new Error(`The path ${path} is not an absolute path, it should start with \`/\`. Maybe you meant /${path}?`)
   }
   return ctx.fs.resolve(path, { signal })

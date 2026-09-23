@@ -402,6 +402,24 @@ describe('listDir', () => {
   })
 })
 
+describe('mkdir', () => {
+  it('creates missing parents through the resolved target and is idempotent', async () => {
+    const target = await fs.resolve(join('nested', 'created'))
+    expect(await fs.mkdir(target)).toEqual({ created: true })
+    expect((await stat(target.targetKey)).isDirectory()).toBe(true)
+    expect(await fs.mkdir(target)).toEqual({ created: false })
+  })
+
+  it('refuses a file target as FS_NOT_DIRECTORY', async () => {
+    await writeFile(join(dir, 'a.txt'), 'text')
+    await expect(fs.mkdir(await fs.resolve('a.txt'))).rejects.toMatchObject({ code: 'FS_NOT_DIRECTORY' })
+  })
+
+  it('honors a pre-aborted signal', async () => {
+    await expect(fs.mkdir(await fs.resolve('never'), AbortSignal.abort())).rejects.toMatchObject({ code: 'FS_ABORTED' })
+  })
+})
+
 describe('writeText', () => {
   it('createIfAbsent creates a new file', async () => {
     const target = await fs.resolve('new.txt')

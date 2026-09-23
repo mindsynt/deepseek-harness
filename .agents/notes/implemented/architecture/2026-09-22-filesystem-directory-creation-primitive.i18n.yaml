@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-22-filesystem-directory-creation-primitive.md
+2026-09-22-filesystem-directory-creation-primitive.md: 7ace870b7cb20270d1bd3be9dd323ade36c98e33
+2026-09-22-filesystem-directory-creation-primitive.zh.md: 97885e8384af61ec4ca53da396a13c1e29e58f41

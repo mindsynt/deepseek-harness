@@ -1,11 +1,11 @@
 /**
  * `SandboxedFileSystem`: the sandbox-enforcing implementation of the
  * `@deepseek-ai/dsh-fs` Service Definition. It extends `LocalFileSystem` so all
- * text-storage mechanics — resolve, stat, read/stream, list, the atomic
- * write and the read-match-write edit critical section — are the local
- * implementation's, verbatim; this package adds only the per-call POLICY fence
- * on the two mutations. Reads pass through untouched: every mode permits
- * reading.
+ * text-storage mechanics — resolve, stat, read/stream, list, directory
+ * creation, the atomic write and the read-match-write edit critical section —
+ * are the local implementation's, verbatim; this package adds only the per-call
+ * POLICY fence on those mutations. Reads pass through untouched: every mode
+ * permits reading.
  *
  * The fence is a policy check in TRUSTED code over a MODEL-CONTROLLED path,
  * NOT a kernel boundary — the operations are the seam's own (open, rename),
@@ -30,7 +30,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import type { Config as LocalConfig } from '@deepseek-ai/dsh-fs-local'
 import { FsError } from '@deepseek-ai/dsh-fs'
-import type { FsEditOutcome, FsEditRequest, FsTarget, FsVersion, FsWriteIntent, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
+import type { FsEditOutcome, FsEditRequest, FsMkdirOutcome, FsTarget, FsVersion, FsWriteIntent, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import { writableRoots } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -64,6 +64,23 @@ export class SandboxedFileSystem extends LocalFileSystem {
   /** The deployment default mode — the capability fact the tool layer reads to advertise escalation. */
   override get sandboxMode(): SandboxMode {
     return this.defaultMode
+  }
+
+  /**
+   * Fence the directory creation by the per-call policy, then delegate to the
+   * inherited recursive creation. See {@link checkedTarget}.
+   * @param target - the resolved directory target to create.
+   * @param signal - aborts before the directory takes effect.
+   * @param sandboxPolicy - the per-call mode and workspace root; omit to use
+   *   the deployment fallback.
+   * @returns whether this call created the directory.
+   */
+  override async mkdir(
+    target: FsTarget,
+    signal?: AbortSignal,
+    sandboxPolicy?: SandboxExecutionPolicy,
+  ): Promise<FsMkdirOutcome> {
+    return super.mkdir(await this.checkedTarget(target, sandboxPolicy), signal)
   }
 
   /**

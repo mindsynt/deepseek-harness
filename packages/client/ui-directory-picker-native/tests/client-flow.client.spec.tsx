@@ -43,7 +43,7 @@ async function bench() {
 
 function owner(overrides: Partial<DirectoryFlowOwnerProps> = {}): DirectoryFlowOwnerProps {
   return {
-    open: true, busy: false,
+    open: true, busy: false, hostLabel: 'This machine',
     onPicked: vi.fn(), onCancel: vi.fn(), onError: vi.fn(),
     ...overrides,
   }

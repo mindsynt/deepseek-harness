@@ -23,6 +23,7 @@ import type {
 export function workspaceView(workspace: Workspace): WorkspaceView {
   return {
     workspaceId: workspace.id,
+    hostId: workspace.hostId,
     path: workspace.path,
     title: workspace.title,
     sessionIds: [...workspace.sessionIds],
@@ -35,6 +36,7 @@ function changedWorkspaceView(workspaceId: string, value: unknown): WorkspaceVie
   const record: WorkspaceRecord = workspaceRecord.parse(value)
   return {
     workspaceId: WorkspaceId(workspaceId),
+    hostId: record.hostId,
     path: record.path,
     title: record.title,
     sessionIds: [...record.sessionIds],

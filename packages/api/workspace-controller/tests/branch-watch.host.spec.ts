@@ -4,8 +4,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
+import { LOCAL_HOST_ID } from '@deepseek-ai/dsh-workspace'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { WorkspaceBranchWatch } from '../src/branch-watch.ts'
+import type { WorkspaceBranchTarget } from '../src/branch-watch.ts'
 import type { WorkspaceBranchView } from '../src/types.ts'
 
 /** Settled-write window the cases below run under. */
@@ -19,9 +23,11 @@ const WAIT_INTERVAL_MS = 10
 
 const roots: string[] = []
 const watches: WorkspaceBranchWatch[] = []
+const contexts: Context[] = []
 
 afterEach(async () => {
   await Promise.all(watches.splice(0).map(watch => watch.dispose()))
+  await Promise.all(contexts.splice(0).map(context => context.fiber.dispose()))
   for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
@@ -54,21 +60,31 @@ async function waitFor(check: () => boolean, what: string): Promise<void> {
 }
 
 /** One watcher and the changes it published. */
-function bench(): { readonly changes: WorkspaceBranchView[]; readonly watch: WorkspaceBranchWatch } {
+async function bench(
+  options: { readonly fileSystem?: boolean } = {},
+): Promise<{ readonly changes: WorkspaceBranchView[]; readonly watch: WorkspaceBranchWatch }> {
+  const ctx = new Context()
+  contexts.push(ctx)
+  if (options.fileSystem !== false) await ctx.plugin(LocalFileSystem, { cwd: tmpdir() })
   const changes: WorkspaceBranchView[] = []
-  const watch = new WorkspaceBranchWatch(DEBOUNCE_MS, (change) => { changes.push(change) })
+  const watch = new WorkspaceBranchWatch(ctx, DEBOUNCE_MS, (change) => { changes.push(change) })
   watches.push(watch)
   return { changes, watch }
 }
 
 const WID = 'watch-w1' as WorkspaceId
 
+/** One target on the Harness host itself. */
+function onHost(path: string): WorkspaceBranchTarget {
+  return { workspaceId: WID, hostId: LOCAL_HOST_ID, path }
+}
+
 describe('WorkspaceBranchWatch', () => {
   it('publishes the branch behind a settled HEAD write', async () => {
     const root = tempDir()
     head(root, 'ref: refs/heads/main\n')
-    const { changes, watch } = bench()
-    await watch.sync([{ workspaceId: WID, path: root }])
+    const { changes, watch } = await bench()
+    await watch.sync([onHost(root)])
     // Installing a watcher publishes what the checkout currently names.
     expect(changes).toEqual([{ workspaceId: WID, branch: 'main' }])
 
@@ -80,8 +96,8 @@ describe('WorkspaceBranchWatch', () => {
   it('stays silent when a settled write names the branch already held', async () => {
     const root = tempDir()
     head(root, 'ref: refs/heads/main\n')
-    const { changes, watch } = bench()
-    await watch.sync([{ workspaceId: WID, path: root }])
+    const { changes, watch } = await bench()
+    await watch.sync([onHost(root)])
 
     // Different bytes that still name the same branch: the event fires, the label does not move.
     head(root, 'ref: refs/heads/main \n')
@@ -92,8 +108,8 @@ describe('WorkspaceBranchWatch', () => {
   it('publishes a Workspace that stopped being a checkout', async () => {
     const root = tempDir()
     head(root, 'ref: refs/heads/dev\n')
-    const { changes, watch } = bench()
-    await watch.sync([{ workspaceId: WID, path: root }])
+    const { changes, watch } = await bench()
+    await watch.sync([onHost(root)])
 
     rmSync(join(root, '.git'), { recursive: true, force: true })
     await waitFor(() => changes.length === 2, 'the checkout removal')
@@ -102,8 +118,8 @@ describe('WorkspaceBranchWatch', () => {
 
   it('observes a checkout created on a registered path since the last sync', async () => {
     const root = tempDir()
-    const { changes, watch } = bench()
-    const targets = [{ workspaceId: WID, path: root }]
+    const { changes, watch } = await bench()
+    const targets = [onHost(root)]
     await watch.sync(targets)
     expect(changes).toEqual([])
 
@@ -121,8 +137,8 @@ describe('WorkspaceBranchWatch', () => {
     writeFileSync(join(first, 'HEAD'), 'ref: refs/heads/one\n')
     writeFileSync(join(second, 'HEAD'), 'ref: refs/heads/two\n')
     writeFileSync(join(root, '.git'), `gitdir: ${first}\n`)
-    const { changes, watch } = bench()
-    const targets = [{ workspaceId: WID, path: root }]
+    const { changes, watch } = await bench()
+    const targets = [onHost(root)]
     await watch.sync(targets)
     expect(changes).toEqual([{ workspaceId: WID, branch: 'one' }])
 
@@ -138,8 +154,8 @@ describe('WorkspaceBranchWatch', () => {
   it('re-resolves an unchanged Workspace set without publishing', async () => {
     const root = tempDir()
     head(root, 'ref: refs/heads/main\n')
-    const { changes, watch } = bench()
-    const targets = [{ workspaceId: WID, path: root }]
+    const { changes, watch } = await bench()
+    const targets = [onHost(root)]
     await watch.sync(targets)
     await watch.sync(targets)
     await watch.sync(targets)
@@ -149,8 +165,8 @@ describe('WorkspaceBranchWatch', () => {
   it('drops observation when a Workspace set no longer names the path', async () => {
     const root = tempDir()
     head(root, 'ref: refs/heads/main\n')
-    const { changes, watch } = bench()
-    await watch.sync([{ workspaceId: WID, path: root }])
+    const { changes, watch } = await bench()
+    await watch.sync([onHost(root)])
     await watch.sync([])
 
     head(root, 'ref: refs/heads/ignored\n')
@@ -161,15 +177,41 @@ describe('WorkspaceBranchWatch', () => {
   it('stops publishing once disposed', async () => {
     const root = tempDir()
     head(root, 'ref: refs/heads/main\n')
-    const { changes, watch } = bench()
-    await watch.sync([{ workspaceId: WID, path: root }])
+    const { changes, watch } = await bench()
+    await watch.sync([onHost(root)])
     await watch.dispose()
 
     head(root, 'ref: refs/heads/after\n')
     await new Promise(resolve => setTimeout(resolve, DEBOUNCE_MS * 10))
     expect(changes).toEqual([{ workspaceId: WID, branch: 'main' }])
     // A sync after disposal installs nothing.
-    await watch.sync([{ workspaceId: WID, path: root }])
+    await watch.sync([onHost(root)])
     expect(changes).toEqual([{ workspaceId: WID, branch: 'main' }])
+  }, CASE_TIMEOUT_MS)
+
+  it('does not watch a checkout another host owns', async () => {
+    const root = tempDir()
+    head(root, 'ref: refs/heads/main\n')
+    const { changes, watch } = await bench()
+
+    // The same spelling on the Harness host: a watch installed here would fire
+    // for it, so silence proves the remote target was not watched at all.
+    await watch.sync([{ workspaceId: WID, hostId: 'alpha', path: root }])
+    expect(changes).toEqual([])
+    head(root, 'ref: refs/heads/ignored\n')
+    await new Promise(resolve => setTimeout(resolve, DEBOUNCE_MS * 10))
+    expect(changes).toEqual([])
+  }, CASE_TIMEOUT_MS)
+
+  it('watches nothing when no filesystem is composed on this Host', async () => {
+    const root = tempDir()
+    head(root, 'ref: refs/heads/main\n')
+    const { changes, watch } = await bench({ fileSystem: false })
+
+    await watch.sync([onHost(root)])
+    expect(changes).toEqual([])
+    head(root, 'ref: refs/heads/ignored\n')
+    await new Promise(resolve => setTimeout(resolve, DEBOUNCE_MS * 10))
+    expect(changes).toEqual([])
   }, CASE_TIMEOUT_MS)
 })

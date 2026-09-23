@@ -3,6 +3,9 @@
 import { mkdir } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import type { RemoteHostId } from '@deepseek-ai/dsh-ssh-host-registry'
 import type {
   Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef,
 } from '@deepseek-ai/dsh-agent'
@@ -14,6 +17,7 @@ import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
+import { LOCAL_HOST_ID, SessionHostStore } from './session-hosts.ts'
 import type { ModelSelection } from './types.ts'
 
 /** Cold Session identity absent from persistence. */
@@ -143,8 +147,16 @@ export class ApiSessionAgentController {
   private readonly selections = new WeakMap<Agent, InstalledSelection>()
   private readonly imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
 
-  /** @param ctx - Host context carrying Agent, model, persistence, and Typert services. */
-  constructor(private readonly ctx: Context) {
+  /**
+   * @param ctx - Host context carrying Agent, model, persistence, and Typert services.
+   * @param sessionHosts - durable Session-to-host sidecar this controller
+   *   records into when it creates a Session and resolves through when it
+   *   resumes or adopts one.
+   */
+  constructor(
+    private readonly ctx: Context,
+    private readonly sessionHosts: SessionHostStore,
+  ) {
     ctx.typert.lookups.configure('agent', async (sessionId: SessionId) => {
       const found = await this.resolveAgent(sessionId)
       if ('error' in found) throw found.error
@@ -234,6 +246,10 @@ export class ApiSessionAgentController {
    * @param cwd - directory the Session must own.
    * @param checkPersistedIdentity - whether to inspect a cold identity before creation.
    * @param presetId - optional Agent preset the Session must own.
+   * @param hostId - host identity of the Workspace this call names, recorded
+   *   for a Session it creates and used to create `cwd` through that open
+   *   execution world; omitted, the durable sidecar (then the Workspace
+   *   accounting, then the built-in local host) supplies it.
    * @returns the matching live ordinary Agent.
    */
   async ensureSession(
@@ -241,10 +257,11 @@ export class ApiSessionAgentController {
     cwd: string,
     checkPersistedIdentity: boolean,
     presetId?: string,
+    hostId?: string,
   ): Promise<Agent> {
     let creation = this.creations.get(sessionId)
     if (creation === undefined) {
-      creation = this.createOrAdopt(sessionId, cwd, checkPersistedIdentity, presetId)
+      creation = this.createOrAdopt(sessionId, cwd, checkPersistedIdentity, presetId, hostId)
         .catch((error: unknown) => {
           const live = this.ctx.agents.get(sessionId)
           if (live !== undefined) {
@@ -434,11 +451,29 @@ export class ApiSessionAgentController {
     if (published !== undefined && hasApiSessionSubagentOwner(this.ctx, published, live)) {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
-    return (await this.ctx.agents.resume({
+    const agent = (await this.ctx.agents.resume({
       resumeSessionId: sessionId,
       agentOptions: this.agentOptions(),
       setup: composition.setup,
     })).agent
+    // Resuming is also how a legacy Session acquires its record: the resolved
+    // host is the workspace's, or the built-in local host, exactly as today.
+    await this.sessionHosts.remember(sessionId, await this.resolvedHostOf(sessionId))
+    return agent
+  }
+
+  /**
+   * Resolve the execution-world host that owns one Session for its resume and
+   * adopt paths, and for every later consumer that addresses a Session's world
+   * (preview, open/reveal degradation, a per-host home). The durable sidecar
+   * answers first, then the Workspace accounting for the Session, then the
+   * built-in local host, so a Session without a record keeps the pre-sidecar
+   * local behaviour.
+   * @param sessionId - Session whose host is resolved.
+   * @returns the host identity that interprets the Session cwd.
+   */
+  async resolvedHostOf(sessionId: SessionId): Promise<string> {
+    return await this.sessionHosts.resolveHost(sessionId)
   }
 
   private async createOrAdopt(
@@ -446,6 +481,7 @@ export class ApiSessionAgentController {
     cwd: string,
     checkPersistedIdentity: boolean,
     presetId: string | undefined,
+    namedHostId: string | undefined,
   ): Promise<Agent> {
     const attached = this.ctx.sessions.get(sessionId)
     const live = this.ctx.agents.get(sessionId)
@@ -453,6 +489,10 @@ export class ApiSessionAgentController {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
     if (live !== undefined) return live
+    // A Workspace-scoped operation names the host; otherwise the sidecar (then
+    // the Workspace accounting, then local) answers, which is what a Session
+    // resumed or adopted without a Workspace must record and address.
+    const hostId = namedHostId ?? await this.resolvedHostOf(sessionId)
 
     if (checkPersistedIdentity) {
       try {
@@ -466,11 +506,14 @@ export class ApiSessionAgentController {
         const storedPreset = this.presetForObservation(observation)
         this.assertPresetUnchanged(sessionId, presetId, storedPreset)
         const composition = await this.composeAgent(storedPreset)
-        return (await this.ctx.agents.resume({
+        const agent = (await this.ctx.agents.resume({
           resumeSessionId: sessionId,
           agentOptions: this.agentOptions(),
           setup: composition.setup,
         })).agent
+        // Adopting a legacy Session records the host it just resolved to.
+        await this.sessionHosts.remember(sessionId, hostId)
+        return agent
       } catch (error: unknown) {
         if (!(error instanceof SessionQueryError)
           || error.code !== 'SESSION_QUERY_SESSION_NOT_FOUND') throw error
@@ -478,12 +521,12 @@ export class ApiSessionAgentController {
     }
 
     try {
-      await mkdir(cwd, { recursive: true })
+      await ensureSessionDirectory(this.ctx, cwd, hostId)
     } catch (error: unknown) {
       throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
     }
     const composition = await this.composeAgent(presetId)
-    return (await this.ctx.agents.create({
+    const agent = (await this.ctx.agents.create({
       sessionId,
       agentOptions: this.agentOptions(),
       meta: {
@@ -492,6 +535,10 @@ export class ApiSessionAgentController {
       },
       setup: composition.setup,
     })).agent
+    // The record is written inside the creating operation, so a Session is
+    // never left without the host that owns its cwd; a failed write is loud.
+    await this.sessionHosts.remember(sessionId, hostId)
+    return agent
   }
 
   private agentOptions(): AgentOptions {
@@ -523,6 +570,38 @@ export class ApiSessionAgentController {
     if (requested === undefined || requested === existing) return
     throw new ApiSessionPresetConflict(sessionId, requested, existing)
   }
+}
+
+/**
+ * Ensure one Session working directory exists in the execution world its
+ * Workspace belongs to. The built-in local identity keeps the Harness host's
+ * own `mkdir`, so an existing composition behaves exactly as before; a named
+ * host creates the directory through its open realm under the provisioning
+ * policy, which bounds `workspace-write` to that same directory. A named host
+ * without an open realm throws instead of falling back to the Harness host's
+ * filesystem, which would leave the Session addressing a directory that only
+ * exists locally.
+ * @param ctx - Host context carrying the remote-host registry and, when
+ *   composed, the sandbox policy that owns the provisioning policy.
+ * @param cwd - Session working directory in the addressed execution world.
+ * @param hostId - host identity that owns the Session cwd; `undefined` names
+ *   the local default.
+ */
+async function ensureSessionDirectory(ctx: Context, cwd: string, hostId: string | undefined): Promise<void> {
+  if (hostId === undefined || hostId === LOCAL_HOST_ID) {
+    await mkdir(cwd, { recursive: true })
+    return
+  }
+  const registry = ctx.get('remoteHosts')
+  const handle = registry?.get(brandString<RemoteHostId>(hostId))
+  if (handle === undefined) {
+    throw new Error(
+      `host "${hostId}" has no open execution world on this Host; open the host before creating a Session in "${cwd}"`,
+    )
+  }
+  const policy = ctx.get('sandboxPolicy')?.provisioningPolicy(cwd)
+  const target = await handle.world.fs.resolve(cwd)
+  await handle.world.fs.mkdir(target, undefined, policy)
 }
 
 function agentModelSelection(selection: ModelSelection): AgentModelSelection {

@@ -19,6 +19,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import FsLocal from '@deepseek-ai/dsh-fs-local'
 
 const testToolSignal = new AbortController().signal
 import WebRuntime from '@deepseek-ai/dsh-web'
@@ -50,6 +51,8 @@ beforeEach(async () => {
   ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  // The spill backend resolves and writes through ctx.fs (one execution world).
+  await ctx.plugin(FsLocal, { cwd: spillRoot })
   await ctx.plugin(WebRuntime, { fetchProvider: WebFetchLocal.LOCAL_FETCH_PROVIDER_ID })
   // Provider cap generous so the tool returns a large formatted result; the
   // policy cap is what triggers the spill (the Agent Note's separation of concerns).

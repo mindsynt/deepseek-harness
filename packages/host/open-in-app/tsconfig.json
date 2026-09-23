@@ -28,6 +28,9 @@
     },
     {
       "path": "../../util/launch-environment"
+    },
+    {
+      "path": "../../workspace/workspace"
     }
   ]
 }

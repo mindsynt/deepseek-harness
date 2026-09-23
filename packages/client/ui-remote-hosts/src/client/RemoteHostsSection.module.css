@@ -1,0 +1,82 @@
+/* Remote hosts section: heading, toolbar, list, and the stream-failure line. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.heading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.intro {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+/* The workspace-creation world: its label, the world's display name, and the
+ * action returning the choice to the Harness host. */
+.selection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.selectionLabel {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.selectionValue {
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.detail {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The selected workspace-creation world no longer holds an execution world:
+ * naming the consequence beside the selection keeps the choice from reading
+ * as usable. */
+.alarm {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-state-error-primary);
+}

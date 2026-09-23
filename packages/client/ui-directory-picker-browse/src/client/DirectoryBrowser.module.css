@@ -43,6 +43,20 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* The addressed execution world, parked at the header's trailing edge: it
+ * must not push the title around, and a long host label truncates rather than
+ * widening the card. */
+.host {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 /* The bar IS the editor's box in both modes: it carries the rounded outline
  * and the inner padding, the crumbs and the input sit inside it, and hovering
  * the edit zone lights the whole row rather than the remainder right of the

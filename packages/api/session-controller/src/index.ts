@@ -22,6 +22,7 @@ import { SessionFileReferences } from './file-references.ts'
 import { ApiSessionList } from './list.ts'
 import { buildModelCatalog } from './catalog.ts'
 import { installModelSelectionProjection } from './model-selection-projection.ts'
+import { SessionHostStore, LOCAL_HOST_ID } from './session-hosts.ts'
 import { SessionSkillCatalog } from './skill-catalog.ts'
 import { SessionMediaReferences } from './media-references.ts'
 import type {
@@ -120,7 +121,7 @@ export class SessionController extends TypertRemoteService {
   constructor(ctx: Context, config: Config, internals: SessionControllerInternals = {}) {
     super(ctx, 'sessionController', { namespace: 'session' })
     installModelSelectionProjection(ctx)
-    this.agents = new ApiSessionAgentController(ctx)
+    this.agents = new ApiSessionAgentController(ctx, new SessionHostStore(ctx))
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
     ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
       const result = await this.agents.resolveAgent(sessionId)
@@ -281,6 +282,22 @@ export class SessionController extends TypertRemoteService {
   workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 'explorer' | 'directory' | null } {
     const fileManager = nativeFileManager()
     return { name: hostname(), available: fileManager !== null && this.canOpenPath(), fileManager }
+  }
+
+  /**
+   * Resolve the remote execution world that owns one Session's paths, for the
+   * in-process Host routes that hand paths to the serving desktop. The answer
+   * comes from {@link ApiSessionAgentController.resolvedHostOf} — the sidecar,
+   * then the Workspace accounting, then the local fallback — so this method
+   * adds no second host vocabulary, and a Session on this Harness host is
+   * reported as `undefined` rather than as another host the caller must know.
+   * @param sessionId - Session whose execution world is resolved.
+   * @returns the remote host identity interpreting the Session cwd, or
+   *   `undefined` when that world is the Harness host's own.
+   */
+  async remoteHostOf(sessionId: SessionId): Promise<string | undefined> {
+    const hostId = await this.agents.resolvedHostOf(sessionId)
+    return hostId === LOCAL_HOST_ID ? undefined : hostId
   }
 
   /**

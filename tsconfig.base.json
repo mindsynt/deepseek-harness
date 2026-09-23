@@ -45,6 +45,9 @@
       "@deepseek-ai/dsh-client-ui-sidebar-terminal/client": ["./packages/client/ui-sidebar-terminal/src/client/index.ts"],
       "@deepseek-ai/dsh-ssh/protocol": ["./packages/ssh/ssh/src/protocol.ts"],
       "@deepseek-ai/dsh-ssh/schemas": ["./packages/ssh/ssh/src/schemas.ts"],
+      // Hand-written: the package name does not match its directory, so the
+      // generated region cannot emit this alias.
+      "@deepseek-ai/dsh-ssh-host-registry": ["./packages/ssh/host-registry/src"],
       "@deepseek-ai/dsh-subprocess-local/output": ["./packages/subprocess/subprocess-local/src/output.ts"],
       "@deepseek-ai/dsh-computer-use": ["./packages/computer-use/computer-use/src/index.ts"],
       "@deepseek-ai/dsh-computer-use/brand": ["./packages/computer-use/computer-use/src/brand.ts"],
@@ -256,6 +259,9 @@
       "@deepseek-ai/dsh-client-ui-plugin-manager": ["./packages/client/ui-plugin-manager/src"],
       "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": ["./packages/client/ui-settings-plugin-inventory/src"],
       "@deepseek-ai/dsh-client-ui-settings-unarchive-sessions": ["./packages/client/ui-settings-unarchive-sessions/src"],
+      // Hand-written: packages/client/ names carry the client- prefix, so the
+      // generated region cannot emit this alias.
+      "@deepseek-ai/dsh-client-ui-remote-hosts": ["./packages/client/ui-remote-hosts/src"],
       "@deepseek-ai/dsh-client-locale": ["./packages/client/locale/src"],
       "@deepseek-ai/dsh-client-web/injections": ["./packages/client/web/src/apply-injections.ts"],
       "@deepseek-ai/dsh-client-web": ["./packages/client/web/src"],
@@ -341,11 +347,15 @@
       "@deepseek-ai/dsh-goal-round-driver": ["./packages/goal/goal-round-driver/src"],
       "@deepseek-ai/dsh-goal-round-driver/invariant": ["./packages/goal/goal-round-driver/src/invariant.ts"],
       "@deepseek-ai/dsh-headless": ["./packages/bundle/headless/src"],
+      "@deepseek-ai/dsh-helper-artifact": ["./packages/ssh/helper-artifact/src"],
+      "@deepseek-ai/dsh-helper-installer": ["./packages/ssh/helper-installer/src"],
       "@deepseek-ai/dsh-home-paths": ["./packages/util/home-paths/src"],
       "@deepseek-ai/dsh-hook-protocol": ["./packages/hooks/hook-protocol/src"],
       "@deepseek-ai/dsh-hook-protocol/invariant": ["./packages/hooks/hook-protocol/src/invariant.ts"],
       "@deepseek-ai/dsh-hooks-claude-code": ["./packages/hooks/hooks-claude-code/src"],
       "@deepseek-ai/dsh-hooks-codex": ["./packages/hooks/hooks-codex/src"],
+      "@deepseek-ai/dsh-host-credentials": ["./packages/ssh/host-credentials/src"],
+      "@deepseek-ai/dsh-hosts-controller": ["./packages/api/hosts-controller/src"],
       "@deepseek-ai/dsh-http-proxy": ["./packages/util/http-proxy/src"],
       "@deepseek-ai/dsh-jobs": ["./packages/jobs/jobs/src"],
       "@deepseek-ai/dsh-jobs/invariant": ["./packages/jobs/jobs/src/invariant.ts"],
@@ -431,6 +441,7 @@
       "@deepseek-ai/dsh-spill-local": ["./packages/spill/spill-local/src"],
       "@deepseek-ai/dsh-spill-policy": ["./packages/spill/spill-policy/src"],
       "@deepseek-ai/dsh-ssh": ["./packages/ssh/ssh/src"],
+      "@deepseek-ai/dsh-ssh-hosts": ["./packages/bundle/ssh-hosts/src"],
       "@deepseek-ai/dsh-storage": ["./packages/storage/storage/src"],
       "@deepseek-ai/dsh-storage-domain": ["./packages/storage/storage-domain/src"],
       "@deepseek-ai/dsh-storage-domain/invariant": ["./packages/storage/storage-domain/src/invariant.ts"],

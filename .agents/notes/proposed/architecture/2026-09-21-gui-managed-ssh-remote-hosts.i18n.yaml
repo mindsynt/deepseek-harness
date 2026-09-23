@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-21-gui-managed-ssh-remote-hosts.md
+2026-09-21-gui-managed-ssh-remote-hosts.md: 8a2ad3a47dbd244f89ebdbeb6e3164f6bc060c27
+2026-09-21-gui-managed-ssh-remote-hosts.zh.md: e7d057e31259aa6fca800682b0ec10e552af00d8

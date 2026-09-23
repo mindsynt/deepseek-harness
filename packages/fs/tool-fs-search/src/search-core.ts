@@ -1,15 +1,18 @@
 /**
  * Shared execution plumbing for the `glob` / `grep` search tools: the
- * package-owned `SEARCH_*` error vocabulary, one spawn helper that runs the
- * PACKAGED ripgrep binary (`@vscode/ripgrep`) with a plain argv vector and
- * returns complete raw stdout, the best-effort formatted-result spill handoff,
- * and workdir-relative path display.
+ * package-owned `SEARCH_*` error vocabulary, one spawn helper that runs a
+ * ripgrep executable resolved in the spawn's own execution world with a plain
+ * argv vector and returns complete raw stdout, the best-effort
+ * formatted-result spill handoff, and workdir-relative path display.
  *
  * Both tools execute as ordinary foreground spawns through `ctx.subprocess` —
  * never `ctx.shell`, never `ctx.shell.start()`, never a model-visible background
- * task. The ripgrep binary ships inside the npm package, so no system `rg`
- * install is required, and no shell layer exists between the argv vector and
- * ripgrep, so no shell quoting is involved. Raw `rg` stdout is an internal
+ * task. The ripgrep binary ships inside the npm package, so a deployment that
+ * runs searches on the harness host needs no system `rg` install
+ * ({@link resolveRgPath} is that host-side preparation); a deployment that runs
+ * them in a remote or otherwise separate execution world resolves the binary
+ * there instead ({@link resolveSearchExecutable}). No shell layer exists between
+ * the argv vector and ripgrep, so no shell quoting is involved. Raw `rg` stdout is an internal
  * transport detail: the tools request a per-run stdout capture budget from the
  * subprocess seam, parse only complete in-memory stdout within
  * `rawOutputMaxBytes`, and never read spill files. The model-facing recovery
@@ -25,7 +28,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { ItemRetainer, TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import type { RetainedItems } from '@deepseek-ai/dsh-output-retention'
-import type { SubprocessHandle, SubprocessOutcome, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessExecutableNotFoundError, type SubprocessHandle, type SubprocessOutcome, type SubprocessOutputRead, type SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 
@@ -157,7 +160,8 @@ function completeStdout(toolName: string, stdout: SubprocessOutputRead, rawOutpu
 let rgPathPromise: Promise<string> | undefined
 
 /**
- * The packaged ripgrep binary path, resolved lazily once per process.
+ * HOST-SIDE PREPARATION: the packaged ripgrep binary's path on the harness
+ * host, resolved lazily once per process.
  *
  * A single-file runtime uses the executable's `-rg` sidecar because a native
  * helper cannot be spawned from pkg's virtual filesystem. Node-mode builds
@@ -165,8 +169,12 @@ let rgPathPromise: Promise<string> | undefined
  * at the call boundary keeps a missing or corrupt binary at the first search
  * call as `SEARCH_FAILED`, rather than failing the Loader composition.
  *
- * @returns the packaged binary's absolute path; the memoized promise rejects
- *   when the platform package cannot be resolved.
+ * This value is a harness-host coordinate, never `argv[0]`: the spawn runs in
+ * the context's execution world, which may not see the host filesystem at all,
+ * so {@link resolveSearchExecutable} locates it in that world first.
+ *
+ * @returns the packaged binary's absolute host path; the memoized promise
+ *   rejects when the platform package cannot be resolved.
  */
 export function resolveRgPath(): Promise<string> {
   rgPathPromise ??= Promise.resolve().then(async () => {
@@ -183,11 +191,82 @@ export function resolveRgPath(): Promise<string> {
   return rgPathPromise
 }
 
+/** The upstream ripgrep program name, tried on the execution world's PATH. */
+const EXECUTION_WORLD_RG = 'rg'
+
 /**
- * Run the packaged ripgrep binary with a plain argv vector and return its
- * complete raw stdout. The working directory is the calling agent's session
- * cwd (`exec.agent.session.header.cwd`) when available, else
- * `process.cwd()`. `exec.signal` is forwarded so the cooperative tool timeout
+ * The host→execution-world mapping consumed from the OPTIONAL filesystem
+ * provider. These spawn-backed tools load without one, and this single method
+ * is all they use, so the face stays structural instead of adding a package
+ * dependency for a provider they never inject.
+ */
+interface HostPathMapper {
+  processPathFromHostPath(hostPath: string): string | undefined
+}
+
+/**
+ * Map the packaged binary out of harness-host coordinates: a mounted filesystem
+ * provider names the same file in its execution world when that world can read
+ * it, and the host path stands otherwise (the provider may be absent, or may
+ * serve a world that is not this host's).
+ * @param ctx - the plugin context; `fs` is read opportunistically.
+ * @param hostPath - the packaged binary's harness-host path.
+ * @returns the execution-world path when the filesystem provider supplies one, else `hostPath`.
+ */
+function executionWorldPackagedPath(ctx: Context, hostPath: string): string {
+  const fs = ctx.get('fs') as HostPathMapper | undefined
+  return fs?.processPathFromHostPath(hostPath) ?? hostPath
+}
+
+/**
+ * Resolve the ripgrep executable that `ctx.subprocess.spawn()` will run, in the
+ * SAME execution world as that spawn.
+ *
+ * The packaged binary is tried first, at its execution-world coordinate, so a
+ * deployment whose searches run on the harness host keeps the fixed
+ * `@vscode/ripgrep` version. When the execution world cannot see it — the
+ * remote-SSH and virtual-filesystem deployments — the world's own `rg` on PATH
+ * is tried next, and a lookup miss there fails loud as `SEARCH_FAILED` instead
+ * of handing a harness-host path to a world that does not have it. A failing
+ * lookup that is NOT a miss (transport failure, cancellation) propagates: only
+ * an absent executable licenses the PATH attempt.
+ *
+ * @param ctx - the plugin context; execution uses its `subprocess` service and optionally its `fs`.
+ * @param toolName - `glob` or `grep`, used in the failure message.
+ * @param signal - the tool execution's abort signal, forwarded to each lookup.
+ * @returns the executable path in the execution world.
+ * @throws {SearchError} `SEARCH_FAILED` when neither candidate is available there.
+ */
+async function resolveSearchExecutable(ctx: Context, toolName: string, signal: AbortSignal): Promise<string> {
+  const packaged = executionWorldPackagedPath(ctx, await resolveRgPath())
+  try {
+    return await ctx.subprocess.resolveExecutable(packaged, undefined, signal)
+  } catch (error: unknown) {
+    if (!(error instanceof SubprocessExecutableNotFoundError)) throw error
+  }
+  try {
+    return await ctx.subprocess.resolveExecutable(EXECUTION_WORLD_RG, undefined, signal)
+  } catch (error: unknown) {
+    if (!(error instanceof SubprocessExecutableNotFoundError)) throw error
+    throw new SearchError(
+      `${toolName} found no ripgrep executable to run: the bundled ripgrep is not available where the search runs `
+      + `and no "${EXECUTION_WORLD_RG}" is on that PATH; install ripgrep there or search a co-located workspace`,
+      'SEARCH_FAILED',
+      { cause: error },
+    )
+  }
+}
+
+/**
+ * Run the resolved ripgrep binary with a plain argv vector and return its
+ * complete raw stdout. The executable is resolved through the subprocess seam
+ * in the spawn's own execution world ({@link resolveSearchExecutable}), so the
+ * working directory is the calling agent's session cwd
+ * (`exec.agent.session.header.cwd`) when available, else `process.cwd()`. That
+ * session cwd is already an execution-world path — a deployment derives it from
+ * its filesystem provider, not from a host spelling — and `process.cwd()`
+ * remains only for a direct call with no session. `exec.signal` is forwarded so
+ * the cooperative tool timeout
  * (`@deepseek-ai/dsh-tool-call-timeout-policy`) and caller cancellation terminate the
  * process tree.
  *
@@ -203,12 +282,14 @@ export function resolveRgPath(): Promise<string> {
  * {@link SearchError} (abort/timeout → `SEARCH_ABORTED`, invalid pattern →
  * `SEARCH_INVALID_PATTERN`, the rest → `SEARCH_FAILED` /
  * `SEARCH_RAW_OUTPUT_OVERFLOW`). Both launch-time failure domains are
- * classified: a synchronous throw at spawn CREATION (a NUL in argv, an abort
- * racing the pre-check, a rejected `@vscode/ripgrep` resolution) reports that
- * the command could not start, while a rejection of `handle.done` reports a
- * provider failure without claiming whether execution began. Both become
- * `SEARCH_FAILED` with the original as `cause`; an abort already observed by
- * creation time becomes `SEARCH_ABORTED` instead.
+ * classified: a synchronous throw before spawn CREATION (a failed executable
+ * lookup, a NUL in argv, an abort racing the pre-check, a rejected
+ * `@vscode/ripgrep` resolution) reports that the command could not start —
+ * except an executable lookup that already produced its own {@link SearchError}
+ * — while a rejection of `handle.done` reports a provider failure without
+ * claiming whether execution began. Both become `SEARCH_FAILED` with the
+ * original as `cause`; an abort already observed by creation time becomes
+ * `SEARCH_ABORTED` instead.
  *
  * @param ctx - the plugin context; execution uses its `subprocess` service.
  * @param exec - the tool-execution context; supplies the session cwd and the abort signal.
@@ -236,7 +317,7 @@ export async function runRipgrep(
   let handle: SubprocessHandle
   try {
     handle = ctx.subprocess.spawn({
-      argv: [await resolveRgPath(), '--no-config', ...argv],
+      argv: [await resolveSearchExecutable(ctx, toolName, exec.signal), '--no-config', ...argv],
       cwd: workdir,
       stdio: {
         stdin: 'ignore',
@@ -247,15 +328,17 @@ export async function runRipgrep(
       signal: exec.signal,
     } satisfies SubprocessSpawnSpec)
   } catch (error: unknown) {
-    // Node's spawn() throws synchronously for a NUL in argv, and the local
-    // impl can throw synchronously when the signal aborts between the check
-    // above and this call (or when the platform-package resolution rejects).
+    // Node's spawn() throws synchronously for a NUL in argv, the local impl can
+    // throw synchronously when the signal aborts between the check above and
+    // this call, and executable lookup can fail before either. A SearchError
+    // from that lookup already classifies its own cause.
     // The static narrowing that proves this re-check "always false" cannot
     // see AbortSignal state changes.
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (exec.signal.aborted) {
       throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
     }
+    if (error instanceof SearchError) throw error
     throw new SearchError(`${toolName} could not start its search command (ripgrep launch failed)`, 'SEARCH_FAILED', { cause: error })
   }
   let outcome: SubprocessOutcome

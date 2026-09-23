@@ -11,6 +11,7 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 
@@ -29,6 +30,9 @@ function SidebarFrame({ renderSlot }: FrameProps) {
 async function bench() {
   const runtime = await SlotTestRuntime.create()
   runtime.ctx.provide('layout', { selectPanel: vi.fn() })
+  // The workspace-creation host selection ui-remote-hosts owns: this assembly
+  // mounts ui-workspace alone, so the spec provides the service face.
+  runtime.ctx.provide('remoteHostSelection', { source: createSnapshotStore({}) })
   runtime.releaseWorkspaceSource()
   const directoryPicker = {}
   const { remote } = runtime

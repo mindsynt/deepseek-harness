@@ -162,5 +162,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       readonly path: string
       readonly kind: 'file' | 'symlink' | 'other'
     }
+    /** The addressed remote host has no open execution world, so its files cannot be read. */
+    'workspace-file/host-unavailable': { readonly hostId: string }
   }
 }

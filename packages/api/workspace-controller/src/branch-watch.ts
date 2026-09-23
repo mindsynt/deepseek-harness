@@ -1,8 +1,10 @@
 /** Live git-branch observation for registered Workspace directories. */
 
 import { watch, type FSWatcher } from 'chokidar'
+import type { Context } from '@deepseek-ai/cordis'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
-import { gitHeadWatch, readWorkspaceBranch } from './branches.ts'
+import { fileSystemFor, gitHeadWatch, isLocalHost, readWorkspaceBranch } from './branches.ts'
 import type { WorkspaceBranchView } from './types.ts'
 
 /** Milliseconds a HEAD write settles before the branch is read, and the watcher poll interval. */
@@ -11,6 +13,8 @@ const MAX_SETTLE_POLL_MS = 10
 /** One registered Workspace whose checkout is observed. */
 export interface WorkspaceBranchTarget {
   readonly workspaceId: WorkspaceId
+  /** Identity of the host whose filesystem interprets {@link path}. */
+  readonly hostId: string
   /** Canonical Workspace directory. */
   readonly path: string
 }
@@ -23,6 +27,11 @@ export interface WorkspaceBranchTarget {
  * the git directory itself, or the Workspace root while `.git` is absent, so a
  * checkout created later is observed too — and a settled write there re-reads
  * the branch.
+ *
+ * Only Workspaces on this Harness host are watched. A remote checkout lives in
+ * another execution world, where a directory watch rooted here would observe the
+ * Harness host's own path instead and never fire; those Workspaces keep their
+ * on-demand read.
  */
 export class WorkspaceBranchWatch {
   private readonly watchers = new Map<WorkspaceId, { readonly directory: string; readonly watcher: FSWatcher }>()
@@ -33,10 +42,12 @@ export class WorkspaceBranchWatch {
   private closed = false
 
   /**
+   * @param ctx - Host context carrying the Harness host's own filesystem.
    * @param debounceMs - settled-write window before a HEAD change is read.
    * @param publish - destination for a changed branch.
    */
   constructor(
+    private readonly ctx: Context,
     private readonly debounceMs: number,
     private readonly publish: (change: WorkspaceBranchView) => void,
   ) {}
@@ -88,7 +99,15 @@ export class WorkspaceBranchWatch {
     const target = this.targets.find(candidate => candidate.workspaceId === workspaceId)
     /* v8 ignore next 2 -- an event already queued when its Workspace left the registry has no path to resolve. */
     if (target === undefined) return
-    const directory = await gitHeadWatch(target.path)
+    // Only this Host's own checkouts are watched: a chokidar watch rooted at a
+    // remote Workspace path would follow a directory of that spelling here and
+    // never fire for the writes happening on the other host.
+    const fs = isLocalHost(target.hostId) ? fileSystemFor(this.ctx, target.hostId) : undefined
+    if (fs === undefined) {
+      await this.withdraw(workspaceId)
+      return
+    }
+    const directory = await gitHeadWatch(fs, target.path)
     /* v8 ignore next -- the plugin can dispose while the workspace path resolves. */
     if (this.closed) return
     const installed = this.watchers.get(workspaceId)
@@ -109,10 +128,10 @@ export class WorkspaceBranchWatch {
       },
     })
     this.watchers.set(workspaceId, { directory, watcher })
-    watcher.on('all', () => { void this.settled(workspaceId) })
+    watcher.on('all', () => { void this.settled(workspaceId, fs) })
     // An install publishes what it observes; a client that already holds the
     // same label drops the repeat.
-    await this.readBranch(workspaceId)
+    await this.readBranch(workspaceId, fs)
   }
 
   private async withdraw(workspaceId: WorkspaceId): Promise<void> {
@@ -122,16 +141,16 @@ export class WorkspaceBranchWatch {
     await installed.watcher.close()
   }
 
-  private async settled(workspaceId: WorkspaceId): Promise<void> {
+  private async settled(workspaceId: WorkspaceId, fs: FileSystem): Promise<void> {
     await this.observe(workspaceId)
-    await this.readBranch(workspaceId)
+    await this.readBranch(workspaceId, fs)
   }
 
-  private async readBranch(workspaceId: WorkspaceId): Promise<void> {
+  private async readBranch(workspaceId: WorkspaceId, fs: FileSystem): Promise<void> {
     const target = this.targets.find(candidate => candidate.workspaceId === workspaceId)
     /* v8 ignore next 2 -- an event already queued when its Workspace left the registry has no path to read. */
     if (target === undefined) return
-    const branch = await readWorkspaceBranch(target.path)
+    const branch = await readWorkspaceBranch(fs, target.path)
     if (this.observed.get(workspaceId) === branch) return
     this.observed.set(workspaceId, branch)
     this.publish(branch === undefined ? { workspaceId } : { workspaceId, branch })

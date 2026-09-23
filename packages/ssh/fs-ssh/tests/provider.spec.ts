@@ -110,6 +110,17 @@ describe('SSH filesystem provider', () => {
     expect(dispatch).toHaveBeenLastCalledWith('fs.edit', { target, edit, expected: { version: 'v2' }, policy }, signal)
   })
 
+  it('forwards directory creation with the resolved policy and returns the created flag', async () => {
+    const { fs, dispatch } = await setup()
+    dispatch.mockResolvedValueOnce({ created: true }).mockResolvedValueOnce({ created: false })
+    const signal = new AbortController().signal
+    const policy: SandboxExecutionPolicy = { mode: 'workspace-write', workspaceRoot: '/remote/link/..' }
+    expect(await fs.mkdir(target, signal, policy)).toEqual({ created: true })
+    expect(dispatch).toHaveBeenLastCalledWith('fs.mkdir', { target, policy }, signal)
+    expect(await fs.mkdir(target)).toEqual({ created: false })
+    expect(dispatch).toHaveBeenLastCalledWith('fs.mkdir', { target, policy: { mode: 'read-only', workspaceRoot: '/remote/work' } }, undefined)
+  })
+
   it('resolves deployment policy for mutations without an explicit policy', async () => {
     const { fs, dispatch } = await setup()
     dispatch.mockResolvedValueOnce({ operation: 'create', version: 'v1', before: null, after: 'new' })

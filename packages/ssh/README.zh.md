@@ -26,6 +26,10 @@ kind: "package-group"
 | [`fs-ssh`](fs-ssh/README.zh.md) | 远端文件身份、读取及带保护的原子修改 | `ctx.fs` |
 | [`subprocess-ssh`](subprocess-ssh/README.zh.md) | 可执行文件查找、进程、控制流及终端 | `ctx.subprocess` |
 | [`sandbox-ssh`](sandbox-ssh/README.zh.md) | 远端文件效果限制及执行信息 | `ctx.sandbox` |
+| [`host-registry`](host-registry/README.zh.md) | 每台已注册 SSH 主机一个隔离执行 realm | `ctx.remoteHosts` |
+| [`host-credentials`](host-credentials/README.zh.md) | 受控 OpenSSH 配置与身份物化，以及凭证存取 | `ctx.sshHostCredentials` |
+| [`helper-installer`](helper-installer/README.zh.md) | 远端辅助程序探测、上传与摘要确认 | `ctx.sshHelperInstaller` |
+| [`helper-artifact`](helper-artifact/README.zh.md) | 构建期组装远端辅助程序的依赖闭包并打包 | `-` |
 
 <a id="related-documentation"></a>
 ## 相关文档

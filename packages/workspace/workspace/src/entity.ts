@@ -13,7 +13,7 @@ import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceRecord } from './spec.ts'
 import type { Workspace, WorkspaceId } from './types.ts'
-import { realpathNormalize } from './paths.ts'
+import { LOCAL_HOST_ID, realpathNormalize, remotePathNormalize } from './paths.ts'
 
 /** An insertSessionBefore request named a session or anchor not on the account (storage failures stay plain errors). */
 export class WorkspaceMoveInvalidError extends Error {
@@ -39,12 +39,15 @@ export interface WorkspaceEntityHost {
   table(): KvTable<WorkspaceId, WorkspaceRecord>
 
   /**
-   * Read a session's canonical directory from the registry's header index.
+   * Read a session's canonical directory under one host's rules from the
+   * registry's header index.
    * @param id - Session whose indexed path is requested.
+   * @param hostId - Identity of the host whose canon to read; the built-in
+   * local host uses `fs.realpath`, another host uses string canon.
    * @returns the canonical directory, or `undefined` when the header is
-   * missing or its cwd cannot identify an existing directory.
+   * missing or its cwd cannot be canonicalized under this host's rules.
    */
-  sessionPath(id: SessionId): string | undefined
+  sessionPath(id: SessionId, hostId: string): string | undefined
 
   /**
    * Read one stored session header for attach validation.
@@ -57,9 +60,10 @@ export interface WorkspaceEntityHost {
   /**
    * Publish a successfully validated canonical cwd to the projection index.
    * @param id - Validated session id.
-   * @param path - Canonical existing directory from the immutable header cwd.
+   * @param hostId - The validating workspace's host, which selects the canon slot.
+   * @param path - Canonical cwd from the immutable header cwd.
    */
-  rememberSessionPath(id: SessionId, path: string): void
+  rememberSessionPath(id: SessionId, hostId: string, path: string): void
 }
 
 /** Chain-slot abort sentinel thrown by the update fn when the record needs no change; only `mutate` observes it. */
@@ -86,6 +90,10 @@ export class WorkspaceEntity implements Workspace {
     return this.record.path
   }
 
+  get hostId(): string {
+    return this.record.hostId
+  }
+
   get title(): string {
     return this.record.title
   }
@@ -99,7 +107,9 @@ export class WorkspaceEntity implements Workspace {
   }
 
   get sessionIds(): readonly SessionId[] {
-    return this.record.sessionIds.filter(id => this.host.sessionPath(id) === this.record.path)
+    return this.record.sessionIds.filter(
+      id => this.host.sessionPath(id, this.record.hostId) === this.record.path,
+    )
   }
 
   async setTitle(title: string): Promise<void> {
@@ -119,33 +129,61 @@ export class WorkspaceEntity implements Workspace {
           + 'its stored header carries no cwd to validate against',
         )
       }
-      let cwd: string
-      try {
-        cwd = await realpathNormalize(header.cwd)
-      } catch (error) {
-        throw new Error(
-          `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
-          + `its cwd '${header.cwd}' does not resolve, so it cannot be validated`,
-          { cause: error },
-        )
-      }
-      if (!(await stat(cwd)).isDirectory()) {
-        throw new Error(
-          `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
-          + `its cwd '${header.cwd}' is not a directory`,
-        )
-      }
+      const cwd = await this.validatedSessionCwd(sessionId, header.cwd)
       if (cwd !== this.record.path) {
         throw new Error(
           `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
-          + `its cwd resolves to '${cwd}'`,
+          + (this.record.hostId === LOCAL_HOST_ID
+            ? `its cwd resolves to '${cwd}'`
+            : `its cwd canonicalizes to '${cwd}' on host '${this.record.hostId}'`),
         )
       }
-      this.host.rememberSessionPath(sessionId, cwd)
+      this.host.rememberSessionPath(sessionId, this.record.hostId, cwd)
     }
     await this.mutate(record => record.sessionIds.includes(sessionId)
       ? record
       : { ...record, sessionIds: [sessionId, ...record.sessionIds] })
+  }
+
+  /**
+   * Canonicalize a session's immutable header cwd under this workspace's host.
+   * The local host resolves through `fs.realpath` and requires an existing
+   * directory; a non-local host applies string canon alone, because only that
+   * host's execution world interprets — or could verify — the path, and its
+   * filesystem is not addressable from this package.
+   * @param sessionId - The session being attached, named in rejection messages.
+   * @param cwd - The stored header cwd.
+   * @returns the canonical cwd in this workspace's host terms.
+   */
+  private async validatedSessionCwd(sessionId: SessionId, cwd: string): Promise<string> {
+    if (this.record.hostId !== LOCAL_HOST_ID) {
+      try {
+        return remotePathNormalize(cwd)
+      } catch (error) {
+        throw new Error(
+          `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
+          + `its cwd '${cwd}' is not a fully qualified path on host '${this.record.hostId}'`,
+          { cause: error },
+        )
+      }
+    }
+    let canonical: string
+    try {
+      canonical = await realpathNormalize(cwd)
+    } catch (error) {
+      throw new Error(
+        `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
+        + `its cwd '${cwd}' does not resolve, so it cannot be validated`,
+        { cause: error },
+      )
+    }
+    if (!(await stat(canonical)).isDirectory()) {
+      throw new Error(
+        `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
+        + `its cwd '${cwd}' is not a directory`,
+      )
+    }
+    return canonical
   }
 
   async insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void> {
@@ -205,7 +243,7 @@ export class WorkspaceEntity implements Workspace {
       next = await this.host.table().update(this.id, (current) => {
         const changed = fn(current)
         const sessionIds = changed.sessionIds.filter(
-          id => this.host.sessionPath(id) === changed.path,
+          id => this.host.sessionPath(id, changed.hostId) === changed.path,
         )
         if (changed === current && sessionIds.length === current.sessionIds.length) {
           throw unchangedSentinel

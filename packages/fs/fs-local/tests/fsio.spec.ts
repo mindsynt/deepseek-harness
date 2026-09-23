@@ -12,6 +12,7 @@ import { isAbsolute, join, parse, relative, resolve } from 'node:path'
 import { createServer } from 'node:net'
 import {
   applyLiteralEdit,
+  createDirectory,
   listDirectory,
   probe,
   probeNoFollow,
@@ -331,6 +332,70 @@ describe('listDirectory', () => {
     } finally {
       await chmod(protectedRoot, 0o700)
     }
+  })
+})
+
+describe('createDirectory', () => {
+  it('creates missing parents and reports the same directory as not created afterwards', async () => {
+    const path = join(dir, 'nested', 'leaf')
+    expect(await createDirectory(localTarget(path))).toBe(true)
+    expect((await stat(path)).isDirectory()).toBe(true)
+    expect(await createDirectory(localTarget(path))).toBe(false)
+  })
+
+  it('refuses a file target as FS_NOT_DIRECTORY without touching it', async () => {
+    const file = join(dir, 'a.txt')
+    await writeFile(file, 'hi')
+    await expect(createDirectory(localTarget(file))).rejects.toMatchObject({ code: 'FS_NOT_DIRECTORY' })
+    expect(await readFile(file, 'utf8')).toBe('hi')
+  })
+
+  it('aborts before creation takes effect', async () => {
+    const path = join(dir, 'aborted')
+    const controller = new AbortController()
+    controller.abort(new Error('cancel create'))
+    await expect(createDirectory(localTarget(path), controller.signal)).rejects.toMatchObject({ code: 'FS_ABORTED' })
+    await expect(stat(path)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('maps a raced non-directory parent to FS_NOT_DIRECTORY', async () => {
+    const cause = Object.assign(new Error('not a directory'), { code: 'ENOTDIR' })
+    await expect(createDirectory(localTarget(join(dir, 'raced')), undefined, { mkdir: () => Promise.reject(cause) }))
+      .rejects.toMatchObject({ code: 'FS_NOT_DIRECTORY', cause })
+  })
+
+  it('maps a creation permission failure to FS_PERMISSION_DENIED', async () => {
+    const cause = Object.assign(new Error('denied'), { code: 'EACCES' })
+    await expect(createDirectory(localTarget(join(dir, 'denied')), undefined, { mkdir: () => Promise.reject(cause) }))
+      .rejects.toMatchObject({ code: 'FS_PERMISSION_DENIED', cause })
+  })
+
+  it('maps any other creation failure to FS_IO_ERROR', async () => {
+    const cause = Object.assign(new Error('io failure'), { code: 'EIO' })
+    await expect(createDirectory(localTarget(join(dir, 'io')), undefined, { mkdir: () => Promise.reject(cause) }))
+      .rejects.toMatchObject({ code: 'FS_IO_ERROR', cause })
+  })
+
+  it('maps a probe permission failure to FS_PERMISSION_DENIED', async () => {
+    const protectedRoot = join(dir, 'protected-probe')
+    await mkdir(protectedRoot)
+    const path = join(protectedRoot, 'child')
+    await chmod(protectedRoot, 0o000)
+    try {
+      const error = await createDirectory(localTarget(path)).then(() => undefined, (caught: unknown) => caught)
+      // Root-like environments may still resolve through mode-000 directories.
+      if (error === undefined) return
+      expect(error).toMatchObject({ code: 'FS_PERMISSION_DENIED' })
+    } finally {
+      await chmod(protectedRoot, 0o700)
+    }
+  })
+
+  it('maps a probe I/O failure to FS_IO_ERROR', async () => {
+    // A self-referential symlink makes stat fail with ELOOP deterministically.
+    const loop = join(dir, 'loop')
+    await symlink(loop, loop)
+    await expect(createDirectory(localTarget(loop))).rejects.toMatchObject({ code: 'FS_IO_ERROR' })
   })
 })
 

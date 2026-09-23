@@ -111,6 +111,21 @@ interface FsDirEntry {
 }
 ```
 
+## 目录创建（提供方约定）
+
+`mkdir` 创建目标目录并一并创建所有缺失的父目录，且是幂等的：目标已是目录时不做任何改动，返回 `created: false`。目标或父路径组件已存在但不是目录时以 `FS_NOT_DIRECTORY` 失败；权限失败保留 `FS_PERMISSION_DENIED`，其他后端故障保留 `FS_IO_ERROR`。它没有递归或 mode 参数——创建总是包含父目录，权限由提供方的 umask 决定——也没有版本守卫，因为重复执行在构造上就是安全的。无法创建目录的后端必须显式失败，而不是报告成功。施加限制的提供方按与 `writeText` 相同的每次调用策略围栏该创建，因此这里和写入一样，策略参数是可选的。
+
+```ts type-equiv
+/** Outcome of one directory creation. */
+interface FsMkdirOutcome {
+  /**
+   * Whether this call created the directory. `false` means the target already
+   * existed as a directory, so the call was an idempotent no-op.
+   */
+  created: boolean
+}
+```
+
 ## 写入与编辑守卫（提供方约定）
 
 `writeText` 和 `editText` 的版本守卫都是可选的：省略守卫时执行无条件的裸提供方变更，提供守卫时则执行相应的条件检查。`writeText` 的守卫是 `FsWriteIntent`：`createIfAbsent` 在目标缺失时创建，目标已存在时以 `FS_NOT_OBSERVED` 拒绝；即使目标在提供方初始探测后才出现，也必须拒绝，因为发布操作本身不得替换。`replaceIfVersion` 仅在目标存在且版本匹配时替换，否则报 `FS_STALE_VERSION`。省略 `expected` 则无条件创建或覆盖。联合类型本身只包含两种有守卫的意图；「无守卫」通过省略表达，因此 write 和 edit 都使用同一个可选的 `expected` 字段。
@@ -275,7 +290,7 @@ type FsErrorCode =
 
 ## 服务与插件
 
-`FileSystem`（`ctx.fs`，abstract）拥有提供方原语：`resolve`、`processPath`、`processPathFromHostPath`、`fileUrl`、`contains`、`stat`、`lstat`、`readText`、`streamText`、`readBytes`、`listDir`、`writeText` 与 `editText`。`dsh-fs-observation-policy` **不注册服务**。它通过 `fs/*` 事件门禁添加策略，根据未见、缺失或存在状态对写入与编辑意图 waterfall 作出决策，并记录 `FsObservation` 值。执行器是 `dsh-tool-fs`：它通过 `ctx.fs` 读取、写入或编辑，分发 waterfall，并 emit 记录事件。下方生成的 [`ctx.fs` 小节](#ctxfs--filesystem-abstract-seam) 展示确切的 `ctx.fs` 签名。
+`FileSystem`（`ctx.fs`，abstract）拥有提供方原语：`resolve`、`processPath`、`processPathFromHostPath`、`fileUrl`、`contains`、`stat`、`lstat`、`readText`、`streamText`、`readBytes`、`listDir`、`mkdir`、`writeText` 与 `editText`。`dsh-fs-observation-policy` **不注册服务**。它通过 `fs/*` 事件门禁添加策略，根据未见、缺失或存在状态对写入与编辑意图 waterfall 作出决策，并记录 `FsObservation` 值。执行器是 `dsh-tool-fs`：它通过 `ctx.fs` 读取、写入或编辑，分发 waterfall，并 emit 记录事件。下方生成的 [`ctx.fs` 小节](#ctxfs--filesystem-abstract-seam) 展示确切的 `ctx.fs` 签名。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -419,6 +434,25 @@ abstract readByteRange(target: FsTarget, range: { offset: number; length: number
  * @returns one entry per direct child, in stable name order.
  */
 abstract listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>
+
+/**
+ * Create a directory, including every missing parent, idempotently. A target
+ * that already exists as a directory is left untouched and reports
+ * `created: false`, so repeated calls converge. A target — or a parent
+ * component — that exists as something else fails with `FS_NOT_DIRECTORY`;
+ * permission and other backend failures keep `FS_PERMISSION_DENIED` and
+ * `FS_IO_ERROR`. There is no `recursive` or mode argument: creation always
+ * includes parents. The provider's umask decides permissions, and a backend
+ * that cannot create directories must fail loudly rather than report success —
+ * the definition applies no fallback.
+ * @param target - the resolved directory target to create.
+ * @param signal - aborts before the directory takes effect.
+ * @param sandboxPolicy - the per-call mode and workspace root this creation
+ *   runs under; a sandboxing backend fences it by that policy, the bare
+ *   backend ignores it. Omit to leave the backend its own default.
+ * @returns whether this call created the directory.
+ */
+abstract mkdir( target: FsTarget, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsMkdirOutcome>
 
 /**
  * Atomically create or replace UTF-8 text. `expected` guards intent and

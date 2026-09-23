@@ -1,8 +1,8 @@
 /**
- * The model-facing filesystem discovery tool suite (`glob`, `grep`) over the
- * packaged ripgrep binary (`@vscode/ripgrep`). This single plugin registers
- * both tools; the binary ships inside the npm dependency, so no system `rg`
- * install and no shell layer is involved.
+ * The model-facing filesystem discovery tool suite (`glob`, `grep`) over a
+ * ripgrep executable resolved in the spawn's execution world, which is the
+ * packaged `@vscode/ripgrep` binary on the harness host. This single plugin
+ * registers both tools with no shell layer.
  *
  * ## Spawn-backed, not a `ctx.fs` provider method
  *
@@ -13,10 +13,10 @@
  * ({@link module:@deepseek-ai/dsh-tool-fs-search/glob} /
  * {@link module:@deepseek-ai/dsh-tool-fs-search/grep}), result parsing,
  * retention, formatted-result spill, and timeout declaration; the subprocess
- * seam owns spawn execution, process-tree termination, environment scrubbing,
- * and raw output capture. The package injects `tools`, `systemPrompt`, and
- * `subprocess` — deliberately NOT `fs`, and `ctx.spillStore` is read
- * opportunistically with `ctx.get()` because formatted-result spill is optional.
+ * seam owns spawn execution, execution-world executable lookup, process-tree
+ * termination, environment scrubbing, and raw output capture. The package
+ * injects `tools`, `systemPrompt`, and `subprocess` — deliberately NOT `fs`;
+ * `ctx.get()` reads `fs` for host-path mapping and `ctx.spillStore` for optional spill.
  *
  * Returned paths are displayed relative to the resolved workdir and are
  * follow-up-readable only in co-located deployments where the workdir and the
@@ -117,9 +117,10 @@ function assertPositiveInteger(name: string, value: number): void {
 }
 
 /**
- * Register the `glob`/`grep` filesystem discovery tool suite. The packaged
- * ripgrep binary is always available (an npm dependency), so registration is
- * unconditional.
+ * Register the `glob`/`grep` filesystem discovery tool suite. Registration is
+ * unconditional: the ripgrep executable is resolved per call in the execution
+ * world the search runs in, so an unavailable binary is a tool error, not a
+ * composition error.
  *
  * @param ctx - plugin context; registrations are effects scoped to this plugin.
  * @param config - resolved plugin configuration from schemastery.

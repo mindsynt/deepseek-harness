@@ -63,16 +63,19 @@ export class DirectoryPickerController extends TypertRemoteService {
 
   /**
    * List one directory level for a Remote caller's in-app browser.
-   * @param path - absolute directory to list; absent lists the home directory.
+   * @param path - absolute directory to list; absent lists the addressed world's anchor.
+   * @param hostId - host whose filesystem is listed; absent or the built-in
+   *   local identity addresses the Harness host, any other identity the open
+   *   execution world of that remote host.
    * @param signal - caller lifetime; abort stops the backend's scan instead of
    *   letting it outlive a disconnected caller.
    * @returns the level's listing with its ancestry.
    */
   @Remote('list')
-  async list(path: string | undefined, signal: AbortSignal): Promise<DirectoryListing> {
+  async list(path: string | undefined, hostId: string | undefined, signal: AbortSignal): Promise<DirectoryListing> {
     const capability = this.requireCapability('browse', 'list')
     try {
-      return await capability.list(path, signal)
+      return await capability.list(path, hostId, signal)
     } catch (error: unknown) {
       throw cancellableFailure(error, signal, 'directory listing was aborted')
     }
@@ -82,10 +85,13 @@ export class DirectoryPickerController extends TypertRemoteService {
    * Create one child directory for a Remote caller's in-app browser.
    * @param path - absolute existing parent directory.
    * @param name - single non-blank path segment.
+   * @param hostId - host whose filesystem the child is created on; absent or
+   *   the built-in local identity addresses the Harness host, any other
+   *   identity the open execution world of that remote host.
    * @returns the created directory's absolute path.
    */
   @Remote('createDirectory')
-  async createDirectory(path: string, name: string): Promise<string> {
+  async createDirectory(path: string, name: string, hostId: string | undefined): Promise<string> {
     const request = createDirectoryRequestSchema.safeParse({ path, name })
     if (!request.success) {
       throw new RemoteError(
@@ -96,7 +102,7 @@ export class DirectoryPickerController extends TypertRemoteService {
     }
     const capability = this.requireCapability('browse', 'createDirectory')
     try {
-      return await capability.createDirectory(request.data.path, request.data.name)
+      return await capability.createDirectory(request.data.path, request.data.name, hostId)
     } catch (error: unknown) {
       throw browseFailure(error)
     }

@@ -1,0 +1,31 @@
+# The dsh-ssh-hosts bundle patch: the optional remote-execution layer over
+# dsh-base, applied as ONE insert after the base layer. It mounts four rows
+# and nothing else: the host registry, the helper installer it provisions
+# through, the host-credentials store it materializes logins with, and the
+# hosts controller that exposes both to the client's Remote line. The
+# local filesystem, subprocess and sandbox rows stay exactly as the base
+# composed them, because the local machine remains a built-in realm. Each
+# registered remote host gets its execution world from the registry, which
+# mounts the SSH providers in an isolated realm per host.
+#
+# The registry activation waits for `sshHelperInstaller` and
+# `sshHostCredentials` (its declared injections), and the controller waits for
+# the registry, so the four rows may appear in this order. The credentials row
+# carries no config: its state directory defaults to `<DSH home>/ssh-hosts`.
+#
+# `hosts` is empty here, so the bundle changes nothing until a deployment
+# declares hosts in its own profile patch layer. That layer also restates
+# `manifest` when this deployment does not use DSH_SSH_HELPER_MANIFEST.
+
+- insert:
+    - id: ssh-host-registry
+      name: '@deepseek-ai/dsh-ssh-host-registry'
+      config:
+        manifest: !!js process.env.DSH_SSH_HELPER_MANIFEST
+        hosts: []      # a deployment overrides this in its own profile patch layer
+    - id: ssh-helper-installer
+      name: '@deepseek-ai/dsh-helper-installer'
+    - id: ssh-host-credentials
+      name: '@deepseek-ai/dsh-host-credentials'
+    - id: ssh-hosts-controller
+      name: '@deepseek-ai/dsh-hosts-controller'

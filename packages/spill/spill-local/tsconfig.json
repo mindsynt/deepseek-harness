@@ -16,6 +16,9 @@
       "path": "../../../vendor/schemastery"
     },
     {
+      "path": "../../fs/fs"
+    },
+    {
       "path": "../spill"
     }
   ]

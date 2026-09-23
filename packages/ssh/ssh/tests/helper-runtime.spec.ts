@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
 import { z } from 'zod'
 import { createHelperHarness as helper } from './fixtures/helper.ts'
-import { targetSchema, writeResultSchema, editResultSchema, infoSchema, entriesSchema } from '../src/schemas.ts'
+import { targetSchema, writeResultSchema, editResultSchema, infoSchema, entriesSchema, mkdirResultSchema } from '../src/schemas.ts'
 
 
 const policy = (workspaceRoot: string) => ({ mode: 'workspace-write', workspaceRoot })
@@ -40,6 +40,23 @@ describe.skipIf(process.platform === 'win32')('SSH helper runtime', () => {
       await test.client.request('fs.edit', { target, edit: { oldString: 'third', newString: 'fourth', replaceAll: false }, policy: policy(test.root) }, editResultSchema)
       expect(await test.client.request('fs.readText', { target }, z.string())).toBe('fourth text')
       await expect(test.client.request('fs.write', { target, content: 'denied', policy: { mode: 'read-only', workspaceRoot: test.root } }, writeResultSchema)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    } finally { await test.close() }
+  })
+
+  it('creates directories through the helper under the caller policy and requires that policy', async () => {
+    const test = await helper()
+    try {
+      const target = await test.client.request('fs.resolve', { path: 'nested/created' }, targetSchema)
+      expect(await test.client.request('fs.mkdir', { target, policy: policy(test.root) }, mkdirResultSchema))
+        .toEqual({ created: true })
+      expect(await test.client.request('fs.mkdir', { target, policy: policy(test.root) }, mkdirResultSchema))
+        .toEqual({ created: false })
+      expect(await test.client.request('fs.stat', { target }, infoSchema)).toMatchObject({ type: 'directory' })
+      // Without a policy the request is rejected at the wire, and a read-only
+      // policy is fenced exactly like a write.
+      await expect(test.client.request('fs.mkdir', { target }, z.unknown())).rejects.toThrow()
+      await expect(test.client.request('fs.mkdir', { target, policy: { mode: 'read-only', workspaceRoot: test.root } }, mkdirResultSchema))
+        .rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
     } finally { await test.close() }
   })
 

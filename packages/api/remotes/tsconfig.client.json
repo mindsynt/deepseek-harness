@@ -78,6 +78,9 @@
       "path": "../settings-controller"
     },
     {
+      "path": "../hosts-controller"
+    },
+    {
       "path": "../workspace-controller/tsconfig.client.json"
     },
     {

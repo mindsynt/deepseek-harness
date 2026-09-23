@@ -34,17 +34,17 @@ export class WorkspaceCommands {
 
   /**
    * Create or resolve one Workspace over an existing directory.
-   * @param request - directory path to register.
+   * @param request - directory path to register and the host that interprets it.
    * @returns the Workspace and whether this call created it.
    */
   create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
     return this.enqueue(async () => {
       try {
-        const existing = await this.ctx.workspaceRegistry.resolveByPath(request.path)
+        const existing = await this.ctx.workspaceRegistry.resolveByPath(request.path, request.hostId)
         if (existing !== undefined) {
           return { workspace: workspaceView(existing), created: false }
         }
-        const workspace = await this.ctx.workspaceRegistry.create(request.path)
+        const workspace = await this.ctx.workspaceRegistry.create(request.path, undefined, request.hostId)
         return { workspace: workspaceView(workspace), created: true }
       } catch (error) {
         if (remoteErrorOf(error) !== undefined) throw error

@@ -1,12 +1,13 @@
 /**
- * Tests for the LOCAL spill backend: `saveText` writes a session-scoped file and
- * returns a locator + byte length + retrieval hint, filename sanitization
- * neutralizes traversal, the configured `root` is honored (and the private
- * default when omitted), and a storage failure rejects. The startup cleanup
- * sweep expires old files, prunes stale roots, skips symlinks/unknown entries,
- * discovers prior default roots, contains filesystem failures, and is awaited on
- * disposal without blocking activation. The Cordis-free store and cleanup
- * helpers are exercised directly for their edge cases.
+ * Tests for the LOCAL spill backend: `saveText` writes a session-scoped file
+ * through the `ctx.fs` seam and returns a backend-resolved locator + byte length
+ * + retrieval hint, filename sanitization neutralizes traversal, the configured
+ * `root` is honored (and the private default when omitted), and a storage
+ * failure (or a missing `ctx.fs`) rejects. The startup cleanup sweep expires old
+ * files, prunes stale roots, skips symlinks/unknown entries, discovers prior
+ * default roots, contains filesystem failures, and is awaited on disposal
+ * without blocking activation. The Cordis-free store and cleanup helpers are
+ * exercised directly for their edge cases.
  */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
@@ -15,6 +16,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, st
 import { realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, normalize } from 'node:path'
+import type { FsTarget } from '@deepseek-ai/dsh-fs'
+import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SaveTextSpill } from '@deepseek-ai/dsh-spill'
@@ -41,6 +44,18 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
+
+/** Load the real local filesystem backend as the spill write seam. */
+async function mountFs(ctx: Context): Promise<void> {
+  if (!ctx.get('fs')) await ctx.plugin(LocalFileSystem)
+}
+
+/** A standalone real local filesystem backend (the ctx.fs seam for direct store calls). */
+async function localFs(): Promise<LocalFileSystem> {
+  const ctx = new Context()
+  await mountFs(ctx)
+  return ctx.fs as LocalFileSystem
+}
 
 /** Write a file with an mtime `ageDays` in the past (fractional allowed). */
 function writeAged(path: string, content: string, ageDays: number): void {
@@ -95,7 +110,8 @@ describe('sessionDir', () => {
 
 describe('saveTextFile', () => {
   it('writes the content under the session dir and reports bytes', async () => {
-    const saved = await saveTextFile({ root, sessionId: 'sess-1', suggestedName: 'r.txt', content: 'héllo' })
+    const fs = await localFs()
+    const saved = await saveTextFile(fs, { root, sessionId: 'sess-1', suggestedName: 'r.txt', content: 'héllo' })
     expect(readFileSync(saved.path, 'utf8')).toBe('héllo')
     expect(saved.bytes).toBe(Buffer.byteLength('héllo', 'utf8'))
     expect(dirname(saved.path)).toBe(sessionDir(root, 'sess-1'))
@@ -103,27 +119,31 @@ describe('saveTextFile', () => {
   })
 
   it('sanitizes a traversal-shaped suggested name into one segment', async () => {
-    const saved = await saveTextFile({ root, sessionId: 'sess-1', suggestedName: '../../evil', content: 'x' })
+    const fs = await localFs()
+    const saved = await saveTextFile(fs, { root, sessionId: 'sess-1', suggestedName: '../../evil', content: 'x' })
     // The separators escaped, so the whole name is one leaf under the session dir.
     expect(dirname(saved.path)).toBe(sessionDir(root, 'sess-1'))
     expect(saved.path.includes('/..')).toBe(false)
   })
 
-  it('creates the session directory and file with owner-only POSIX permissions', async () => {
-    const saved = await saveTextFile({ root, sessionId: 'sess-1', suggestedName: 'r.txt', content: 'x' })
+  it('creates the session directory and an owner-only file', async () => {
+    const fs = await localFs()
+    const saved = await saveTextFile(fs, { root, sessionId: 'sess-1', suggestedName: 'r.txt', content: 'x' })
     const directory = statSync(dirname(saved.path))
     const file = statSync(saved.path)
     expect(directory.isDirectory()).toBe(true)
     expect(file.isFile()).toBe(true)
+    // The backend owns directory permissions now (ctx.fs exposes no mkdir/mode
+    // primitive); the artifact itself stays owner-only.
     if (process.platform !== 'win32') {
-      expect(directory.mode & 0o777).toBe(0o700)
       expect(file.mode & 0o777).toBe(0o600)
     }
   })
 
   it('gives distinct paths to two saves of the same name', async () => {
-    const a = await saveTextFile({ root, sessionId: 'sess-1', suggestedName: 'r.txt', content: 'a' })
-    const b = await saveTextFile({ root, sessionId: 'sess-1', suggestedName: 'r.txt', content: 'b' })
+    const fs = await localFs()
+    const a = await saveTextFile(fs, { root, sessionId: 'sess-1', suggestedName: 'r.txt', content: 'a' })
+    const b = await saveTextFile(fs, { root, sessionId: 'sess-1', suggestedName: 'r.txt', content: 'b' })
     expect(a.path).not.toBe(b.path)
   })
 })
@@ -141,12 +161,51 @@ describe('LocalSpillStore service', () => {
   // (cleanupPeriodDays: 0) keeps them from scanning/sweeping the real tmpdir.
   it('registers as ctx.spillStore and saves under the configured root', async () => {
     const ctx = new Context()
+    await mountFs(ctx)
     await ctx.plugin(LocalSpillStore, { root, cleanupPeriodDays: 0 })
     const ref = await ctx.spillStore.saveText(request())
     expect(dirname(ref.locator)).toBe(sessionDir(root, 'sess-1'))
     expect(readFileSync(ref.locator, 'utf8')).toBe('the full body')
     expect(ref.bytes).toBe(Buffer.byteLength('the full body', 'utf8'))
     expect(ref.retrievalHint).toBe('Use read with offset/limit, or grep this path to search within it.')
+  })
+
+  it('reads the saved locator back through ctx.fs (round trip)', async () => {
+    const ctx = new Context()
+    await mountFs(ctx)
+    await ctx.plugin(LocalSpillStore, { root, cleanupPeriodDays: 0 })
+    const ref = await ctx.spillStore.saveText(request())
+    const target = await ctx.fs.resolve(ref.locator)
+    expect(await ctx.fs.readText(target)).toBe('the full body')
+  })
+
+  it('takes the locator from the backend display path and writes with the exclusive-create intent', async () => {
+    // A backend whose execution world spells paths differently from the harness
+    // host: the locator must follow `resolve().displayPath`, not the host path.
+    class WorldSpelling extends LocalFileSystem {
+      override async resolve(path: string): Promise<FsTarget> {
+        const target = await super.resolve(path)
+        return { targetKey: target.targetKey, displayPath: `world://spill/${basename(path)}` }
+      }
+    }
+    const ctx = new Context()
+    await ctx.plugin(WorldSpelling)
+    const write = vi.spyOn(ctx.fs as WorldSpelling, 'writeText')
+    await ctx.plugin(LocalSpillStore, { root, cleanupPeriodDays: 0 })
+    const ref = await ctx.spillStore.saveText(request())
+    const [target, content, intent] = write.mock.calls[0]! as unknown as [FsTarget, string, unknown]
+    expect(ref.locator.startsWith('world://spill/')).toBe(true)
+    expect(ref.locator).toBe(target.displayPath)
+    expect(content).toBe('the full body')
+    expect(intent).toEqual({ kind: 'createIfAbsent' })
+    // The artifact still landed in the root the backend resolved.
+    expect(readFileSync(String(target.targetKey), 'utf8')).toBe('the full body')
+  })
+
+  it('rejects with an actionable error when ctx.fs is unavailable', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LocalSpillStore, { root, cleanupPeriodDays: 0 })
+    await expect(ctx.spillStore.saveText(request())).rejects.toThrow(/ctx\.fs is unavailable; load a filesystem backend/)
   })
 
   it('resolves a relative configured root to absolute', async () => {
@@ -161,10 +220,11 @@ describe('LocalSpillStore service', () => {
     expect((ctx.spillStore as LocalSpillStore).root).toBe(privateRoot())
   })
 
-  it('rejects when the root is not writable (missing parent, exclusive open)', async () => {
+  it('rejects loudly when the backend cannot resolve the artifact path', async () => {
     const ctx = new Context()
-    // A file (not a dir) as the root makes mkdir under it fail — a real storage error.
-    const filePath = (await saveTextFile({ root, sessionId: 's', suggestedName: 'f', content: 'x' })).path
+    await mountFs(ctx)
+    // A file (not a dir) as the root makes the artifact path unresolvable — a real storage error.
+    const filePath = (await saveTextFile(await localFs(), { root, sessionId: 's', suggestedName: 'f', content: 'x' })).path
     await ctx.plugin(LocalSpillStore, { root: filePath, cleanupPeriodDays: 0 })
     await expect(ctx.spillStore.saveText(request())).rejects.toThrow()
   })
@@ -472,7 +532,7 @@ describe('startup cleanup sweep', () => {
       await sweepSpillRoots({ roots, cutoffMs: Date.now() - 30 * DAY_MS, warn: () => {} })
       expect(existsSync(old)).toBe(false)
       expect(existsSync(activeDefault)).toBe(true)
-      const saved = await saveTextFile({ root: alias, sessionId: 'next', suggestedName: 'ok.txt', content: 'ok' })
+      const saved = await saveTextFile(await localFs(), { root: alias, sessionId: 'next', suggestedName: 'ok.txt', content: 'ok' })
       expect(readFileSync(saved.path, 'utf8')).toBe('ok')
     } finally {
       rmSync(fakeTmp, { recursive: true, force: true })
@@ -510,6 +570,7 @@ describe('startup cleanup sweep', () => {
     SweptStore.barrier = new Promise<void>((resolve) => { release = resolve })
 
     const ctx = new Context()
+    await mountFs(ctx)
     const fiber = await ctx.plugin(SweptStore, { root, cleanupPeriodDays: 30 })
     // Activation returned while the sweep is still parked: service is usable and
     // the old file is untouched so far.

@@ -9,7 +9,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { Deque } from '@deepseek-ai/dsh-deque'
-import type { FsObservation, FsTarget } from '@deepseek-ai/dsh-fs'
+import type { FileSystem, FsObservation, FsTarget } from '@deepseek-ai/dsh-fs'
 import type { WorkspaceFileWatchFrame } from './types.ts'
 
 /** One `fs/observed` emission as received, before any generation filters it. */
@@ -19,8 +19,8 @@ type Observed = readonly [target: FsTarget, observation: FsObservation]
 export class WorkspaceChangeFeed {
   private readonly followers = new Set<ChangeFollower>()
 
-  /** @param ctx - Host context carrying the filesystem the observations come from. */
-  constructor(private readonly ctx: Context) {
+  /** @param ctx - Host context carrying the `fs/observed` emissions every generation filters. */
+  constructor(ctx: Context) {
     ctx.on('fs/observed', (target, observation) => {
       for (const follower of this.followers) follower.push([target, observation])
     })
@@ -33,11 +33,13 @@ export class WorkspaceChangeFeed {
   /**
    * Open one generation reporting observations inside `workspaceRoot`.
    * @param workspaceRoot - the session's workspace root path.
+   * @param fs - the filesystem that owns `workspaceRoot`: the addressed host's
+   *   execution world, which also produced the observations this generation filters.
    * @param signal - generation cancellation.
    * @returns `ready` after observation is active and the root resolves, then
    *   observations made after the generation was first pulled, in emission order.
    */
-  async *follow(workspaceRoot: string, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame> {
+  async *follow(workspaceRoot: string, fs: FileSystem, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame> {
     signal.throwIfAborted()
     // Registered before the root resolves, so nothing observed while it does is
     // missed; the root only filters at drain time.
@@ -47,15 +49,15 @@ export class WorkspaceChangeFeed {
       // Under the generation's signal, so a consumer leaving mid-resolve on a slow
       // backend releases the follower now rather than when the resolve settles;
       // a rejection the abort caused is the quiet end every other abort takes here.
-      const root = await this.ctx.fs.resolve(workspaceRoot, { signal }).catch((error: unknown) => {
+      const root = await fs.resolve(workspaceRoot, { signal }).catch((error: unknown) => {
         if (signal.aborted) return undefined
         throw error
       })
       if (root === undefined || signal.aborted || follower.isClosed) return
       yield { kind: 'ready' }
       for await (const [target, observation] of follower.read(signal)) {
-        if (!this.ctx.fs.contains(root, target)) continue
-        const absolutePath = this.ctx.fs.processPath(target)
+        if (!fs.contains(root, target)) continue
+        const absolutePath = fs.processPath(target)
         yield {
           kind: 'change',
           change: observation.kind === 'present'

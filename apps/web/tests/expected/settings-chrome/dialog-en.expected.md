@@ -13,6 +13,9 @@
     - button "Agent presets":
       - img
       - text: Agent presets
+    - button "Remote hosts":
+      - img
+      - text: Remote hosts
     - button "Archived sessions":
       - img
       - text: Archived sessions

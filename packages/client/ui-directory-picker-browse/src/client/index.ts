@@ -37,6 +37,7 @@ export function apply(ctx: ClientContext): void {
     const dictionaries: [locale: string, dict: Record<string, string>][] = [
       ['zh', {
         'browser.title': '选择工作区目录',
+        'browser.host': '目标主机：{name}',
         'browser.home': '主目录',
         'browser.newFolder': '新建文件夹',
         'browser.folderName': '文件夹名称',
@@ -52,6 +53,7 @@ export function apply(ctx: ClientContext): void {
       }],
       ['en', {
         'browser.title': 'Select Workspace Directory',
+        'browser.host': 'Target host: {name}',
         'browser.home': 'Home',
         'browser.newFolder': 'New folder',
         'browser.folderName': 'Folder name',

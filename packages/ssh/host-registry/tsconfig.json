@@ -1,0 +1,48 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../ssh"
+    },
+    {
+      "path": "../fs-ssh"
+    },
+    {
+      "path": "../helper-installer"
+    },
+    {
+      "path": "../host-credentials"
+    },
+    {
+      "path": "../subprocess-ssh"
+    },
+    {
+      "path": "../sandbox-ssh"
+    },
+    {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../sandbox/sandbox"
+    },
+    {
+      "path": "../../storage/storage-domain"
+    },
+    {
+      "path": "../../util/brand"
+    }
+  ]
+}

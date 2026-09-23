@@ -29,6 +29,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionSearchResultItem } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
+// Type-only: the workspace-creation host selection this package reads.
+import type { RemoteHostSelectionState } from '@deepseek-ai/dsh-client-ui-remote-hosts/client'
+import type { SelectedHostWorldProbe } from '../selected-host-world.ts'
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { createWorkspaceViewStore } from '../stores.ts'
@@ -43,7 +46,14 @@ export interface DirectoryFlowOwnerProps {
   open: boolean
   /** True while the owner adopts a picked path (`createWorkspace` in flight); occupants disable their commit affordances. */
   busy: boolean
-  /** The operator picked a directory (absolute host path); the owner adopts it. */
+  /**
+   * Display label of the execution world this flow addresses: the selected
+   * remote host, or the Harness host while no remote host is selected. The
+   * occupant names it, since the listing's paths alone do not say which world
+   * they came from.
+   */
+  hostLabel: string
+  /** The operator picked a directory (absolute path in {@link hostLabel}'s world); the owner adopts it. */
   onPicked: (path: string) => void
   /** The operator dismissed the interaction; the owner just closes the flow. */
   onCancel: () => void
@@ -96,6 +106,12 @@ export type WorkspaceBrowserInjected = {
      * saw. Select the field the surface needs (`info => info.home`).
      */
     hostInfo: HostObservable<RemoteHostFacts>
+    /**
+     * The workspace-creation host selected in the Remote hosts settings
+     * section, published by ui-remote-hosts. Read at render so a selection
+     * made while this surface is mounted reaches its labels and its flow.
+     */
+    selectedHost: HostObservable<RemoteHostSelectionState>
   }
   /**
    * Start a New Session in a Workspace: reuse-or-create its blank session and
@@ -136,6 +152,12 @@ export type WorkspaceBrowserInjected = {
   archiveSession: (sessionId: SessionId) => Promise<void>
   /** Adopt a picked host directory as a real Workspace before targeting a Session. */
   createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  /**
+   * Sample the selected remote host's execution world before a browse or
+   * creation entry addresses it: a world never reconnects, so the entry must
+   * refuse to open instead of letting the Host's rejection surface bare.
+   */
+  checkSelectedHostWorld: SelectedHostWorldProbe
 }
 
 /** Full browser props: shell owner share + viewing store + injected actions + the locale seat. */
@@ -152,9 +174,15 @@ export type WorkspaceBrowserProps =
  * callback; this callback creates only the real Host Workspace. A type alias
  * supplies the implicit index signature required by the registry.
  */
-export type WorkspacePickerInjected = DirectoryPickingInjected & {
+export type WorkspacePickerInjected = {
+  hooks: DirectoryPickingInjected['hooks'] & {
+    /** The workspace-creation host selected in the Remote hosts settings section. */
+    selectedHost: HostObservable<RemoteHostSelectionState>
+  }
   /** Adopt a picked host directory as a real Workspace before targeting a Session. */
   createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  /** Sample the selected remote host's execution world before this surface's browse or creation entry opens. */
+  checkSelectedHostWorld: SelectedHostWorldProbe
 }
 
 /**
@@ -166,5 +194,5 @@ export type WorkspacePickerProps =
   PropsRuntime<'conversation.hero.workspace'>
   & PropsRenderSlots<'conversation.hero.workspace.directoryFlow'>
   & Omit<WorkspacePickerInjected, 'hooks'>
-  & DirectoryPickingHooks
+  & PropsHooks<WorkspacePickerInjected['hooks']>
   & PropsLocale<'workspace'>

@@ -33,13 +33,16 @@
    overflow: a marker wider than `padding-left` loses its leading digits with no
    way to scroll them back. Markers are right-aligned to the content edge, so the
    padding must fit the widest one the list can produce. `searchMaxResults` is an
-   unbounded positive integer, so the padding is sized in `em` — against this
-   element's own font, the one a marker inherits — to hold a three-digit marker
-   (`999. ` measures 2.35em in the app font stack) plus the gap the one-digit
-   case already had. */
+   unbounded positive integer, so the room is sized from the marker's own font:
+   `3ch` is the three digit columns of a three-digit marker and `1em` carries its
+   separator, the space after it, and the gap. The reproduced worst case is the
+   app stack's Linux fallback, whose metrics make `999. ` 2.545em — 40.71875px at
+   this element's 16px — so a fixed `2.5em` clipped it less than one pixel in;
+   `calc(3ch + 1em)` resolves to 2.908em there and scales with whatever font a
+   platform resolves instead of pinning one metric. */
 .sources {
   margin: 0;
-  padding-left: 2.5em;
+  padding-left: calc(3ch + 1em);
   display: flex;
   flex-direction: column;
   gap: 10px;

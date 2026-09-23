@@ -48,7 +48,10 @@ function pathTable(entries: Record<string, string> = {}): (name: string) => Prom
 }
 
 /** Boot webserver + open-in-app rows through the real Loader. */
-async function boot(layers: readonly LaunchEnvironmentLayerInput[] = []): Promise<string> {
+async function boot(
+  layers: readonly LaunchEnvironmentLayerInput[] = [],
+  workspaces?: readonly { readonly hostId: string; readonly path: string }[],
+): Promise<string> {
   internals.catalog = { env: {}, ...internals.catalog }
   root = await mkdtemp(join(tmpdir(), 'dsh-open-in-app-loader-'))
   const configPath = join(root, 'cordis.yml')
@@ -69,6 +72,9 @@ async function boot(layers: readonly LaunchEnvironmentLayerInput[] = []): Promis
   context.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot(layers))
   context.baseUrl = pathToFileURL(root).href + '/'
   context.provide('connection', { requestRejection: () => trust.rejection } as never)
+  // A boot without a Workspace registry is the composition the launcher must
+  // keep working in; the route reads it optionally.
+  if (workspaces !== undefined) context.provide('workspaceRegistry', { list: () => workspaces } as never)
   // The plugin resolves PATH names through the composition's subprocess
   // capability; the not-found rejection is the provider's real signal.
   context.provide('subprocess', {
@@ -299,6 +305,58 @@ describe('open-in-app host routes (real Loader composition)', () => {
       // The unresolved entry also stops serving an icon.
       expect((await fetch(`${base}/open-in-app/icon/cursor`)).status).toBe(404)
       expect((await openCursor()).status).toBe(400)
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses a directory recorded as a remote workspace before the Host filesystem is consulted', async () => {
+    const launches: string[][] = []
+    const home = await mkdtemp(join(tmpdir(), 'dsh-open-in-app-home-'))
+    await cursorBundle(home)
+    darwinFixture(home, launches)
+    // The directory deliberately does not exist on this Host: the remote-world
+    // refusal must be the answer, not the misleading not-found for a path that
+    // only that host's execution world contains.
+    const remotePath = join(home, 'remote-only')
+    const base = await boot([], [{ hostId: 'remote-1', path: remotePath }])
+    try {
+      const response = await fetch(`${base}/open-in-app/open`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ app: 'cursor', path: remotePath }),
+      })
+      expect(response.status).toBe(409)
+      expect(response.headers.get('cache-control')).toBe('no-store')
+      expect(await response.json()).toEqual({
+        hostId: 'remote-1',
+        message: `"${remotePath}" is a workspace on remote host "remote-1"; this Harness host's desktop cannot open that execution world's directories — open it on "remote-1"`,
+      })
+      expect(launches).toEqual([])
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps a directory some local workspace also records on this Host', async () => {
+    const launches: string[][] = []
+    const home = await mkdtemp(join(tmpdir(), 'dsh-open-in-app-home-'))
+    await cursorBundle(home)
+    darwinFixture(home, launches)
+    const shared = join(home, 'shared-workspace')
+    await mkdir(shared, { recursive: true })
+    const base = await boot([], [
+      { hostId: 'local', path: shared },
+      { hostId: 'remote-1', path: shared },
+    ])
+    try {
+      const response = await fetch(`${base}/open-in-app/open`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ app: 'cursor', path: shared }),
+      })
+      expect(response.status).toBe(200)
+      expect(launches).toHaveLength(1)
     } finally {
       await rm(home, { recursive: true, force: true })
     }

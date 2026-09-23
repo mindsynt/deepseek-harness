@@ -1,7 +1,7 @@
 /**
  * Vocabulary for the filesystem Service Definition (`ctx.fs`): the opaque target/version
  * identities, the metadata `stat` returns, the write-intent and outcome shapes, the
- * literal-edit request/outcome, and the typed error taxonomy.
+ * directory-creation outcome, the literal-edit request/outcome, and the typed error taxonomy.
  * @module @deepseek-ai/dsh-fs/types
  */
 
@@ -141,6 +141,15 @@ export interface FsWriteOutcome {
   before: string | null
   /** The file's content AFTER the write, LF-normalized to share `before`'s diff basis. */
   after: string
+}
+
+/** Outcome of one directory creation. */
+export interface FsMkdirOutcome {
+  /**
+   * Whether this call created the directory. `false` means the target already
+   * existed as a directory, so the call was an idempotent no-op.
+   */
+  created: boolean
 }
 
 /** A literal-replacement edit request. */

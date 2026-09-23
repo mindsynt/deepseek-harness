@@ -252,6 +252,11 @@
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
 
+    # Remote host management: one Settings section over the generated `hosts`
+    # Remote namespace; the followed host list arrives on `hosts/follow`.
+    - id: ui-remote-hosts
+      name: '@deepseek-ai/dsh-client-ui-remote-hosts'
+
     # Plugin management: the sidebar Plugins page installs, enables, disables,
     # and removes the profile's bundles through the `pluginManager` Remote.
     # Without a profile-backed Host it reports itself unavailable.

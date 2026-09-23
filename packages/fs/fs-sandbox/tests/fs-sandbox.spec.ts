@@ -81,6 +81,12 @@ describe('read-only', () => {
     expect(await readFile(path, 'utf8')).toBe('original')
   })
 
+  it('denies directory creation, leaving no directory on disk', async () => {
+    const path = join(workspace, 'denied-dir')
+    await expect(fs.mkdir(await target(path))).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    expect(existsSync(path)).toBe(false)
+  })
+
   it('allows reads (every mode permits reading)', async () => {
     const path = join(workspace, 'readable.txt')
     await writeFile(path, 'hello')
@@ -144,6 +150,26 @@ describe('workspace-write containment', () => {
     expect(await readFile(path, 'utf8')).toBe('original')
   })
 
+  it('a directory creation inside the workspace lands and is idempotent', async () => {
+    const path = join(workspace, 'nested', 'created-dir')
+    expect(await fs.mkdir(await target(path))).toEqual({ created: true })
+    expect(existsSync(path)).toBe(true)
+    expect(await fs.mkdir(await target(path))).toEqual({ created: false })
+  })
+
+  it('a directory creation outside the workspace is denied, no directory created', async () => {
+    const path = join(outside, 'escape-dir')
+    await expect(fs.mkdir(await target(path))).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it('a directory creation under a symlinked-out directory is denied', async () => {
+    await symlink(outside, join(workspace, 'link'))
+    const path = join(workspace, 'link', 'linked-dir')
+    await expect(fs.mkdir(await target(path))).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    expect(existsSync(join(outside, 'linked-dir'))).toBe(false)
+  })
+
   it('an edit inside the workspace lands', async () => {
     const path = join(workspace, 'edit.txt')
     await writeFile(path, 'original')
@@ -199,6 +225,12 @@ describe('danger-full-access', () => {
     await fs.writeText(await target(path), 'free')
     expect(await readFile(path, 'utf8')).toBe('free')
   })
+
+  it('creates directories anywhere, unfenced', async () => {
+    const path = join(outside, 'free-dir')
+    expect(await fs.mkdir(await target(path))).toEqual({ created: true })
+    expect(existsSync(path)).toBe(true)
+  })
 })
 
 describe('the per-call policy override (escalation)', () => {
@@ -218,6 +250,16 @@ describe('the per-call policy override (escalation)', () => {
     const path = join(outside, 'granted-full.txt')
     await fs.writeText(await target(path), 'full', undefined, undefined, { mode: 'danger-full-access', workspaceRoot: workspace })
     expect(await readFile(path, 'utf8')).toBe('full')
+  })
+
+  it('a workspace-write stamp lets a contained directory creation land for that call only', async () => {
+    await boot('read-only')
+    const path = join(workspace, 'granted-dir')
+    expect(await fs.mkdir(await target(path), undefined, { mode: 'workspace-write', workspaceRoot: workspace }))
+      .toEqual({ created: true })
+    expect(existsSync(path)).toBe(true)
+    await expect(fs.mkdir(await target(join(workspace, 'plain-dir'))))
+      .rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
   })
 })
 

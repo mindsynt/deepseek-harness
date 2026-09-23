@@ -32,9 +32,11 @@ function workspace(
   id: string,
   sessionIds: readonly SessionId[] = [],
   updatedAt = '2026-01-01T00:00:00.000Z',
+  hostId = 'local',
 ): WorkspaceView {
   return {
     workspaceId: wid(id),
+    hostId,
     path: `/w/${id}`,
     title: id,
     sessionIds,
@@ -171,6 +173,17 @@ describe('ClientWorkspaceModel', () => {
     expect(model.getSnapshot().archivedSessionIds).toEqual([])
   })
 
+  it('projects each row host identity through baselines and increments', () => {
+    const model = modelFor()
+    baseline(model, [workspace('remote', [], '2026-01-01T00:00:00.000Z', 'alpha'), workspace('here')])
+    expect(model.getSnapshot().items.map(item => [item.workspaceId, item.hostId])).toEqual([
+      ['remote', 'alpha'],
+      ['here', 'local'],
+    ])
+    model.upsertView(workspace('shown', [], '2026-02-01T00:00:00.000Z', 'beta'))
+    expect(model.getSnapshot().items[0]).toMatchObject({ workspaceId: 'shown', hostId: 'beta' })
+  })
+
   it('labels Workspaces with their checked-out branch and keeps labels when a read fails', async () => {
     const remote = new FakeWorkspaceRemote()
     remote.onBranches = () => Promise.resolve(remoteOk({
@@ -265,6 +278,18 @@ describe('ClientWorkspaceModel', () => {
     await expect(model.create({ path: '/w/created' })).resolves.toMatchObject({ ok: true })
     expect(remote.calls).toContainEqual({ method: 'create', request: { path: '/w/created' } })
     expect(model.getSnapshot().items[0]?.workspaceId).toBe('created')
+  })
+
+  it('carries the requested host through create and merges the returned row', async () => {
+    const remote = new FakeWorkspaceRemote()
+    const model = modelFor(remote)
+    remote.onCreate = request => Promise.resolve(remoteOk({
+      workspace: workspace('on-alpha', [], '2026-01-01T00:00:00.000Z', request.hostId ?? 'local'),
+      created: true,
+    }))
+    await expect(model.create({ path: '/srv/app', hostId: 'alpha' })).resolves.toMatchObject({ ok: true })
+    expect(remote.calls).toContainEqual({ method: 'create', request: { path: '/srv/app', hostId: 'alpha' } })
+    expect(model.getSnapshot().items[0]).toMatchObject({ workspaceId: 'on-alpha', hostId: 'alpha' })
   })
 
   it('lets newer stream order outrank unary echoes and rolls failures back', async () => {

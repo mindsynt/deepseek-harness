@@ -1,7 +1,9 @@
 /**
  * The in-app workspace-directory browser (figma Harness 813-23126 family): a
  * 680×500 dialog (clamped to short/narrow viewports — the Miller row scrolls
- * sideways, the columns scroll down) whose header carries the title, the selection-path
+ * sideways, the columns scroll down) whose header carries the title, the
+ * addressed world's label (beside the heading, announced as its description,
+ * never part of its accessible name), the selection-path
  * breadcrumb, and a click-to-edit path zone; below it a Miller view — one
  * full-width level until a row is selected, then two columns splitting the
  * row evenly (256px floor; level | selected folder's children) around a
@@ -34,7 +36,7 @@
  * the crumbs name where the walk ended, and Open's fallback target follows
  * them.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCheckOutline16, IconChevronRightOutline14, IconEditOutline16, IconFolderClose16, IconFolderOpen16,
@@ -44,10 +46,17 @@ import type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-api-remo
 import type { Translate } from '@deepseek-ai/dsh-client-locale/client'
 import css from './DirectoryBrowser.module.css'
 
-/** Owner-supplied browser props: browse calls, pick semantics, and copy. */
+/** Owner-supplied browser props: browse calls, the addressed world, pick semantics, and copy. */
 export interface DirectoryBrowserProps {
   /** Dialog visibility (owner-local; closed unmounts nothing but resets on reopen). */
   open: boolean
+  /**
+   * Display label of the execution world this browser lists (the selected
+   * remote host, or the Harness host), already localized by the owner: a
+   * remote realm's paths read like local ones, so the dialog has to name the
+   * world its listing came from.
+   */
+  hostLabel: string
   /**
    * List one directory level (absent path = the Host home directory); the
    * signal aborts a superseded scan on the wire. A rejection may carry
@@ -270,7 +279,10 @@ function LevelColumn({ entries, selectedPath, busy, onPick, showHidden, filterPr
  * @param props - owner-controlled browser props.
  * @returns the dialog element (null while closed, via Modal).
  */
-export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen, onClose, busy, t }: DirectoryBrowserProps) {
+export function DirectoryBrowser({ open, hostLabel, listDirectory, createDirectory, onOpen, onClose, busy, t }: DirectoryBrowserProps) {
+  // Links the header's host label to the heading it sits beside: the label is
+  // chrome, not part of the accessible name "Select Workspace Directory".
+  const hostLabelId = useId()
   // Miller state: the listed level, the selected row in it, and the selected
   // folder's own listing (the right column; null while nothing is selected).
   const [parent, setParent] = useState<DirectoryListing | null>(null)
@@ -816,7 +828,16 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
         }}
       >
         <div className={css.header}>
-          <h2 className={css.title}>{t('browser.title')}</h2>
+          <h2 className={css.title} aria-describedby={hostLabelId}>
+            {t('browser.title')}
+            {/* Which execution world this listing came from: a remote realm's
+              * paths are absolute POSIX paths, so nothing else in the dialog
+              * distinguishes it from the Harness host's own filesystem. The
+              * label rides beside the heading rather than in its accessible
+              * name, and stays announced through the heading's description, so
+              * a screen reader still learns which world the panes came from. */}
+            <span id={hostLabelId} className={css.host} aria-hidden="true">{t('browser.host', { name: hostLabel })}</span>
+          </h2>
           <div className={css.crumbBar}>
             {pathDraft === null
               ? (

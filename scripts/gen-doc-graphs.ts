@@ -286,6 +286,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns Workspace commands and reconnect-safe Workspace state delivery through the generated Remote namespace.',
   },
   {
+    key: 'hostsController',
+    pkg: 'hosts-controller',
+    title: 'Host SSH host-management Remote controller',
+    mode: 'core',
+    note: 'Exposes the remote-host registry and the credential store it composes through the generated Remote namespace: list, add and remove hosts, check a stored login, and follow durable host-record changes.',
+  },
+  {
     key: 'directoryPickerController',
     pkg: 'api-workspace-controller',
     title: 'Host directory-picking Remote controller',
@@ -548,6 +555,27 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['fs-ssh', 'subprocess-ssh', 'sandbox-ssh'],
     note: 'Owns one authenticated OpenSSH connection, installed helper identity, independent program streams and disconnect cleanup for the paired remote providers.',
+  },
+  {
+    key: 'sshHelperInstaller',
+    pkg: 'helper-installer',
+    title: 'Remote helper installation over the local OpenSSH client',
+    mode: 'core',
+    note: 'Places a caller-supplied helper archive on a host, verifies the installed entry digest, and returns the coordinates the connection consumes; it never uses the helper it installs.',
+  },
+  {
+    key: 'remoteHosts',
+    pkg: 'ssh-host-registry',
+    title: 'Per-host execution realm registry',
+    mode: 'core',
+    note: 'Owns one isolated Cordis service scope per registered SSH host, so the filesystem, subprocess and sandbox services resolve per host instead of per process.',
+  },
+  {
+    key: 'sshHostCredentials',
+    pkg: 'host-credentials',
+    title: 'Stored SSH login material and controlled identities',
+    mode: 'core',
+    note: 'Stores one host login in the credential seam and materializes a DSH-controlled OpenSSH configuration, identity and known_hosts, so a connection addresses a generated alias instead of the deployment OpenSSH configuration.',
   },
   {
     key: 'subprocess',

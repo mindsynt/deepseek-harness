@@ -318,7 +318,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/api/workspace-files/src/index.ts:69`](../packages/api/workspace-files/src/index.ts)
+来源：[`packages/api/workspace-files/src/index.ts:83`](../packages/api/workspace-files/src/index.ts)
 
 <a id="deepseek-aidsh-attachment-local"></a>
 
@@ -898,7 +898,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/fs/fs-local/src/index.ts:43`](../packages/fs/fs-local/src/index.ts)
+来源：[`packages/fs/fs-local/src/index.ts:45`](../packages/fs/fs-local/src/index.ts)
 
 <a id="deepseek-aidsh-fs-sandbox"></a>
 
@@ -955,6 +955,22 @@ export interface Config {
 ```
 
 来源：[`packages/bundle/headless/src/index.ts:42`](../packages/bundle/headless/src/index.ts)
+
+<a id="deepseek-aidsh-helper-installer"></a>
+
+## `@deepseek-ai/dsh-helper-installer`
+
+```ts config-catalog
+/** Plugin config for the remote command deadline and the local OpenSSH client. */
+export interface Config {
+  /** Deadline for one remote command, in milliseconds; defaults to 30,000. */
+  installTimeoutMs?: number
+  /** Local OpenSSH client configuration file passed to `ssh -F` when an install request names none. */
+  sshConfigFile?: string
+}
+```
+
+来源：[`packages/ssh/helper-installer/src/index.ts:46`](../packages/ssh/helper-installer/src/index.ts)
 
 <a id="deepseek-aidsh-hmr"></a>
 
@@ -1043,6 +1059,28 @@ export interface Config {
 
 来源：[`packages/hooks/hooks-codex/src/index.ts:43`](../packages/hooks/hooks-codex/src/index.ts)
 
+<a id="deepseek-aidsh-host-credentials"></a>
+
+## `@deepseek-ai/dsh-host-credentials`
+
+需要：`credentials`
+
+```ts config-catalog
+/** Plugin config: the local directory every generated file lives under. */
+export interface Config {
+  /**
+   * Absolute local directory holding one generated directory per host; omit it
+   * for `<DSH home>/ssh-hosts`, where the harness home is `$DSH_HOME` or
+   * `~/.dsh`.
+   */
+  readonly stateDir?: string
+  /** Deadline for one `ssh-keyscan` invocation, in milliseconds; defaults to 10000. */
+  readonly scanTimeoutMs?: number
+}
+```
+
+来源：[`packages/ssh/host-credentials/src/index.ts:74`](../packages/ssh/host-credentials/src/index.ts)
+
 <a id="deepseek-aidsh-host-directory-picker-browse"></a>
 
 ## `@deepseek-ai/dsh-host-directory-picker-browse`
@@ -1055,7 +1093,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/host/directory-picker-browse/src/index.ts:181`](../packages/host/directory-picker-browse/src/index.ts)
+来源：[`packages/host/directory-picker-browse/src/index.ts:210`](../packages/host/directory-picker-browse/src/index.ts)
 
 <a id="deepseek-aidsh-host-frontend-static"></a>
 
@@ -2536,7 +2574,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/spill/spill-local/src/index.ts:31`](../packages/spill/spill-local/src/index.ts)
+来源：[`packages/spill/spill-local/src/index.ts:39`](../packages/spill/spill-local/src/index.ts)
 
 <a id="deepseek-aidsh-spill-policy"></a>
 
@@ -2575,6 +2613,12 @@ export interface Config {
   helperHash: string
   /** Absolute remote default workspace. */
   workspace: string
+  /**
+   * Absolute local OpenSSH client configuration file passed to `ssh -F`; when
+   * omitted, the client falls back to its own default configuration, so an
+   * alias defined only in a DSH-generated file is unreachable.
+   */
+  sshConfigFile?: string
   /** Optional preinstalled built PTC entry, paired with its expected digest. */
   bootstrapPath?: string
   /** SHA-256 of bootstrapPath; both fields must be supplied together. */
@@ -2591,6 +2635,40 @@ export interface Config {
 ```
 
 来源：[`packages/ssh/ssh/src/index.ts:17`](../packages/ssh/ssh/src/index.ts)
+
+<a id="deepseek-aidsh-ssh-host-registry"></a>
+
+## `@deepseek-ai/dsh-ssh-host-registry`
+
+需要：`sshHelperInstaller` · `sshHostCredentials` · `storageDomain`
+
+```ts config-catalog
+/** Plugin config: the SSH hosts this deployment opens while the plugin activates. */
+export interface Config {
+  /** Hosts provisioned and opened while the plugin activates; omission opens none. */
+  readonly hosts?: readonly RemoteHostEntryConfig[]
+  /** Absolute local path of an artifact manifest every entry without its own `manifest` uses. */
+  readonly manifest?: string
+}
+
+/** One host a profile opens at startup. */
+export interface RemoteHostEntryConfig {
+  /** Registry identity; a non-empty token, never a path. */
+  readonly id: string
+  /** Caller-facing label; omission uses the id. */
+  readonly label?: string
+  /** OpenSSH host alias. */
+  readonly host: string
+  /** Absolute remote directory receiving the digest-named install directory. */
+  readonly root: string
+  /** Absolute remote default workspace. */
+  readonly workspace: string
+  /** Absolute local path of this host's artifact manifest; omission uses the plugin-level one. */
+  readonly manifest?: string
+}
+```
+
+来源：[`packages/ssh/host-registry/src/index.ts:74`](../packages/ssh/host-registry/src/index.ts)
 
 <a id="deepseek-aidsh-storage-domain"></a>
 
@@ -3321,7 +3399,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/fs/tool-str-replace-editor/src/index.ts:505`](../packages/fs/tool-str-replace-editor/src/index.ts)
+来源：[`packages/fs/tool-str-replace-editor/src/index.ts:537`](../packages/fs/tool-str-replace-editor/src/index.ts)
 
 <a id="deepseek-aidsh-tool-subagent"></a>
 
@@ -3782,7 +3860,7 @@ export interface Config {
 }
 ```
 
-来源： [`packages/deliverables/workspace-changes/src/index.ts:36`](../packages/deliverables/workspace-changes/src/index.ts)
+来源： [`packages/deliverables/workspace-changes/src/index.ts:33`](../packages/deliverables/workspace-changes/src/index.ts)
 
 ## 无配置的可加载插件
 
@@ -3819,6 +3897,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-plan`（[`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-plugin-manager`（[`packages/client/ui-plugin-manager/src/index.ts`](../packages/client/ui-plugin-manager/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-reference`（[`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-remote-hosts`（[`packages/client/ui-remote-hosts/src/index.ts`](../packages/client/ui-remote-hosts/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-renderer`（[`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-schedule`（[`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-session`（[`packages/client/ui-session/src/index.ts`](../packages/client/ui-session/src/index.ts)）
@@ -3858,6 +3937,7 @@ export interface Config {
 - `@deepseek-ai/dsh-host-directory-picker-auto` — 需要 `webServer` · `loader`（[`packages/host/directory-picker-auto/src/index.ts`](../packages/host/directory-picker-auto/src/index.ts)）
 - `@deepseek-ai/dsh-host-directory-picker-native`（[`packages/host/directory-picker-native/src/index.ts`](../packages/host/directory-picker-native/src/index.ts)）
 - `@deepseek-ai/dsh-host-plugin-inventory` — 需要 `loader`（[`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts)）
+- `@deepseek-ai/dsh-hosts-controller` — 需要 `remoteHosts` · `sshHostCredentials`（[`packages/api/hosts-controller/src/index.ts`](../packages/api/hosts-controller/src/index.ts)）
 - `@deepseek-ai/dsh-llm`（[`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts)）
 - `@deepseek-ai/dsh-lsp`（[`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts)）
 - `@deepseek-ai/dsh-mcp-resources` — 需要 `tools`（[`packages/mcp/mcp-resources/src/index.ts`](../packages/mcp/mcp-resources/src/index.ts)）
@@ -3925,6 +4005,7 @@ export interface Config {
 - `@deepseek-ai/dsh-experimental-browser-use-runtime` ([`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts))
 - `@deepseek-ai/dsh-experimental-webworker-packer`（[`packages/experimental/webworker-packer/src/index.ts`](../packages/experimental/webworker-packer/src/index.ts)）
 - `@deepseek-ai/dsh-experimental-webworker-runtime`（[`packages/experimental/webworker-runtime/src/index.ts`](../packages/experimental/webworker-runtime/src/index.ts)）
+- `@deepseek-ai/dsh-helper-artifact`（[`packages/ssh/helper-artifact/src/index.ts`](../packages/ssh/helper-artifact/src/index.ts)）
 - `@deepseek-ai/dsh-home-paths`（[`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts)）
 - `@deepseek-ai/dsh-hook-protocol`（[`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts)）
 - `@deepseek-ai/dsh-http-proxy`（[`packages/util/http-proxy/src/index.ts`](../packages/util/http-proxy/src/index.ts)）
@@ -3949,6 +4030,7 @@ export interface Config {
 - `@deepseek-ai/dsh-session-snapshot`（[`packages/test-support/session-snapshot/src/index.ts`](../packages/test-support/session-snapshot/src/index.ts)）
 - `@deepseek-ai/dsh-session-telemetry`（[`packages/session/session-telemetry/src/index.ts`](../packages/session/session-telemetry/src/index.ts)）
 - `@deepseek-ai/dsh-session-title-llm`（[`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts)）
+- `@deepseek-ai/dsh-ssh-hosts`（[`packages/bundle/ssh-hosts/src/index.ts`](../packages/bundle/ssh-hosts/src/index.ts)）
 - `@deepseek-ai/dsh-subagent-in-process-driver`（[`packages/subagent/subagent-in-process-driver/src/index.ts`](../packages/subagent/subagent-in-process-driver/src/index.ts)）
 - `@deepseek-ai/dsh-timeout`（[`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts)）
 - `@deepseek-ai/dsh-typert-generator`（[`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts)）

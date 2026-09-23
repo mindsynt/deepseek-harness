@@ -40,6 +40,7 @@ function snapshot(archivedSessionIds: readonly string[], items: readonly Workspa
 function workspace(title: string, sessionIds: readonly string[]): WorkspaceView {
   return {
     workspaceId: title as WorkspaceView['workspaceId'],
+    hostId: 'local',
     path: `/work/${title}`,
     title,
     sessionIds: sessionIds.map(sid),

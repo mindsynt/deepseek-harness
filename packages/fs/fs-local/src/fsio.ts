@@ -101,6 +101,8 @@ export interface FsIoInternals {
   inspectTemp?: (paths: { stagingDir: string; tempPath: string }) => void | Promise<void>
   /** Test hook after raw-read stat preflight and before bounded content I/O. */
   inspectReadBytesAfterStat?: (target: LocalTarget) => void | Promise<void>
+  /** Override the directory-creation syscall for deterministic error-path coverage. */
+  mkdir?: (path: string, options: { readonly recursive: true }) => Promise<unknown>
 }
 
 /** A resolved local path: the absolute path shown to callers and its realpath identity. */
@@ -281,6 +283,54 @@ function listingIoError(displayPath: string, error: unknown): FsError {
   /* v8 ignore next -- Windows chmod does not deny directory listing; POSIX covers permission translation. */
   if (isPermissionError(error)) return new FsError(`cannot list "${displayPath}": permission denied`, 'FS_PERMISSION_DENIED', { cause: error })
   return new FsError(`cannot list "${displayPath}": ${errorMessage(error)}`, 'FS_IO_ERROR', { cause: error })
+}
+
+/** Translate a directory-creation probe or syscall failure into the seam taxonomy. */
+function creationIoError(displayPath: string, error: unknown): FsError {
+  if (isPermissionError(error)) {
+    return new FsError(`cannot create "${displayPath}": permission denied`, 'FS_PERMISSION_DENIED', { cause: error })
+  }
+  return new FsError(`cannot create "${displayPath}": ${errorMessage(error)}`, 'FS_IO_ERROR', { cause: error })
+}
+
+/**
+ * Create a directory, including missing parents, idempotently. The preflight
+ * probe decides the target's current type, so a repeat call on an existing
+ * directory reports no creation and a non-directory target is refused as
+ * `FS_NOT_DIRECTORY` before any syscall.
+ * @param target - the resolved directory to create.
+ * @param signal - aborts before creation takes effect (`FS_ABORTED`).
+ * @param internals - Test hook overriding the creation syscall.
+ * @returns whether this call created the directory.
+ * @throws FsError('FS_NOT_DIRECTORY') when the target or a parent is not a directory.
+ */
+export async function createDirectory(
+  target: LocalTarget,
+  signal?: AbortSignal,
+  internals: FsIoInternals = {},
+): Promise<boolean> {
+  throwIfAborted(signal, 'create')
+  let existing: PathInfo | null
+  try {
+    existing = await probe(target.targetKey)
+  } catch (error: unknown) {
+    throw creationIoError(target.displayPath, error)
+  }
+  if (existing !== null) {
+    if (existing.type === 'directory') return false
+    throw new FsError(`cannot create "${target.displayPath}": not a directory`, 'FS_NOT_DIRECTORY')
+  }
+  try {
+    await (internals.mkdir ?? mkdir)(target.targetKey, { recursive: true })
+  } catch (error: unknown) {
+    // A concurrent creator or an ancestor swap can surface a vanished or
+    // non-directory parent here even though the preflight saw neither.
+    if (isENOTDIR(error) || isEEXIST(error) || isENOENT(error)) {
+      throw new FsError(`cannot create "${target.displayPath}": a parent path segment is not a directory`, 'FS_NOT_DIRECTORY', { cause: error })
+    }
+    throw creationIoError(target.displayPath, error)
+  }
+  return true
 }
 
 async function resolveListedChildTarget(parent: LocalTarget, name: string): Promise<LocalTarget> {

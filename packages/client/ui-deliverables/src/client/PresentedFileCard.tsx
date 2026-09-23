@@ -22,10 +22,11 @@ function cardDescription(description: string | undefined, fallback: string): str
  * @param props - durable file metadata, Sidebar preview, Host capabilities, gesture status, and localized copy.
  * @returns the file card and its anchored action menu.
  */
-export function PresentedFileCard({ file, cwd, phase, host, onPreview, onAction, t }: {
+export function PresentedFileCard({ file, cwd, phase, remoteHost, host, onPreview, onAction, t }: {
   file: PresentedPath
   cwd: string | undefined
   phase: PresentedOpenPhase | undefined
+  remoteHost: { readonly hostId: string } | undefined
   host: PresentedHost | null
   onPreview: () => void
   onAction: (action: PresentedAction) => void
@@ -45,9 +46,11 @@ export function PresentedFileCard({ file, cwd, phase, host, onPreview, onAction,
   const metadata = fileExtension(name).toUpperCase() || t('presented.file')
   const status = phase === undefined
     ? cardDescription(file.description, metadata)
-    : t(reveal === 'directory' && phase === 'revealed' ? 'presented.directoryOpened'
-      : reveal === 'directory' && phase === 'revealing' ? 'presented.directoryOpening'
-        : reveal === 'directory' && phase === 'revealError' ? 'presented.directoryError' : `presented.${phase}`)
+    : remoteHost !== undefined
+      ? t('presented.remoteUnavailable', { host: remoteHost.hostId })
+      : t(reveal === 'directory' && phase === 'revealed' ? 'presented.directoryOpened'
+        : reveal === 'directory' && phase === 'revealing' ? 'presented.directoryOpening'
+          : reveal === 'directory' && phase === 'revealError' ? 'presented.directoryError' : `presented.${phase}`)
   return <div className={css.file} data-presented-file>
     <button type="button" className={css.cardPreview} title={resolveWorkspacePath(cwd, file.path)}
       aria-label={t('presented.previewCard', { name: file.path })} onClick={onPreview} />
@@ -56,7 +59,7 @@ export function PresentedFileCard({ file, cwd, phase, host, onPreview, onAction,
       <div className={css.details}>
         <span className={css.fileName}>{name}</span>
         <span className={css.description} role={phase === undefined ? undefined : 'status'}
-          data-error={phase === 'error' || phase === 'revealError' || phase === 'nativeUnavailable' ? true : undefined}>
+          data-error={phase === 'error' || phase === 'revealError' || phase === 'nativeUnavailable' || phase === 'remoteUnavailable' ? true : undefined}>
           <span className={css.secondaryText}>{status}</span>
           <span className={css.previewHint}>{t('presented.preview')}</span>
         </span>

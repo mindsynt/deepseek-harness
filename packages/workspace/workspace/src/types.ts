@@ -23,18 +23,31 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 }
 
 /**
- * One workspace: a stable id over an existing directory, a display title, and
- * an ordered candidate account of sessions. Membership requires both an id in
- * that account and a session header whose canonical cwd equals the workspace
- * path. Consumers only see this interface; the implementation stays private.
+ * One workspace: a stable id over an existing directory on one host, a display
+ * title, and an ordered candidate account of sessions. Membership requires
+ * both an id in that account and a session header whose cwd canonicalizes to
+ * the workspace path under {@link hostId}'s rules. Consumers only see this
+ * interface; the implementation stays private.
  */
 export interface Workspace {
   /** Stable record id (generated uuid). */
   readonly id: WorkspaceId
 
   /**
-   * Canonical directory path: the `fs.realpath` of the path given at create
-   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
+   * Identity of the host whose execution world interprets {@link path}:
+   * `'local'` (the exported `LOCAL_HOST_ID`) for the Harness host machine,
+   * otherwise the id of a host another composition registered. A record that
+   * stores no host identity reads as `'local'`. The registry does not verify
+   * that a non-local id names a registered host.
+   */
+  readonly hostId: string
+
+  /**
+   * Canonical directory path on {@link hostId}. On the local host this is the
+   * `fs.realpath` of the path given at create time (trailing slashes, `..`,
+   * and symlinks all resolved); on a non-local host it is the caller's
+   * absolutely rooted POSIX spelling with trailing slashes removed, because
+   * only that host's execution world can resolve it further. Never rewritten
    * afterwards, even when the directory disappears (see {@link status}).
    */
   readonly path: string
@@ -53,8 +66,8 @@ export interface Workspace {
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
    * account is filtered synchronously: missing headers, invalid cwd values,
-   * and canonical cwd mismatches are never returned. A subsequent workspace
-   * mutation prunes those filtered candidates durably.
+   * and cwd mismatches under {@link hostId}'s canon are never returned. A
+   * subsequent workspace mutation prunes those filtered candidates durably.
    */
   readonly sessionIds: readonly SessionId[]
 
@@ -69,10 +82,12 @@ export interface Workspace {
    * Prepend a session to this workspace's candidate account. An already
    * accounted id resolves without writing, aside from the durable
    * filtered-candidate prune every accepted mutation performs. A new id's
-   * live or persisted
-   * header cwd must resolve to an existing directory equal to {@link path};
-   * unknown ids, missing or invalid cwd values, and mismatches reject without
-   * writing.
+   * live or persisted header cwd must canonicalize to {@link path} in
+   * {@link hostId}'s terms: on the local host through `fs.realpath` plus an
+   * existing-directory check, on a non-local host through the same string
+   * canon the host's execution world applies, with no Harness-host filesystem
+   * access. Unknown ids, missing or invalid cwd values, and mismatches reject
+   * without writing.
    * @param sessionId - The session to record.
    * @returns resolution after durability.
    */
@@ -104,7 +119,9 @@ export interface Workspace {
 
   /**
    * Live directory check, uncached: whether {@link path} currently exists and
-   * is a directory. A missing directory never mutates the record — the
+   * is a directory. The check reads the Harness host's filesystem even for a
+   * non-local {@link hostId}, whose execution world is not addressable from
+   * this package. A missing directory never mutates the record — the
    * directory may only be temporarily moved.
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */

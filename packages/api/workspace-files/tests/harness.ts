@@ -12,6 +12,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
@@ -97,4 +98,20 @@ export async function failureOf(operation: Promise<unknown>): Promise<{ code: st
     return { code: failure.code, details: failure.details }
   }
   throw new Error('expected the operation to fail')
+}
+
+/**
+ * Mount one extra execution world on the harness's own root context, isolated
+ * under `fs` the way the host registry isolates one realm per remote host. The
+ * returned backend is what `ctx.remoteHosts.get(id)?.world.fs` answers with,
+ * and it shares the harness's event bus, so observations emitted in either
+ * world reach the change feed.
+ * @param ctx - the harness root context.
+ * @param root - directory this world's filesystem is rooted at.
+ * @returns the world's filesystem and its disposer.
+ */
+export async function openRemoteWorld(ctx: Context, root: string): Promise<{ fs: FileSystem; dispose: () => Promise<void> }> {
+  const realm = ctx.isolate('fs', Symbol('workspace-files remote world'))
+  const fiber = await realm.plugin(LocalFileSystem, { cwd: root })
+  return { fs: realm.fs, dispose: async () => { await fiber.dispose() } }
 }

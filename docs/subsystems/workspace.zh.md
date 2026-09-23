@@ -2,7 +2,7 @@
 
 [English](workspace.md) | 中文
 
-工作区（workspace）是用户工作目录的持久记录：一个建立在规范路径之上的稳定 id、一个显示标题，以及归属于它的会话的有序账本。该子系统是单个包（package）（[dsh-workspace](../../packages/workspace/workspace)，`ctx.workspaceRegistry`）——一项宿主侧可选能力，不属于 agent loop（智能体循环）主干，并且对模型不可见（没有工具、没有提示词文本、没有会话事件）。它通过[存储领域数据形式](storage.zh.md)存储自己的记录，并对照 [`SessionHeader.cwd`](persistence.zh.md#sessionheader--metadata-beside-the-log) 校验会话成员资格，因此 `storageDomain` 与 `sessionPersistence` 是必需的启动依赖：持久化这一依赖不可用时，插件保持 pending，而不是把这种不可用误当作空历史。设计记录：[领域 KV 存储 Agent Note（agent 决策记录）](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)；引导与 GUI 顺序：[Workspace UI 产品流程 Agent Note](../../.agents/notes/archived/feature/2026-07-25-workspace-ui-product-flow.md)。
+工作区（workspace）是用户工作目录的持久记录：一个建立在一个宿主与规范路径之上的稳定 id、一个显示标题，以及归属于它的会话的有序账本。该子系统是单个包（package）（[dsh-workspace](../../packages/workspace/workspace)，`ctx.workspaceRegistry`）——一项宿主侧可选能力，不属于 agent loop（智能体循环）主干，并且对模型不可见（没有工具、没有提示词文本、没有会话事件）。它通过[存储领域数据形式](storage.zh.md)存储自己的记录，并对照 [`SessionHeader.cwd`](persistence.zh.md#sessionheader--metadata-beside-the-log) 校验会话成员资格，因此 `storageDomain` 与 `sessionPersistence` 是必需的启动依赖：持久化这一依赖不可用时，插件保持 pending，而不是把这种不可用误当作空历史。设计记录：[领域 KV 存储 Agent Note（agent 决策记录）](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)；引导与 GUI 顺序：[Workspace UI 产品流程 Agent Note](../../.agents/notes/archived/feature/2026-07-25-workspace-ui-product-flow.md)。
 
 源码：[`packages/workspace/workspace/src/types.ts`](../../packages/workspace/workspace/src/types.ts)
 
@@ -16,7 +16,7 @@
 type WorkspaceId = Branded<'WorkspaceId'>
 ```
 
-`WorkspaceId` 是[品牌化 id](core.zh.md#branded-ids)。路径标识与之分离：`realpathNormalize`（`fs.realpath`；尾部斜杠、`..` 与符号链接全部解析）是唯一的一套唯一性规范——工作区路径以规范化形式存储，唯一性即规范路径的字符串相等（指向已被拥有目录的符号链接会与之冲突），attach 时的会话 cwd 检查也走同一套规范。
+`WorkspaceId` 是[品牌化 id](core.zh.md#branded-ids)。路径标识与之分离，并以宿主为作用域：记录在 `path` 旁存储 `hostId`（省略时即内置的 `LOCAL_HOST_ID`（`'local'`）），唯一性即 `(hostId, 规范路径)` 的字符串相等。本机宿主的规范是 `realpathNormalize`（`fs.realpath`；尾部斜杠、`..` 与符号链接全部解析），因此指向已被拥有目录的符号链接会与之冲突，attach 时的会话 cwd 检查也走同一套规范。其他宿主的规范是 `remotePathNormalize`——调用方给出的绝对 POSIX 拼写并去掉尾部斜杠——因为只有该宿主的执行世界才能进一步解析 `..`、符号链接或路径是否存在；同一路径在两个宿主上是两个工作区。
 
 ## 工作区实体
 
@@ -24,18 +24,31 @@ type WorkspaceId = Branded<'WorkspaceId'>
 
 ```ts type-equiv
 /**
- * One workspace: a stable id over an existing directory, a display title, and
- * an ordered candidate account of sessions. Membership requires both an id in
- * that account and a session header whose canonical cwd equals the workspace
- * path. Consumers only see this interface; the implementation stays private.
+ * One workspace: a stable id over an existing directory on one host, a display
+ * title, and an ordered candidate account of sessions. Membership requires
+ * both an id in that account and a session header whose cwd canonicalizes to
+ * the workspace path under {@link hostId}'s rules. Consumers only see this
+ * interface; the implementation stays private.
  */
 interface Workspace {
   /** Stable record id (generated uuid). */
   readonly id: WorkspaceId
 
   /**
-   * Canonical directory path: the `fs.realpath` of the path given at create
-   * time (trailing slashes, `..`, and symlinks all resolved). Never rewritten
+   * Identity of the host whose execution world interprets {@link path}:
+   * `'local'` (the exported `LOCAL_HOST_ID`) for the Harness host machine,
+   * otherwise the id of a host another composition registered. A record that
+   * stores no host identity reads as `'local'`. The registry does not verify
+   * that a non-local id names a registered host.
+   */
+  readonly hostId: string
+
+  /**
+   * Canonical directory path on {@link hostId}. On the local host this is the
+   * `fs.realpath` of the path given at create time (trailing slashes, `..`,
+   * and symlinks all resolved); on a non-local host it is the caller's
+   * absolutely rooted POSIX spelling with trailing slashes removed, because
+   * only that host's execution world can resolve it further. Never rewritten
    * afterwards, even when the directory disappears (see {@link status}).
    */
   readonly path: string
@@ -54,8 +67,8 @@ interface Workspace {
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
    * account is filtered synchronously: missing headers, invalid cwd values,
-   * and canonical cwd mismatches are never returned. A subsequent workspace
-   * mutation prunes those filtered candidates durably.
+   * and cwd mismatches under {@link hostId}'s canon are never returned. A
+   * subsequent workspace mutation prunes those filtered candidates durably.
    */
   readonly sessionIds: readonly SessionId[]
 
@@ -70,10 +83,12 @@ interface Workspace {
    * Prepend a session to this workspace's candidate account. An already
    * accounted id resolves without writing, aside from the durable
    * filtered-candidate prune every accepted mutation performs. A new id's
-   * live or persisted
-   * header cwd must resolve to an existing directory equal to {@link path};
-   * unknown ids, missing or invalid cwd values, and mismatches reject without
-   * writing.
+   * live or persisted header cwd must canonicalize to {@link path} in
+   * {@link hostId}'s terms: on the local host through `fs.realpath` plus an
+   * existing-directory check, on a non-local host through the same string
+   * canon the host's execution world applies, with no Harness-host filesystem
+   * access. Unknown ids, missing or invalid cwd values, and mismatches reject
+   * without writing.
    * @param sessionId - The session to record.
    * @returns resolution after durability.
    */
@@ -105,7 +120,9 @@ interface Workspace {
 
   /**
    * Live directory check, uncached: whether {@link path} currently exists and
-   * is a directory. A missing directory never mutates the record — the
+   * is a directory. The check reads the Harness host's filesystem even for a
+   * non-local {@link hostId}, whose execution world is not addressable from
+   * this package. A missing directory never mutates the record — the
    * directory may only be temporarily moved.
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */
@@ -113,13 +130,13 @@ interface Workspace {
 }
 ```
 
-所有权的真源是记录中有序的 `sessionIds`，绝不从会话 cwd 派生——但成员资格要求两者同时成立：账本上有其 id，且 header 的规范 cwd 等于工作区路径，因此一个会话在结构上至多属于一个工作区。失败的写入会拒绝（`insertSessionBefore` 的账本错误以 `WorkspaceMoveInvalidError` 拒绝，存储失败以普通错误拒绝）；每次被接受的变更都盖上 `updatedAt` 时间戳，并持久修剪不再通过成员资格检查的候选项。
+所有权的真源是记录中有序的 `sessionIds`，绝不从会话 cwd 派生——但成员资格要求两者同时成立：账本上有其 id，且 header 的 cwd 在所属宿主的规范下规范化为工作区路径，因此一个会话在结构上至多属于一个工作区。失败的写入会拒绝（`insertSessionBefore` 的账本错误以 `WorkspaceMoveInvalidError` 拒绝，存储失败以普通错误拒绝）；每次被接受的变更都盖上 `updatedAt` 时间戳，并持久修剪不再通过成员资格检查的候选项。
 
 ## 注册表：`ctx.workspaceRegistry`
 
-`WorkspaceRegistry`（[签名](#ctxworkspaceregistry--workspaceregistry)）拥有注册与解析。`create(path, title?)` 要求完全限定路径并将其规范化，拒绝不存在的路径（原样传出原始 `ENOENT`）或非目录；当规范路径已被拥有时原样返回既有实体；否则创建一条标题为 `title ?? defaultWorkspaceTitle(path)` 的记录并前插到持久的注册表顺序中（不同规范路径可以共享同一显示标题，没有最终路径段时使用根路径拼写）。`get(id)` 与有序的 `list()` 是同步缓存读取；`resolveByPath(path)` 应用同一套完全限定 realpath 规范但不创建。`delete(id)` 只移除注册记录、顺序条目和会话账本——目录、用户文件、实时会话和已持久化日志一概不动，因此这些会话变为 Ungrouped（[决策](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.zh.md)）；未知 id 返回 `false`。create 与 delete 会在其两次写入（记录 + 顺序）可能分叉之前先持久写入一个待定变更标记；启动时恰好解决被标记的那次变更——通过删除被标记的表行：这会补完被中断的 delete，并回滚被中断的 create（注册可以重建，因此回滚是安全方向）——而没有标记的顺序/表不一致则作为损坏大声失败。
+`WorkspaceRegistry`（[签名](#ctxworkspaceregistry--workspaceregistry)）拥有注册与解析。`create(path, title?, hostId?)` 指定拥有该目录的宿主——省略或传空 `hostId` 即内置本机宿主——要求完全限定路径并将其规范化：在本机宿主上拒绝不存在的路径（原样传出原始 `ENOENT`）或非目录；非本机宿主只做路径字符串规范化，不读取 Harness 宿主文件系统。当 `(hostId, 规范路径)` 配对已被拥有时原样返回既有实体；否则创建一条标题为 `title ?? defaultWorkspaceTitle(path)` 的记录并前插到持久的注册表顺序中（不同规范路径可以共享同一显示标题，没有最终路径段时使用根路径拼写）。`get(id)` 与有序的 `list()` 是同步缓存读取；`resolveByPath(path, hostId?)` 应用同一套以宿主为作用域的规范但不创建。`delete(id)` 只移除注册记录、顺序条目和会话账本——目录、用户文件、实时会话和已持久化日志一概不动，因此这些会话变为 Ungrouped（[决策](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.zh.md)）；未知 id 返回 `false`。create 与 delete 会在其两次写入（记录 + 顺序）可能分叉之前先持久写入一个待定变更标记；启动时恰好解决被标记的那次变更——通过删除被标记的表行：这会补完被中断的 delete，并回滚被中断的 create（注册可以重建，因此回滚是安全方向）——而没有标记的顺序/表不一致则作为损坏大声失败。
 
-会话的 cwd 在创建时由创建者赋予，而不是由本注册表赋予——API 网关从所选工作区的 `path` 解析新会话的 cwd（回退到显式或默认 cwd），先创建会话使 cwd 落入其不可变的 [`SessionHeader`](persistence.zh.md#sessionheader--metadata-beside-the-log)，再调用 `attachSession`，后者会把已存储的 header cwd 与工作区路径重新校验一遍。首次成功启动时，注册表仅凭已持久化的 header（`id`、`cwd`、`createdAt`——绝不读事件正文）引导历史：把规范 cwd 有效的会话按目录分组为工作区，最新的排在最前；「已初始化」标记最后写入，因此被中断的引导可以安全续跑。引导只发生这一次：没有 cwd 的历史遗留会话保持 Ungrouped，此后创建的会话只能通过 `attachSession` 加入工作区。
+会话的 cwd 在创建时由创建者赋予，而不是由本注册表赋予——API 网关从所选工作区的 `path` 解析新会话的 cwd（回退到显式或默认 cwd），先创建会话使 cwd 落入其不可变的 [`SessionHeader`](persistence.zh.md#sessionheader--metadata-beside-the-log)，再调用 `attachSession`，后者会按所属宿主的规范把已存储的 header cwd 与工作区路径重新校验一遍。首次成功启动时，注册表仅凭已持久化的 header（`id`、`cwd`、`createdAt`——绝不读事件正文）引导历史：把本机规范 cwd 有效的会话按目录分组为本机宿主的记录，最新的排在最前；「已初始化」标记最后写入，因此被中断的引导可以安全续跑。引导只发生这一次：没有 cwd 的历史遗留会话保持 Ungrouped，同一路径上的非本机宿主记录绝不与本机分组合并，此后创建的会话只能通过 `attachSession` 加入工作区。
 
 ## 消费方
 
@@ -165,20 +182,26 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 
 /**
  * List one directory level for a Remote caller's in-app browser.
- * @param path - absolute directory to list; absent lists the home directory.
+ * @param path - absolute directory to list; absent lists the addressed world's anchor.
+ * @param hostId - host whose filesystem is listed; absent or the built-in
+ *   local identity addresses the Harness host, any other identity the open
+ *   execution world of that remote host.
  * @param signal - caller lifetime; abort stops the backend's scan instead of
  *   letting it outlive a disconnected caller.
  * @returns the level's listing with its ancestry.
  */
-@Remote('list') async list(path: string | undefined, signal: AbortSignal): Promise<DirectoryListing>
+@Remote('list') async list(path: string | undefined, hostId: string | undefined, signal: AbortSignal): Promise<DirectoryListing>
 
 /**
  * Create one child directory for a Remote caller's in-app browser.
  * @param path - absolute existing parent directory.
  * @param name - single non-blank path segment.
+ * @param hostId - host whose filesystem the child is created on; absent or
+ *   the built-in local identity addresses the Harness host, any other
+ *   identity the open execution world of that remote host.
  * @returns the created directory's absolute path.
  */
-@Remote('createDirectory') async createDirectory(path: string, name: string): Promise<string>
+@Remote('createDirectory') async createDirectory(path: string, name: string, hostId: string | undefined): Promise<string>
 ```
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
@@ -292,7 +315,7 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 ```ts cordis-catalog
 /**
  * Create or idempotently resolve one Workspace over an existing directory.
- * @param request - directory path to register.
+ * @param request - directory path to register and the host that interprets it.
  * @returns the Workspace and whether this call created it.
  */
 @Remote('create') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>
@@ -340,10 +363,14 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 @Remote('unarchiveSession') unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue>
 
 /**
- * Read the checked-out git branch of every registered Workspace.
+ * Read the checked-out git branch of every registered Workspace, each in the
+ * execution world its host identity addresses.
  *
  * A branch is external checkout state that no Workspace mutation announces,
  * so it stays out of the durable projection and is read on demand instead.
+ * A Workspace whose world this Host cannot reach contributes no label: the
+ * branch is decorative, and reading the Harness host's own filesystem instead
+ * would name a branch the Workspace does not have.
  * @returns one entry per registered Workspace, each omitting `branch` when its path is not a checkout.
  */
 @Remote('branches') async branches(): Promise<WorkspaceBranchesValue>
@@ -441,21 +468,29 @@ Source: [`packages/api/workspace-files/src/index.ts`](../../packages/api/workspa
 
 ### `ctx.workspaceRegistry` — `WorkspaceRegistry`
 
-Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-cwd header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.
+Durable workspace registry. Startup waits for `sessionPersistence`, builds one header index carrying each session's local and non-local path canons, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.
 
 ```ts cordis-catalog
 /**
- * Create or reuse a workspace for an existing directory. The fully qualified
- * path is canonicalized through `fs.realpath`; a relative, nonexistent, or
- * non-directory path rejects. Repeated calls for the same canonical path
- * return the existing entity without changing its title.
- * A newly created workspace is prepended to the durable registry order.
- * Different canonical paths may share a display title.
- * @param path - Existing directory to own, in a fully qualified path spelling.
+ * Create or reuse a workspace for a directory on one host. On the built-in
+ * local host the fully qualified path is canonicalized through `fs.realpath`
+ * and must name an existing directory, so a relative, nonexistent, or
+ * non-directory path rejects. On any other host the path is canonicalized by
+ * string alone (absolutely rooted POSIX spelling, trailing slashes removed)
+ * and no Harness-host filesystem access happens, because that host's
+ * execution world owns the directory. Repeated calls for the same
+ * `(hostId, canonical path)` pair return the existing entity without
+ * changing its title; the same canonical path on two hosts is two
+ * workspaces. A newly created workspace is prepended to the durable registry
+ * order. Different canonical paths may share a display title. The registry
+ * does not verify that a non-local `hostId` names a registered host.
+ * @param path - Directory to own, in a fully qualified path spelling.
  * @param title - Display title used only when a new record is created.
+ * @param hostId - Identity of the host that interprets `path`; omitted or
+ * empty names the built-in local host.
  * @returns the existing or newly durable workspace.
  */
-async create(path: string, title?: string): Promise<Workspace>
+async create(path: string, title?: string, hostId?: string): Promise<Workspace>
 
 /**
  * Look up a workspace by id.
@@ -513,13 +548,18 @@ archiveSession(sessionId: SessionId): Promise<void>
 unarchiveSession(sessionId: SessionId): Promise<void>
 
 /**
- * Resolve by canonical directory path without creating or mutating a
- * workspace. A missing path rejects during `realpath`; an existing unowned
- * directory returns `undefined`.
- * @param path - Existing directory path in a fully qualified spelling.
- * @returns the workspace owning the canonical path, when one exists.
+ * Resolve by canonical directory path on one host without creating or
+ * mutating a workspace. On the built-in local host a missing path rejects
+ * during `realpath`; a non-local host canonicalizes the path string alone,
+ * so no Harness-host filesystem access happens. An existing unowned
+ * directory — or, on a non-local host, any unowned canonical spelling —
+ * returns `undefined`.
+ * @param path - Directory path in a fully qualified spelling.
+ * @param hostId - Identity of the host that interprets `path`; omitted or
+ * empty means the built-in local host.
+ * @returns the workspace owning the canonical path on that host, when one exists.
  */
-async resolveByPath(path: string): Promise<Workspace | undefined>
+async resolveByPath(path: string, hostId?: string): Promise<Workspace | undefined>
 ```
 
 Types: [SessionId](core.zh.md)

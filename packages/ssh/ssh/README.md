@@ -29,13 +29,14 @@ Compose this service with [`fs-ssh`](../fs-ssh/README.md), [`subprocess-ssh`](..
 
 ### Deployment prerequisites
 
-Both endpoints require Linux or macOS. The local `ssh` command must support connection multiplexing and Unix-socket forwarding; the server must permit that forwarding. Configure the alias, credentials and known-host entry before startup: the service enables `BatchMode`, requires strict host-key checking, disables agent forwarding and adds no interactive authentication flow.
+Both endpoints require Linux or macOS. The local `ssh` command must support connection multiplexing and Unix-socket forwarding; the server must permit that forwarding. Configure the alias, credentials and known-host entry before startup: the service enables `BatchMode`, requires strict host-key checking, disables agent forwarding and adds no interactive authentication flow. `sshConfigFile` names an absolute local OpenSSH client configuration passed as `ssh -F`, for aliases no user configuration defines; omitting it uses the client's default configuration.
 
-Install the built helper and its matching runtime dependencies on the remote host. Keep Node, helper, bootstrap and their dependencies outside the workspace and writable temporary roots. They must also remain outside a backend’s replaced temporary tree, such as bwrap’s private `/tmp`; the workspace may still be under `/tmp`. Digest verification detects an unexpected installed artifact after helper startup; it does not make writable deployment files safe to execute or authenticate a malicious SSH host.
+Install the built helper and its matching runtime dependencies on the remote host. Keep Node, helper, bootstrap and their dependencies outside the workspace and writable temporary roots. They must also remain outside a backend’s replaced temporary tree, such as bwrap’s private `/tmp`; the workspace may still be under `/tmp`. Digest verification detects an unexpected installed artifact after helper startup; it does not make writable deployment files safe to execute or authenticate a malicious SSH host. The helper and client also pin a wire protocol version at the handshake, so a helper built before the installed client's operation set fails there instead of answering an unknown operation later.
 
 | Field | Default | Meaning |
 |---|---|---|
 | `host` | required | Existing OpenSSH host alias |
+| `sshConfigFile` | omitted | Absolute local OpenSSH client configuration file passed as `ssh -F` |
 | `node`, `helper`, `workspace` | required | Absolute remote Node executable, bundled helper entry and default workspace |
 | `helperHash` | required | Lowercase SHA-256 of the installed helper entry |
 | `bootstrapPath`, `bootstrapHash` | omitted | Paired remote PTC entry and its lowercase SHA-256 |

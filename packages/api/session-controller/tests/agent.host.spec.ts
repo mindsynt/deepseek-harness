@@ -1,15 +1,23 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-presets'
+import type { FsTarget } from '@deepseek-ai/dsh-fs'
+import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
+import Storage from '@deepseek-ai/dsh-storage'
+import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
+import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ApiSessionAgentController,
@@ -19,6 +27,7 @@ import {
   inspectApiSession,
 } from '../src/agent.ts'
 import { installModelSelectionProjection } from '../src/model-selection-projection.ts'
+import { SessionHostStore } from '../src/session-hosts.ts'
 import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 
 const roots: Context[] = []
@@ -31,7 +40,7 @@ afterEach(async () => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-async function harness(): Promise<{ ctx: Context; agents: ApiSessionAgentController }> {
+async function harness(workspaces: readonly Workspace[] = []): Promise<{ ctx: Context; agents: ApiSessionAgentController }> {
   const ctx = new Context()
   roots.push(ctx)
   await ctx.plugin(TypertRegistry)
@@ -44,7 +53,14 @@ async function harness(): Promise<{ ctx: Context; agents: ApiSessionAgentControl
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
-  return { ctx, agents: new ApiSessionAgentController(ctx) }
+  // Real durable storage: the session-host sidecar writes and reads through it.
+  const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-session-host-'))
+  tempDirs.push(storageRoot)
+  await ctx.plugin(Storage)
+  await ctx.plugin(StorageJson, { root: storageRoot })
+  await ctx.plugin(StorageDomain, { backend: 'json' })
+  ctx.provide('workspaceRegistry', { list: () => workspaces, get: () => undefined } as never)
+  return { ctx, agents: new ApiSessionAgentController(ctx, new SessionHostStore(ctx)) }
 }
 
 function header(id: string, cwd: string | null = '/workspace'): SessionHeader {
@@ -73,6 +89,39 @@ function unpublishedAgent(ctx: Context, meta: SessionHeader): Agent {
     status: 'idle',
     ctx,
   } as unknown as Agent
+}
+
+/** One directory-creation call a fake remote execution world received. */
+interface RemoteMkdirCall {
+  readonly target: FsTarget
+  readonly policy: SandboxExecutionPolicy | undefined
+}
+
+/**
+ * Fake remote-host registry serving exactly `hostId` with one world whose
+ * filesystem records directory creation and answers `settle`, or succeeds.
+ * @param hostId - the one host this registry serves.
+ * @param calls - receives every directory-creation call.
+ * @param settle - optional rejection the fake creation throws.
+ * @returns the registry service value.
+ */
+function remoteHosts(hostId: string, calls: RemoteMkdirCall[], settle?: () => Promise<never>): never {
+  return {
+    get: (id: string) => {
+      if (id !== hostId) return undefined
+      return {
+        world: {
+          fs: {
+            resolve: (path: string) => Promise.resolve({ targetKey: path as never, displayPath: path }),
+            mkdir: (target: FsTarget, _signal?: AbortSignal, policy?: SandboxExecutionPolicy) => {
+              calls.push({ target, policy })
+              return settle === undefined ? Promise.resolve({ created: true }) : settle()
+            },
+          },
+        },
+      }
+    },
+  } as never
 }
 
 describe('ApiSession identity failures', () => {
@@ -483,5 +532,117 @@ describe('ApiSession create or adoption', () => {
     writeFileSync(file, 'not a directory')
     await expect(agents.ensureSession(SessionId('mkdir-failure'), join(file, 'child'), false))
       .rejects.toThrow('failed to ensure project directory')
+  })
+})
+
+describe('ApiSession Workspace-host directory creation', () => {
+  it('creates the cwd on the Harness host for an unnamed or built-in Workspace host', async () => {
+    const { ctx, agents } = await harness()
+    const root = mkdtempSync(join(tmpdir(), 'dsh-session-controller-local-cwd-'))
+    tempDirs.push(root)
+
+    const unnamedCwd = join(root, 'unnamed', 'project')
+    const unnamed = unpublishedAgent(ctx, header('unnamed-cwd', unnamedCwd))
+    vi.spyOn(ctx.agents, 'create').mockResolvedValue({ agent: unnamed, dispose: () => Promise.resolve() })
+    await expect(agents.ensureSession(unnamed.id, unnamedCwd, false)).resolves.toBe(unnamed)
+    expect(existsSync(unnamedCwd)).toBe(true)
+    // A bare cwd, and the built-in identity, record the local host.
+    await expect(agents.resolvedHostOf(unnamed.id)).resolves.toBe('local')
+
+    // The built-in identity must not need the remote-host registry at all.
+    const localCwd = join(root, 'local', 'project')
+    const local = unpublishedAgent(ctx, header('local-host-cwd', localCwd))
+    vi.spyOn(ctx.agents, 'create').mockResolvedValue({ agent: local, dispose: () => Promise.resolve() })
+    await expect(agents.ensureSession(local.id, localCwd, false, undefined, 'local')).resolves.toBe(local)
+    expect(existsSync(localCwd)).toBe(true)
+    await expect(agents.resolvedHostOf(local.id)).resolves.toBe('local')
+  })
+
+  it('creates a remote Workspace cwd through that host filesystem under the provisioning policy', async () => {
+    const { ctx, agents } = await harness()
+    await ctx.plugin(SandboxPolicyService, { mode: 'read-only', workspaceRoot: '/deployment-root' })
+    const calls: RemoteMkdirCall[] = []
+    ctx.provide('remoteHosts', remoteHosts('remote-1', calls))
+    const cwd = `/dsh-remote-world-${randomUUID()}`
+    const created = unpublishedAgent(ctx, header('remote-cwd', cwd))
+    vi.spyOn(ctx.agents, 'create').mockResolvedValue({ agent: created, dispose: () => Promise.resolve() })
+
+    await expect(agents.ensureSession(created.id, cwd, false, undefined, 'remote-1')).resolves.toBe(created)
+    // A read-only deployment default still provisions the Session's own root,
+    // under workspace-write bounded to that root and to nothing wider.
+    expect(calls).toEqual([{
+      target: { targetKey: cwd, displayPath: cwd },
+      policy: { mode: 'workspace-write', workspaceRoot: cwd },
+    }])
+    expect(existsSync(cwd)).toBe(false)
+    // The creating operation records the host that owns the Session cwd.
+    await expect(agents.resolvedHostOf(created.id)).resolves.toBe('remote-1')
+  })
+
+  it('passes no policy when the composition has no sandbox-policy owner', async () => {
+    const { ctx, agents } = await harness()
+    const calls: RemoteMkdirCall[] = []
+    ctx.provide('remoteHosts', remoteHosts('remote-1', calls))
+    const cwd = `/dsh-remote-no-policy-${randomUUID()}`
+    const created = unpublishedAgent(ctx, header('remote-no-policy', cwd))
+    vi.spyOn(ctx.agents, 'create').mockResolvedValue({ agent: created, dispose: () => Promise.resolve() })
+
+    await expect(agents.ensureSession(created.id, cwd, false, undefined, 'remote-1')).resolves.toBe(created)
+    expect(calls).toEqual([{ target: { targetKey: cwd, displayPath: cwd }, policy: undefined }])
+  })
+
+  it('fails loud when a named Workspace host has no open execution world', async () => {
+    const absent = await harness()
+    const absentCwd = `/dsh-remote-absent-${randomUUID()}`
+    const absentAgent = unpublishedAgent(absent.ctx, header('remote-absent', absentCwd))
+    vi.spyOn(absent.ctx.agents, 'create').mockResolvedValue({ agent: absentAgent, dispose: () => Promise.resolve() })
+    await expect(absent.agents.ensureSession(absentAgent.id, absentCwd, false, undefined, 'remote-1'))
+      .rejects.toThrow('host "remote-1" has no open execution world')
+    expect(existsSync(absentCwd)).toBe(false)
+
+    const unopened = await harness()
+    unopened.ctx.provide('remoteHosts', remoteHosts('other-host', []))
+    const unopenedCwd = `/dsh-remote-unopened-${randomUUID()}`
+    const unopenedAgent = unpublishedAgent(unopened.ctx, header('remote-unopened', unopenedCwd))
+    vi.spyOn(unopened.ctx.agents, 'create').mockResolvedValue({ agent: unopenedAgent, dispose: () => Promise.resolve() })
+    await expect(unopened.agents.ensureSession(unopenedAgent.id, unopenedCwd, false, undefined, 'remote-1'))
+      .rejects.toThrow('failed to ensure project directory')
+    expect(existsSync(unopenedCwd)).toBe(false)
+  })
+
+  it('surfaces a failed remote directory creation', async () => {
+    const denied = await harness()
+    denied.ctx.provide('remoteHosts', remoteHosts(
+      'remote-1',
+      [],
+      () => Promise.reject(new Error('remote permission denied')),
+    ))
+    const deniedCwd = `/dsh-remote-denied-${randomUUID()}`
+    const deniedAgent = unpublishedAgent(denied.ctx, header('remote-denied', deniedCwd))
+    vi.spyOn(denied.ctx.agents, 'create').mockResolvedValue({ agent: deniedAgent, dispose: () => Promise.resolve() })
+    await expect(denied.agents.ensureSession(deniedAgent.id, deniedCwd, false, undefined, 'remote-1'))
+      .rejects.toThrow(`failed to ensure project directory "${deniedCwd}": Error: remote permission denied`)
+    expect(existsSync(deniedCwd)).toBe(false)
+  })
+
+  it('resolves a legacy Session through its Workspace and records that host', async () => {
+    const legacy = header('legacy-session', '/srv/legacy')
+    const workspace = {
+      id: 'legacy-workspace',
+      hostId: 'remote-7',
+      sessionIds: [legacy.id],
+    } as unknown as Workspace
+    const { ctx, agents } = await harness([workspace])
+    providePersistence(ctx, {
+      list: () => Promise.resolve([legacy]),
+      inspect: () => Promise.resolve({ meta: legacy, events: [] }),
+    })
+    const resumed = unpublishedAgent(ctx, header('legacy-session', '/srv/legacy'))
+    vi.spyOn(ctx.agents, 'resume').mockResolvedValue({ agent: resumed, dispose: () => Promise.resolve() })
+
+    await expect(agents.ensureSession(legacy.id, '/srv/legacy', true)).resolves.toBe(resumed)
+    // No sidecar record existed, so the Workspace accounting answered and the
+    // resume backfilled the record with that host.
+    await expect(agents.resolvedHostOf(legacy.id)).resolves.toBe('remote-7')
   })
 })

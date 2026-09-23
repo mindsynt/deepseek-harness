@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-与 `ui-workspace` 及宿主后端 [`dsh-host-directory-picker-browse`](../../host/directory-picker-browse/README.zh.md) 一起挂载本插件；一行 cordis.yml 随即组合出完整的浏览拾取交互。当工作区流程发起目录请求时，用户看到应用内对话框：头部承载路径面包屑与可编辑路径区，未选中行时是一整栏层级，选中后该行分为层级与子项两栏。
+与 `ui-workspace` 及宿主后端 [`dsh-host-directory-picker-browse`](../../host/directory-picker-browse/README.zh.md) 一起挂载本插件；一行 cordis.yml 随即组合出完整的浏览拾取交互。当工作区流程发起目录请求时，用户看到应用内对话框：头部在路径面包屑旁标出所指向的执行世界，并承载可编辑路径区；未选中行时是一整栏层级，选中后该行分为层级与子项两栏。
 
 ### 导航与创建
 
@@ -39,7 +39,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-对话框是 680×500 的 Miller 分栏视图（在较矮或较窄的视口中限制尺寸），经 `ctx.workspaces` 驱动宿主的 `listDirectory` 与 `createDirectory` 原语。两处注册经嵌套的 `ctx.slots.inject()` 调用作为一次事务性效果安装，因为任一声明条目都可能晚些激活或替换其声明；对话框文案注册在本包自己的 locale 命名空间下，让两份字典作为一个单元落地。浏览类失败留在对话框自己的提示区内，因此本填充从不驱动持有方的 `onError` 分支。node 半部是一个空 `apply`，让插件留在宿主名单上。
+对话框是 680×500 的 Miller 分栏视图（在较矮或较窄的视口中限制尺寸），经 `ctx.uiWorkspace` 驱动宿主的 `listDirectory` 与 `createDirectory` 原语。持有方把所选世界的显示名称作为 `hostLabel` 传入，头部将其显示在标题旁：远端 realm 列出的绝对 POSIX 路径与 Harness 宿主机自身的文件系统同样呈现，因此只有头部能说明这些分栏来自哪个世界。该标签不进入标题的可访问名——读屏读到的标题是 `选择工作区目录`——而是作为该标题的描述被播报，因此读屏用户仍能获知所在世界。`ctx.uiWorkspace` 每次列举与每次创建时都解析所选主机，因此在别处改变的选择会作用于下一次扫描，新建文件夹也落在分栏所示的世界里。两处注册经嵌套的 `ctx.slots.inject()` 调用作为一次事务性效果安装，因为任一声明条目都可能晚些激活或替换其声明；对话框文案注册在本包自己的 locale 命名空间下，让两份字典作为一个单元落地。浏览类失败留在对话框自己的提示区内——宿主自身的诊断（包括“该主机没有已打开的执行世界”）会原样显示——因此本填充从不驱动持有方的 `onError` 分支。node 半部是一个空 `apply`，让插件留在宿主名单上。
 
 </details>
 

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { WorkspaceBrowser } from '../src/client/rows/WorkspaceBrowser.tsx'
@@ -82,6 +83,8 @@ async function bench() {
   const directoryPicker = { pick: pickDirectory }
   Object.assign(new TestRemote(ctx), { directoryPicker })
   ctx.provide('remote.directoryPicker', directoryPicker as never)
+  const hostSelection = createSnapshotStore<{ hostId?: string; hostLabel?: string }>({})
+  ctx.provide('remoteHostSelection', { source: hostSelection })
   const locale = new LocaleRuntime(ctx)
   // These specs assert the shipped Chinese copy. There is no jsdom `window`
   // in this lane, so browser-language detection never runs and the locale
@@ -91,6 +94,7 @@ async function bench() {
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
     retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory,
+    hostSelection,
   }
 }
 
@@ -111,6 +115,9 @@ describe('ui-workspace apply', () => {
     expect(inject).toEqual([
       'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout',
     ])
+    // ui-remote-hosts' selection is optional: requiring it would suspend this
+    // fiber for a composition that drops that row.
+    expect(inject).not.toContain('remoteHostSelection')
   })
 
   it('registers browser and pickers for declarations arriving before or after apply', async () => {
@@ -170,6 +177,34 @@ describe('ui-workspace apply', () => {
     const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
     await picker.createWorkspace({ path: '/tmp/project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+  })
+
+  it('addresses creation and reports the selected host through both surfaces', async () => {
+    const b = await bench()
+    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+
+    const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
+    const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
+    // No remote host selected: the Harness host, exactly as before this seam.
+    expect(browser.hooks.selectedHost.getSnapshot()).toEqual({})
+    expect(picker.hooks.selectedHost.getSnapshot()).toEqual({})
+    await browser.createWorkspace({ path: '/tmp/local' })
+    expect(b.create).toHaveBeenCalledWith({ path: '/tmp/local' })
+
+    // The selection is read per call and republished through the very source
+    // both surfaces bound, so a host chosen after activation reaches them.
+    const notified = vi.fn()
+    const unsubscribe = picker.hooks.selectedHost.subscribe(notified)
+    b.hostSelection.set({ hostId: 'alpha', hostLabel: 'Alpha' })
+    await Promise.resolve()
+    expect(notified).toHaveBeenCalled()
+    expect(browser.hooks.selectedHost.getSnapshot()).toEqual({ hostId: 'alpha', hostLabel: 'Alpha' })
+    await picker.createWorkspace({ path: '/srv/work' })
+    expect(b.create).toHaveBeenLastCalledWith({ path: '/srv/work', hostId: 'alpha' })
+    unsubscribe()
+
+    await b.ctx.fiber.dispose()
   })
 
   it('declares the two directory-flow holes and reports their occupancy per surface', async () => {

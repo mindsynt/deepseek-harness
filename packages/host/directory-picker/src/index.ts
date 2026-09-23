@@ -36,26 +36,38 @@ export interface DirectoryPickerBrowseCapability {
   kind: 'browse'
   /**
    * List one directory level.
-   * @param path - absolute directory to list; absent lists the home directory.
+   * @param path - absolute directory to list; absent lists the addressed
+   * world's anchor directory.
+   * @param hostId - host whose filesystem is listed; absent or the built-in
+   * local identity addresses this Harness host's own filesystem, any other
+   * identity the open execution world of that remote host. A named host with
+   * no open world fails loud instead of listing the Harness host's directories.
    * @param signal - caller lifetime; abort stops the scan (a stalled network
    * directory must not outlive a disconnected caller) and rejects with the
    * abort reason.
    * @returns the level's listing with ancestry; backends bound the complete
    * result, and a cut level reports `truncated`.
-   * @throws {DirectoryPickerError} `directory-unreadable` when the target is not fully
-   * qualified (a wire value must never resolve against the host cwd or, on
-   * Windows, its current drive) or cannot be listed.
+   * @throws {DirectoryPickerError} `directory-unreadable` when the addressed host has no
+   * open execution world, the target is not fully qualified (a wire value must
+   * never resolve against the host cwd or, on Windows, its current drive), or
+   * the target cannot be listed.
    */
-  list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>
+  list(path?: string, hostId?: string, signal?: AbortSignal): Promise<DirectoryListing>
   /**
    * Create one child directory under an existing parent.
    * @param path - absolute existing parent directory.
    * @param name - single non-blank path segment (no separators, not `.`/`..`).
+   * @param hostId - host whose filesystem the child is created on; absent or
+   * the built-in local identity addresses this Harness host's own filesystem,
+   * any other identity the open execution world of that remote host. A named
+   * host with no open world fails loud instead of creating on the Harness host.
    * @returns the created directory's absolute path.
    * @throws {DirectoryPickerError} `directory-exists` for an existing child,
-   * `directory-create-failed` for a parent that is not fully qualified or any other failure.
+   * `directory-unreadable` when the addressed host has no open execution world,
+   * `directory-create-failed` for a parent that is not fully qualified in the
+   * addressed world or any other failure.
    */
-  createDirectory(path: string, name: string): Promise<string>
+  createDirectory(path: string, name: string, hostId?: string): Promise<string>
 }
 
 /**

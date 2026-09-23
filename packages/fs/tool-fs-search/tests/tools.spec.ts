@@ -17,7 +17,7 @@ import { join, sep } from 'node:path'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH, type ToolExecution, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
-import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessExecutableNotFoundError, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessCollectedOutputs, SubprocessHandle, SubprocessOutcome, SubprocessOutputRead, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { rgPath } from '@vscode/ripgrep'
@@ -150,7 +150,14 @@ class FakeHandle implements SubprocessHandle {
 class FakeSubprocess extends SubprocessRuntime {
   async terminalEnvironment() { return { platform: 'posix' as const } }
   spawns: SubprocessSpawnSpec[] = []
-  override async resolveExecutable(command: string): Promise<string> { return command }
+  /** Every executable candidate this run asked the execution world to resolve, in order. */
+  executableRequests: string[] = []
+  /** Scripted executable lookup; the default accepts each candidate and returns it unchanged. */
+  executableLookup: (command: string) => Promise<string> = command => Promise.resolve(command)
+  override resolveExecutable(command: string): Promise<string> {
+    this.executableRequests.push(command)
+    return this.executableLookup(command)
+  }
   override spawnTerminal(): Promise<never> { throw new Error('search tools spawn pipes, never terminals') }
   handles: FakeHandle[] = []
   /** Arms the per-spawn script; a `{ reject }` return scripts a spawn-level failure. */
@@ -1266,3 +1273,105 @@ describe('scope-aware search guidance', () => {
 function withPersona(...sections: string[]): string {
   return ['You are an AI agent powered by DeepSeek Harness.', ...sections].join('\n\n')
 }
+
+describe('execution-world executable resolution', () => {
+  /** A lookup that reports every candidate as absent from the execution world. */
+  const misses = (command: string): Promise<string> =>
+    Promise.reject(new SubprocessExecutableNotFoundError(`no executable ${command} in the execution world`))
+
+  it('spawns the executable the execution world resolved instead of the harness-host path', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.executableLookup = () => Promise.resolve('/remote/tools/rg')
+
+    await call(ctx, 'grep', { pattern: 'x' })
+
+    // The packaged host path is only a lookup candidate; argv[0] is the world's answer.
+    expect(subprocess.executableRequests).toEqual([rgPath])
+    expect(subprocess.spawns[0]?.argv[0]).toBe('/remote/tools/rg')
+  })
+
+  it('falls back to the execution world PATH rg when the packaged binary is not there', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.executableLookup = command => command === 'rg' ? Promise.resolve('/usr/bin/rg') : misses(command)
+
+    const result = await call(ctx, 'grep', { pattern: 'x' })
+
+    expect(result.isError).toBe(false)
+    expect(subprocess.executableRequests).toEqual([rgPath, 'rg'])
+    expect(subprocess.spawns[0]?.argv[0]).toBe('/usr/bin/rg')
+  })
+
+  it('fails loud as SEARCH_FAILED when the execution world has no ripgrep at all', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.executableLookup = misses
+
+    const result = await call(ctx, 'glob', { pattern: '*' })
+
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { name: 'SearchError', code: 'SEARCH_FAILED' } })
+    expect(text(result)).toContain('found no ripgrep executable to run')
+    expect(text(result)).toContain('no "rg" is on that PATH')
+    expect(subprocess.executableRequests).toEqual([rgPath, 'rg'])
+    expect(subprocess.spawns).toHaveLength(0)
+  })
+
+  it('does not fall back to PATH when the packaged-binary lookup fails for another reason', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.executableLookup = () => Promise.reject(new Error('ssh transport unavailable'))
+
+    const result = await call(ctx, 'grep', { pattern: 'x' })
+
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { name: 'SearchError', code: 'SEARCH_FAILED' } })
+    expect(text(result)).toContain('could not start')
+    expect(subprocess.executableRequests).toEqual([rgPath])
+    expect(subprocess.spawns).toHaveLength(0)
+  })
+
+  it('does not fall back past a non-miss failure of the PATH lookup', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.executableLookup = command =>
+      command === 'rg' ? Promise.reject(new Error('ssh transport unavailable')) : misses(command)
+
+    const result = await call(ctx, 'grep', { pattern: 'x' })
+
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { name: 'SearchError', code: 'SEARCH_FAILED' } })
+    expect(text(result)).toContain('could not start')
+    expect(subprocess.executableRequests).toEqual([rgPath, 'rg'])
+  })
+
+  it('reports an abort fired during executable lookup as SEARCH_ABORTED', async () => {
+    const { ctx, subprocess } = await setup()
+    const controller = new AbortController()
+    subprocess.executableLookup = () => { controller.abort('timeout'); return misses('any') }
+
+    const result = await call(ctx, 'glob', { pattern: '*' }, { signal: controller.signal })
+
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { code: 'SEARCH_ABORTED' } })
+    expect(text(result)).toContain('aborted before completion')
+    expect(subprocess.spawns).toHaveLength(0)
+  })
+
+  it('maps the packaged binary through the mounted filesystem provider', async () => {
+    const { ctx, subprocess } = await setup()
+    ctx.provide('fs', { processPathFromHostPath: () => '/mounted/tools/rg' })
+    subprocess.executableLookup = () => Promise.resolve('/mounted/tools/rg')
+
+    await call(ctx, 'glob', { pattern: '*' })
+
+    expect(subprocess.executableRequests).toEqual(['/mounted/tools/rg'])
+    expect(subprocess.spawns[0]?.argv[0]).toBe('/mounted/tools/rg')
+  })
+
+  it('keeps the host path when the filesystem provider serves a world without it', async () => {
+    const { ctx, subprocess } = await setup()
+    ctx.provide('fs', { processPathFromHostPath: () => undefined })
+    subprocess.executableLookup = () => Promise.resolve('/execution-world/rg')
+
+    await call(ctx, 'glob', { pattern: '*' })
+
+    expect(subprocess.executableRequests).toEqual([rgPath])
+  })
+})

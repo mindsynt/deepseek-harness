@@ -277,6 +277,10 @@ describe('ReviewTab', () => {
     act(() => { controller.state.set({ '/api/changes.open?sessionId=viewed&seq=5&index=1': 'nativeUnavailable' }) })
     expect(view.queryByRole('button', { name: 'Open ~/out/big.bin in default app' })).toBeNull()
     act(() => {
+      controller.state.set({ '/api/changes.open?sessionId=viewed&seq=5&index=1': { phase: 'remoteUnavailable', hostId: 'remote-1' } })
+    })
+    expect(view.queryByRole('button', { name: 'Open ~/out/big.bin in default app' })).toBeNull()
+    act(() => {
       controller.state.set({})
       controller.host.set({ name: 'server', available: false, fileManager: null })
     })

@@ -4,7 +4,7 @@ import { Duplex, PassThrough } from 'node:stream'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
-import { SshRpcPeer } from '../src/protocol.ts'
+import { SshRpcPeer, SSH_PROTOCOL_VERSION } from '../src/protocol.ts'
 import { SshConnection } from '../src/index.ts'
 import type { Config } from '../src/index.ts'
 
@@ -56,7 +56,7 @@ const config: Config = {
   requestTimeoutMs: 1000, maxFrameBytes: 4096, maxPending: 8, leaseMs: 30_000,
 }
 const hello = {
-  protocol: 1, hash: 'a'.repeat(64), platform: 'linux', nodeVersion: 'v24.19.0',
+  protocol: SSH_PROTOCOL_VERSION, hash: 'a'.repeat(64), platform: 'linux', nodeVersion: 'v24.19.0',
   node: '/canonical/node', root: '/tmp/remote-helper', workspace: '/canonical/workspace',
 }
 
@@ -134,6 +134,7 @@ function setup(options: {
 describe.skipIf(process.platform === 'win32')('SSH connection startup', () => {
   it.each([
     { host: '-option' }, { host: 'alias; command' }, { node: 'relative' }, { helperHash: 'bad' },
+    { sshConfigFile: 'relative/config' },
     { bootstrapPath: '/remote/bootstrap.js' }, { bootstrapHash: 'b'.repeat(64) },
     { requestTimeoutMs: 0 }, { requestTimeoutMs: 2_147_483_648 },
     { maxFrameBytes: 64 * 1024 * 1024 + 1 }, { maxPending: 129 }, { leaseMs: 2999 },
@@ -162,7 +163,35 @@ describe.skipIf(process.platform === 'win32')('SSH connection startup', () => {
     expect(argv).toContain('StrictHostKeyChecking=yes')
     expect(argv).toContain('ForwardAgent=no')
     expect(argv.at(-1)).toBe("'/remote/node' '--disable-sigusr1' '/remote/helper'\\''s file.js'")
-    expect(test.calls[0]?.params).toEqual({ protocol: 1, workspace: '/remote/workspace', leaseMs: 30_000, bootstrapPath: '/remote/process.js' })
+    expect(test.calls[0]?.params).toEqual({ protocol: SSH_PROTOCOL_VERSION, workspace: '/remote/workspace', leaseMs: 30_000, bootstrapPath: '/remote/process.js' })
+  })
+
+  it('passes a configured client configuration file as the first SSH argument', async () => {
+    const test = setup({ config: { sshConfigFile: '/etc/dsh/ssh_config' } })
+    await test.service.ready
+    const argv = transport.spawn.mock.calls[0]?.[1] as string[]
+    expect(argv.slice(0, 2)).toEqual(['-F', '/etc/dsh/ssh_config'])
+    expect(argv).toContain('StrictHostKeyChecking=yes')
+    expect(argv.at(-2)).toBe('test-alias')
+  })
+
+  it('omits -F when the deployment keeps the client default configuration', async () => {
+    const test = setup()
+    await test.service.ready
+    const argv = transport.spawn.mock.calls[0]?.[1] as string[]
+    expect(argv).not.toContain('-F')
+    expect(argv[0]).toBe('-T')
+  })
+
+  it('passes the configured client configuration file to forwarding control commands', async () => {
+    const test = setup({ config: { sshConfigFile: '/etc/dsh/ssh_config' } })
+    await test.service.ready
+    const socket = await test.service.connectStream({ path: '/tmp/remote-helper/control', capability: 'b'.repeat(64) })
+    socket.destroy(new Error('data channel closed'))
+    await expect.poll(() => transport.exec.mock.calls.length).toBe(2)
+    const forwarded = transport.exec.mock.calls[0]?.[1] as string[]
+    expect(forwarded.slice(0, 2)).toEqual(['-F', '/etc/dsh/ssh_config'])
+    expect(forwarded).toContain('-S')
   })
 
   it('permits filesystem-only deployments and refuses an unconfigured PTC bootstrap getter', async () => {
@@ -176,7 +205,7 @@ describe.skipIf(process.platform === 'win32')('SSH connection startup', () => {
   it.each([
     { hello: { hash: 'c'.repeat(64) }, error: 'helper digest' },
     { hello: { bootstrapHash: 'c'.repeat(64) }, error: 'bootstrap digest' },
-    { hello: { protocol: 2 }, error: 'Invalid' },
+    { hello: { protocol: 1 }, error: 'Invalid' },
   ])('refuses a mismatched helper identity before readiness: $error', async ({ hello, error }) => {
     const test = setup({ hello })
     await expect(test.service.ready).rejects.toThrow(error)

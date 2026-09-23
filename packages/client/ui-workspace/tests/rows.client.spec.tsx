@@ -7,7 +7,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { RowDragProps } from '../src/client/rows/Rows.tsx'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from '../src/client/rows/Rows.tsx'
-import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
+import { UNGROUPED_KEY, type GroupNode, type SearchResultNode, type SessionNode } from '../src/client/tree.ts'
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -162,6 +162,27 @@ describe('workspace browser rows', () => {
     const bare: GroupNode = { ...group, branch: undefined }
     render(<ProjectRowItem group={bare} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
     expect(screen.getByRole('treeitem').textContent).toBe('Project')
+  })
+
+  it('publishes expansion toggling on the group row that owns the label', () => {
+    const onToggle = vi.fn()
+    const group: GroupNode = {
+      key: UNGROUPED_KEY, workspaceId: undefined, cwd: undefined, createdAt: undefined, label: '',
+      branch: undefined, sessionCount: 1, expanded: false, containsCurrent: false, sessions: [],
+    }
+    const view = render(<ProjectRowItem group={group} onToggle={onToggle} onCreate={vi.fn()} t={t} />)
+    // The group row is addressed by walking two ancestors up from its label,
+    // so the treeitem carrying `aria-expanded` must be exactly those two levels up.
+    const label = screen.getByText('未分组')
+    const row = label.parentElement?.parentElement
+    expect(row?.getAttribute('role')).toBe('treeitem')
+    expect(row?.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(label)
+    expect(onToggle).toHaveBeenCalledOnce()
+
+    view.rerender(<ProjectRowItem group={{ ...group, expanded: true }} onToggle={onToggle} onCreate={vi.fn()} t={t} />)
+    expect(screen.getByText('未分组').parentElement?.parentElement?.getAttribute('aria-expanded')).toBe('true')
   })
 
   it('renders and opens a selected running Session row', () => {

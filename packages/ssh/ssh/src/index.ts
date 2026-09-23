@@ -25,6 +25,12 @@ export interface Config {
   helperHash: string
   /** Absolute remote default workspace. */
   workspace: string
+  /**
+   * Absolute local OpenSSH client configuration file passed to `ssh -F`; when
+   * omitted, the client falls back to its own default configuration, so an
+   * alias defined only in a DSH-generated file is unreachable.
+   */
+  sshConfigFile?: string
   /** Optional preinstalled built PTC entry, paired with its expected digest. */
   bootstrapPath?: string
   /** SHA-256 of bootstrapPath; both fields must be supplied together. */
@@ -48,6 +54,7 @@ export class SshConnection extends Service {
   static Config: schema<Config> = schema.object({
     host: schema.string().required(), node: schema.string().required(), helper: schema.string().required(),
     helperHash: schema.string().required(), workspace: schema.string().required(),
+    sshConfigFile: schema.string(),
     bootstrapPath: schema.string(), bootstrapHash: schema.string(),
     requestTimeoutMs: schema.number().default(30_000), maxFrameBytes: schema.number().default(64 * 1024 * 1024),
     maxPending: schema.number().default(128), leaseMs: schema.number().default(30_000),
@@ -67,7 +74,7 @@ export class SshConnection extends Service {
   private failure: Error | undefined
   private sockets = new Set<Socket>()
   private nextSocket = 0
-  private readonly config: Required<Omit<Config, 'bootstrapPath' | 'bootstrapHash'>> & Pick<Config, 'bootstrapPath' | 'bootstrapHash'>
+  private readonly config: Required<Omit<Config, 'bootstrapPath' | 'bootstrapHash' | 'sshConfigFile'>> & Pick<Config, 'bootstrapPath' | 'bootstrapHash' | 'sshConfigFile'>
   private remote: Hello | undefined
 
   constructor(ctx: Context, config: Config) {
@@ -77,6 +84,7 @@ export class SshConnection extends Service {
       host: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.@-]*$/),
       node: z.string().startsWith('/'), helper: z.string().startsWith('/'), helperHash: z.string().regex(/^[0-9a-f]{64}$/),
       workspace: z.string().startsWith('/'), requestTimeoutMs: z.number().int().positive().max(2_147_483_647),
+      sshConfigFile: z.string().startsWith('/').optional(),
       bootstrapPath: z.string().startsWith('/').optional(), bootstrapHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
       maxFrameBytes: z.number().int().positive().max(64 * 1024 * 1024), maxPending: z.number().int().positive().max(128),
       leaseMs: z.number().int().min(3000).max(600_000),
@@ -227,7 +235,10 @@ export class SshConnection extends Service {
     const combined = AbortSignal.any(signals)
     combined.throwIfAborted()
     const result = Promise.withResolvers<undefined>()
-    const command = execFile('ssh', ['-S', this.controlPath(), ...args, this.config.host], {
+    const command = execFile('ssh', [
+      ...this.config.sshConfigFile === undefined ? [] : ['-F', this.config.sshConfigFile],
+      '-S', this.controlPath(), ...args, this.config.host,
+    ], {
       signal: combined, maxBuffer: 64 * 1024,
     }, (error) => { if (error === null) result.resolve(undefined); else result.reject(error) })
     const closed = new Promise<void>((resolve) => { command.once('close', () => { resolve() }) })
@@ -261,6 +272,7 @@ export class SshConnection extends Service {
     const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`
     const command = [this.config.node, '--disable-sigusr1', this.config.helper].map(quote).join(' ')
     const child = spawn('ssh', [
+      ...this.config.sshConfigFile === undefined ? [] : ['-F', this.config.sshConfigFile],
       '-T', '-M', '-S', this.controlPath(), '-o', 'ControlPersist=no', '-o', 'BatchMode=yes',
       '-o', 'StrictHostKeyChecking=yes', '-o', 'ForwardAgent=no', '-o', 'ClearAllForwardings=yes',
       '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=3', this.config.host, command,

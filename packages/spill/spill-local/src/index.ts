@@ -1,10 +1,16 @@
 /**
- * `LocalSpillStore`: the host-filesystem implementation of the
+ * `LocalSpillStore`: the filesystem implementation of the
  * `@deepseek-ai/dsh-spill` storage seam. Persists oversized text to a
- * private, session-scoped file (see `./store.ts` for the traversal-safe naming
- * and exclusive owner-only write) and returns a path locator plus local
- * read/grep retrieval guidance. After activation it runs one best-effort
- * startup sweep that reclaims spill files older than `cleanupPeriodDays`.
+ * private, session-scoped file through `ctx.fs` (see `./store.ts` for the
+ * traversal-safe naming and exclusive create) and returns the backend-resolved
+ * path locator plus read/grep retrieval guidance. After activation it runs one
+ * best-effort startup sweep that reclaims spill files older than
+ * `cleanupPeriodDays`.
+ *
+ * Every artifact read and write goes through the `ctx.fs` service, so the
+ * locator is spelled in the execution world's own filesystem rather than assumed
+ * to be a harness host path. `ctx.fs` is read through `ctx.get` (an optional
+ * service), and a save without it fails loud.
  *
  * @module @deepseek-ai/dsh-spill-local
  */
@@ -13,6 +19,8 @@ import { Context } from '@deepseek-ai/cordis'
 import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import z from '@deepseek-ai/schemastery'
+// Type-only acknowledgement of the `ctx.fs` service declaration this plugin reads.
+import type {} from '@deepseek-ai/dsh-fs'
 import { SpillLocator, SpillStore } from '@deepseek-ai/dsh-spill'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
 import { gatherSweepRoots, sweepSpillRoots } from './cleanup.ts'
@@ -147,7 +155,13 @@ export class LocalSpillStore extends SpillStore {
   }
 
   async saveText(input: SaveTextSpill): Promise<SpillRef> {
-    const saved = await saveTextFile({
+    // The filesystem seam is optional at load (cleanup is host-local), so a
+    // missing backend is named here, at the first operation that needs it.
+    const fs = this.ctx.get('fs')
+    if (fs === undefined) {
+      throw new Error('spill-local: ctx.fs is unavailable; load a filesystem backend (for example @deepseek-ai/dsh-fs-local) before spilling text')
+    }
+    const saved = await saveTextFile(fs, {
       root: this.root,
       sessionId: input.owner.sessionId,
       suggestedName: input.suggestedName,

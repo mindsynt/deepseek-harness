@@ -218,6 +218,13 @@ export async function runSshHelper(transport: HelperTransport): Promise<void> {
         }, signal)
       return Buffer.from(bytes).toString('base64')
     }
+    if (method === 'fs.mkdir') {
+      // The policy is required exactly as for fs.write/fs.edit: the helper's own
+      // sandboxed filesystem fences creation by the caller's resolved policy.
+      const input = z.object({ target: targetSchema, policy: policySchema }).strict().parse(raw)
+      const resolved = await policy(input.policy, signal)
+      return await ctx.fs.mkdir(asTarget(input.target), signal, resolved)
+    }
     if (method === 'fs.write' || method === 'fs.edit') {
       const input = z.object({
         target: targetSchema, content: z.string().optional(), edit: editSchema.optional(),

@@ -61,7 +61,12 @@ async function fixture() {
     sessionId === 'owner' && seq === 9 && index === 0 ? comparison : undefined)
   ctx.provide('workspaceChanges', { summary, diff })
   const opener = vi.fn(async (_request: { path: string; action?: 'reveal' }, _signal: AbortSignal) => ({ opened: true as const }))
-  ctx.provide('sessionController', { openWorkspacePath: opener, workspaceDesktop: () => ({ name: 'desktop', available: true, fileManager: 'finder' }) } as never)
+  const remoteHost = vi.fn(async (_sessionId: SessionId) => undefined as string | undefined)
+  ctx.provide('sessionController', {
+    openWorkspacePath: opener,
+    remoteHostOf: remoteHost,
+    workspaceDesktop: () => ({ name: 'desktop', available: true, fileManager: 'finder' }),
+  } as never)
   const connection = new HostConnectionService(ctx, [], {} as BrowserAuth)
   await ctx.plugin({
     inject: ['connection', 'sessionQuery', 'sessionController', 'workspaceFiles', 'fs', 'sandboxPolicy', 'workspaceChanges'],
@@ -71,7 +76,7 @@ async function fixture() {
   const open = (query = '?sessionId=owner&seq=9&index=0') => handler.fetch(new Request(`http://localhost${CHANGES_OPEN_PATH}${query}`, { method: 'POST' }))
   const read = (query = '?sessionId=owner&seq=9') => handler.fetch(new Request(`http://localhost${CHANGED_FILES_PATH}${query}`))
   const compare = (query = '?sessionId=owner&seq=9&index=0') => handler.fetch(new Request(`http://localhost${CHANGES_DIFF_PATH}${query}`))
-  return { root, cwd, ctx, data, readEvent, open, read, compare, comparison, diff, opener, outside, summary }
+  return { root, cwd, ctx, data, readEvent, open, read, compare, comparison, diff, opener, outside, summary, remoteHost }
 }
 
 describe('change summary route', () => {
@@ -172,6 +177,20 @@ describe('changed files native open route', () => {
     expect(failed.status).toBe(500)
     expect(await failed.text()).not.toContain('/private/host/path')
     expect((await open()).status).toBe(204)
+  })
+
+  it('refuses a remote-host Session with its host named instead of mapping the path', async () => {
+    const { open, opener, remoteHost } = await fixture()
+    remoteHost.mockResolvedValue('remote-1')
+    const response = await open()
+    expect(response.status).toBe(409)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toEqual({
+      hostId: 'remote-1',
+      message: '"src/lib/a.ts" lives in remote host "remote-1"\'s execution world, so this Harness host\'s desktop cannot open it; open it on "remote-1"',
+    })
+    expect(remoteHost).toHaveBeenCalledWith(SessionId('owner'))
+    expect(opener).not.toHaveBeenCalled()
   })
 
   it('validates served summaries and logged announcements', () => {

@@ -6,8 +6,13 @@ import type { Readable, Writable } from 'node:stream'
 import { z } from 'zod'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 
-/** Wire version shared by the installed helper and client package. */
-export const SSH_PROTOCOL_VERSION = 1
+/**
+ * Wire version shared by the installed helper and client package. Version 2
+ * added the `fs.mkdir` operation: an installed helper from version 1 fails the
+ * handshake with a typed schema rejection instead of answering an unknown
+ * operation later, and the helper entry digest changes with the same build.
+ */
+export const SSH_PROTOCOL_VERSION = 2
 
 /** Maximum prepared or running process handles owned by one helper. */
 export const SSH_MAX_PROCESS_HANDLES = 128
