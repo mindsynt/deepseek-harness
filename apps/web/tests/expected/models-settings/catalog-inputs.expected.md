@@ -5,7 +5,8 @@
     - button "模型"
     - button "内置插件"
     - button "Agent 预设"
-    - button "远程主机"  - button "打开配置文件"
+    - button "远程主机"
+  - button "打开配置文件"
   - button "关闭"
   - heading "模型" [level=2]
   - paragraph: 填入各提供商的 API 密钥即可使用其模型。
@@ -28,7 +29,7 @@
           - /placeholder: 提供商默认
         - text: 思考方言
         - combobox "思考方言":
-          - option "默认（按端点推断）" [selected]
+          - option "默认（按端点/目录自动推断）" [selected]
           - option "openai"
           - option "deepseek"
           - option "openrouter"
