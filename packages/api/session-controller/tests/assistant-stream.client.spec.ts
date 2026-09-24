@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { LlmAttemptId, createAssistantMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type {
@@ -120,6 +120,34 @@ describe('ClientAssistantStream', () => {
 
     expect(stream.replace([], baseline(3))).toHaveLength(2)
     expect(stream.replace([])).toEqual([])
+  })
+
+  it('continues with durable entries when the reconnect baseline cannot expand', () => {
+    const stream = new ClientAssistantStream()
+    const durable = ordinary(4)
+    const opening = baseline(1).activeAttempt!
+    const broken: SessionAssistantStreamBaseline = {
+      revision: 2,
+      activeAttempt: {
+        ...opening,
+        stream: [{
+          type: 'chunk',
+          time: 20,
+          chunk: { type: 'finish', reason: { kind: 'error', failure: { message: 'x', code: 'y', status: undefined } } },
+        }] as never,
+      },
+    }
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(stream.replace([durable], broken)).toEqual([durable])
+      expect(warning).toHaveBeenCalledWith(
+        '[session-controller] assistant stream baseline could not be expanded; continuing without its transient prefix',
+        expect.any(TypeError),
+      )
+      expect(stream.acceptFrame(chunkFrame(1))).toEqual(expect.objectContaining({ type: 'transient' }))
+    } finally {
+      warning.mockRestore()
+    }
   })
 
   it('passes through durable events not owned by the active attempt', () => {

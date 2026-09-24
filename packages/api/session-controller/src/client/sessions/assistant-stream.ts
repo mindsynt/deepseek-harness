@@ -5,7 +5,7 @@ import type {
   SessionAssistantStreamFrame,
 } from '../../types.ts'
 import { expandAssistantStream } from '@deepseek-ai/dsh-llm/assistant-stream'
-import type { AssistantStreamRecord } from '@deepseek-ai/dsh-llm/assistant-stream'
+import type { AssistantStreamRecord, TimedStreamChunk } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
 import type {
   SessionAssistantSettlementEntry,
@@ -77,25 +77,34 @@ export class ClientAssistantStream {
     this.publishedSeqs = new Set(visible.map(entry => entry.event.seq))
     this.durableCursor = visible.reduce((cursor, entry) => Math.max(cursor, entry.event.seq), -1)
     if (opening !== undefined) {
-      for (const [index, member] of expandAssistantStream(
-        opening.stream as unknown as readonly AssistantStreamRecord[],
-      ).entries()) {
-        this.transientInGap += 1
-        visible.push({
-          type: 'transient',
-          event: {
-            type: 'assistant/live-chunk',
-            seq: this.durableCursor + 1 - 1 / (this.transientInGap + 1),
-            time: member.time,
-            data: {
-              attemptId: opening.attemptId,
-              turn: opening.turn,
-              step: opening.step,
-              chunk: member.chunk,
+      let expanded: readonly TimedStreamChunk[] | undefined
+      try {
+        expanded = expandAssistantStream(opening.stream as unknown as readonly AssistantStreamRecord[])
+      } catch (error: unknown) {
+        console.warn(
+          '[session-controller] assistant stream baseline could not be expanded; continuing without its transient prefix',
+          error,
+        )
+      }
+      if (expanded !== undefined) {
+        for (const [index, member] of expanded.entries()) {
+          this.transientInGap += 1
+          visible.push({
+            type: 'transient',
+            event: {
+              type: 'assistant/live-chunk',
+              seq: this.durableCursor + 1 - 1 / (this.transientInGap + 1),
+              time: member.time,
+              data: {
+                attemptId: opening.attemptId,
+                turn: opening.turn,
+                step: opening.step,
+                chunk: member.chunk,
+              },
             },
-          },
-        })
-        if (index + 1 >= opening.nextIndex) break
+          })
+          if (index + 1 >= opening.nextIndex) break
+        }
       }
     }
     return visible
