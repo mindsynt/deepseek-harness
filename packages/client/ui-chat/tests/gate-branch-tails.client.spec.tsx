@@ -53,6 +53,8 @@ describe('render branch tails', () => {
         t={t}
         useChat={bindSnapshotSelector(source)}
         useProjection={() => undefined}
+        useModelPricing={selector => selector({ status: 'idle', byRoute: new Map() })}
+        ensureModelPricing={() => {}}
       />,
     )
     expect(view.container.textContent).toBe('2 轮 3 步')

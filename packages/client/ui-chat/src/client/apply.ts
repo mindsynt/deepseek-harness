@@ -21,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {
-  ChatNodeInjected, ChatScrollPosition, ChatViewInjected,
+  ChatNodeInjected, ChatScrollPosition, ChatViewInjected, GlobalCostInjected, PerformanceUsageInjected,
   TurnTailOwnerProps,
 } from './contract/slots.ts'
 import type { ChatSnapshot } from './contract/snapshot.ts'
@@ -29,6 +29,7 @@ import { EMPTY_CHAT_SNAPSHOT } from './contract/snapshot.ts'
 import { ApprovalCommand } from './chat/ApprovalCommand.tsx'
 import { ChatView } from './chat/ChatView.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
+import { ComposerCostPill } from './chat/ComposerCostPill.tsx'
 import { StatsPills } from './chat/StatsPills.tsx'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { en, NS, zh } from './locale.ts'
@@ -40,6 +41,8 @@ import { CHAT_SETTINGS_NAMESPACE, DEFAULT_LINK_OPENING, type ChatSettings } from
 import { LinkOpeningRow, type LinkOpeningRowInjected } from './settings/LinkOpeningRow.tsx'
 import { PerformanceUsageRow, type PerformanceUsageRowInjected } from './settings/PerformanceUsageRow.tsx'
 import { PerformanceUsagePolicy } from './performance-usage.ts'
+import { GlobalUsagePolicy } from './global-usage.ts'
+import { ModelPricingPolicy } from './model-pricing.ts'
 import { useTurnDataValue } from './chat/use-turn-data.ts'
 import { bindDisclosure } from './chat/use-disclosure.ts'
 
@@ -55,7 +58,7 @@ const CHAT_NODE_INJECT: ChatNodeInjected = {
 /** Services required by the Chat target and its presentation registrations. */
 export const inject = [
   'slots', 'sessions', 'uiWorkspace', 'uiSession', 'uiConversation', 'locale',
-  'configForms', 'remote', 'remote.session', 'sidebarRight',
+  'configForms', 'remote', 'remote.session', 'remote.llm', 'sidebarRight',
 ]
 
 /**
@@ -117,9 +120,47 @@ export function apply(ctx: Context): void {
   const transcriptView = new TranscriptViewPolicy(chatSettings)
   const presentation = derivePresentationPolicy(transcriptView.mode)
   const performancePolicy = new PerformanceUsagePolicy(chatSettings)
-  ctx.effect(() => () => { transcriptView.dispose(); performancePolicy.dispose() })
-  const performanceUsage = performancePolicy.mode
-  registerChatNodeRenderers(ctx, performanceUsage, presentation)
+  const modelPricingPolicy = new ModelPricingPolicy({
+    listConfigurableProviders: () => ctx.remote.llm.listConfigurableProviders(),
+    describe: ctx.configForms.describe(),
+  })
+  const globalUsagePolicy = new GlobalUsagePolicy({
+    list: ctx.sessions.list,
+    refreshProjections: ctx.sessions.refreshProjections.bind(ctx.sessions),
+  })
+  ctx.effect(() => {
+    const disposeAdaptersUpdated = ctx.remote.$on('llm/adapters-updated', () => {
+      modelPricingPolicy.refreshDirectory()
+    })
+    const disposeConnectionReset = ctx.on('connection/reset', () => {
+      modelPricingPolicy.reset()
+      globalUsagePolicy.reset()
+    })
+    return () => {
+      disposeAdaptersUpdated()
+      disposeConnectionReset()
+      transcriptView.dispose()
+      performancePolicy.dispose()
+      modelPricingPolicy.dispose()
+      globalUsagePolicy.dispose()
+    }
+  })
+  const usageInjection: PerformanceUsageInjected = {
+    hooks: {
+      performanceUsage: performancePolicy.mode,
+      modelPricing: modelPricingPolicy.snapshot,
+    },
+    ensureModelPricing: () => { modelPricingPolicy.ensure() },
+  }
+  const costInjection: PerformanceUsageInjected & GlobalCostInjected = {
+    ...usageInjection,
+    hooks: {
+      ...usageInjection.hooks,
+      globalUsage: globalUsagePolicy.snapshot,
+    },
+    ensureGlobalUsage: () => { globalUsagePolicy.ensure() },
+  }
+  registerChatNodeRenderers(ctx, usageInjection, presentation)
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -127,7 +168,7 @@ export function apply(ctx: Context): void {
     order: 13,
     locale: NS,
     inject: (): PerformanceUsageRowInjected => ({
-      hooks: { performanceUsage },
+      ...usageInjection,
       setPerformanceUsage: (mode) => { performancePolicy.setMode(mode) },
     }),
   }, PerformanceUsageRow))
@@ -229,8 +270,17 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('conversation.composer.dock', () =>
     ctx.slots.register({
       name: 'conversation.composer.dock', id: 'stats', order: 0, locale: NS,
-      inject: () => ({ hooks: { performanceUsage } }),
+      inject: () => usageInjection,
     }, StatsPills))
+
+  // The cost reading is a separate dock row so its own `order: 1` CSS can
+  // place it after the conversation-owned context meter, which the Chat
+  // plugin cannot reorder from outside.
+  ctx.slots.inject('conversation.composer.dock', () =>
+    ctx.slots.register({
+      name: 'conversation.composer.dock', id: 'cost', order: 1, locale: NS,
+      inject: () => costInjection,
+    }, ComposerCostPill))
 
   ctx.slots.inject('conversation.approval.detail', () =>
     ctx.slots.register({ name: 'conversation.approval.detail' }, ApprovalCommand))

@@ -173,6 +173,8 @@ describe('PerformanceUsageRow', () => {
     render(<PerformanceUsageRow
       {...b.props}
       usePerformanceUsage={bindSnapshotSelector(source)}
+      useModelPricing={selector => selector({ status: 'idle', byRoute: new Map() })}
+      ensureModelPricing={() => {}}
       setPerformanceUsage={setPerformanceUsage}
     />)
     expect(screen.getByText('Performance & usage')).toBeDefined()

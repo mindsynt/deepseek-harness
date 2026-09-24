@@ -100,7 +100,7 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 ### 带推理（reasoning）与协议兼容运行
 
-`reasoningEfforts` 声明模型可选择的 thinking 等级：每个键都是选择器提供的等级，其值是分派时在协议中发送的拼写，因此 `max: ultra` 可以为拥有自有词汇的网关重命名等级。省略该字段时保留已安装目录条目的能力；`false` 声明非推理模型。对于 pi-ai 无法识别的端点，`compat` 开关重塑请求——哪个角色携带系统提示词、哪个字段限制输出、thinking 等级如何传递——可逐路由、逐模型配置。当路由自身的目录没有描述某个模型时，若路由 id 命中已安装提供商（如 `xiaomi`），或端点与某个已安装提供商共享至少三段 DNS 后缀（如 `*.maas.aliyuncs.com` → Qwen 方言），它还会继承目录的兼容共识；只有目录完全不了解该家族时才退回 OpenAI 检测。显式 `compat` 字段仍逐字段优先。条目与已安装目录都没有尺寸的模型，会采用路由的 `defaultContextWindow` 与 `defaultMaxTokens` 回退值。
+`reasoningEfforts` 声明模型可选择的 thinking 等级：每个键都是选择器提供的等级，其值是分派时在协议中发送的拼写，因此 `max: ultra` 可以为拥有自有词汇的网关重命名等级。省略该字段时保留已安装目录条目的能力；`false` 声明非推理模型。对于 pi-ai 无法识别的端点，`compat` 开关重塑请求——哪个角色携带系统提示词、哪个字段限制输出、thinking 等级如何传递——可逐路由、逐模型配置。当路由自身的目录没有描述某个模型时，若路由 id 命中已安装提供商（如 `xiaomi`），或端点与某个已安装提供商共享至少三段 DNS 后缀（如 `*.maas.aliyuncs.com` → Qwen 方言），它还会继承目录的兼容共识；只有目录完全不了解该家族时才退回 OpenAI 检测。显式 `compat` 字段仍逐字段优先。条目与已安装目录都没有尺寸的模型，会采用路由的 `defaultContextWindow` 与 `defaultMaxTokens` 回退值。 `models` 条目或 `modelOverrides` 值还可以声明 `pricing`——每 1,000,000 token 的 `inputCacheHit`、`inputCacheMiss` 与 `output` 费率，以及可选的 `utcOffsetMinutes` 与首个匹配的 `timeBands`——配置 schema 与解析都会校验它；该字段刻意不会带到物化后的 pi-ai 模型上，token-meter 消费方需从配置中解析它。
 
 对于自托管 Chat Completions 端点，`thinkingTokenBudgetField` 选择推理预算参数，`vllmPriority` 在服务端启用优先级调度时设置整数调度优先级。模板参数接受 `$var: thinking.budget`。`openai-responses` 网关可设置 `supportsMaxOutputTokens: false` 来省略 `max_output_tokens`；Azure 与 Codex 传输会忽略这个共享兼容字段。这些控制均需显式启用；目录拥有的 Anthropic effort 和回退能力不是可配置开关。
 

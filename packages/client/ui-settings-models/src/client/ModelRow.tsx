@@ -26,6 +26,8 @@ interface ModelRowProps {
   inputLoading?: boolean
   /** Adapter-owned extra advanced control; absent for the DeepSeek catalog editor. */
   reasoning?: ReactNode
+  /** Adapter-owned pricing editor rendered after the other advanced controls. */
+  pricing?: ReactNode
   expanded: boolean
   disabled: boolean
   t: (key: ModelsKey) => string
@@ -109,6 +111,7 @@ export function ModelRow(props: ModelRowProps): ReactNode {
               fallback={props.inputFallback} disabled={disabled || props.inputLoading === true} t={t} onChange={props.onChange}
             />
             {props.reasoning}
+            {props.pricing}
           </div>
         )
         : null}

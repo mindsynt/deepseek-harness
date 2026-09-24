@@ -32,6 +32,8 @@ import type {
 } from './types.ts'
 import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
 import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
+import { usageByDayProjectionDefinition } from './usage-by-day.ts'
+import { usageByRouteProjectionDefinition } from './usage-by-route.ts'
 import { estimateContent, estimateMessage, estimateToolsTokens, ROLE_OVERHEAD } from './estimate.ts'
 import { commitSurfaceTokens, planSurfaceTokens } from './surface-fold.ts'
 import type { MeterSurfaceNode } from './surface-fold.ts'
@@ -43,6 +45,8 @@ export type * from './types.ts'
 // in aggregate programs that only import the package root.
 export type * from './usage-projection.ts'
 export type * from './breakdown-projection.ts'
+export type * from './usage-by-day.ts'
+export type * from './usage-by-route.ts'
 
 /**
  * Raw anchor facts captured at the latest successful call; the baseline is
@@ -114,6 +118,8 @@ export class TokenMeter extends Service {
     ctx.sessionProjections.register(tokenUsageProjectionDefinition)
     ctx.sessionProjections.register(contextPressureProjectionDefinition)
     ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
+    ctx.sessionProjections.register(usageByRouteProjectionDefinition)
+    ctx.sessionProjections.register(usageByDayProjectionDefinition)
 
     // Readers catch up independently, while eager observation bounds ordinary
     // read latency without creating state for sessions no consumer has read.

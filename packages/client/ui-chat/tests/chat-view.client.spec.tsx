@@ -26,6 +26,7 @@ import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/c
 import type { KeyedSnapshotSelectorHook, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { LlmModelPricing } from '@deepseek-ai/dsh-llm/types'
 import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -46,6 +47,7 @@ import { TurnTailNodeView } from '../src/client/chat/TurnTailNodeView.tsx'
 import { TurnProcessNodeView } from '../src/client/chat/TurnProcessNodeView.tsx'
 import { SystemPromptNodeView } from '../src/client/chat/SystemPromptRow.tsx'
 import { formatRunDuration } from '../src/client/chat/message-chrome.ts'
+import { modelPricingKey, type ModelPricingSnapshot } from '../src/client/model-pricing.ts'
 import { ChatSnapshotBuilder } from '../src/client/conversation-nodes/chat-snapshot-builder.ts'
 import { ProcessState } from '../src/client/conversation-nodes/process-groups.ts'
 import type { TurnProcessSpec } from '../src/client/contract/turn-process.ts'
@@ -308,6 +310,8 @@ function makeHarness(
   const chat = createChatStore().create()
   const transcriptView = createSnapshotStore<TranscriptViewMode>('compact')
   const performanceUsage = createSnapshotStore<'compact' | 'detailed'>('detailed')
+  const modelPricing = createSnapshotStore<ModelPricingSnapshot>({ status: 'idle', byRoute: new Map() })
+  const ensureModelPricing = vi.fn()
   const t = makeTranslate(zh, commonZh)
   const toolOwners: Array<{
     callId: string
@@ -368,6 +372,8 @@ function makeHarness(
         return (
           <TurnTailNodeView
             usePerformanceUsage={bindSnapshotSelector(performanceUsage)}
+            useModelPricing={bindSnapshotSelector(modelPricing)}
+            ensureModelPricing={ensureModelPricing}
             {...nodeProps}
             node={nodeOwner.node}
             renderSlot={renderTurnTailSlot}
@@ -481,6 +487,9 @@ function makeHarness(
     setOutline: (value: unknown) => { outlineValue = value },
     chatScroll, forkAt, toolOwners,
     setPerformanceUsage: (mode: 'compact' | 'detailed') => { performanceUsage.set(mode) },
+    modelPricing,
+    ensureModelPricing,
+    setModelPricing: (snapshot: ModelPricingSnapshot) => { modelPricing.set(snapshot) },
     setGrouped: (value: ConversationGroupedView<ProcessGroupData> | undefined) => {
       grouped = value
       conversation.set({ ...conversation.getSnapshot() })
@@ -2984,6 +2993,73 @@ describe('ChatView', () => {
     expect(view.queryByRole('button', { name: /用量/ })).toBeNull()
     act(() => { h.setPerformanceUsage('detailed') })
     expect(view.getByRole('button', { name: /用量/ })).toBeTruthy()
+  })
+
+  it('adds the estimated cost to the Turn usage dialog once pricing is ready', () => {
+    const settled: AssistantMessageNode = {
+      kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1, blocks: [{ kind: 'text', text: 'answer' }],
+      timing: { stepStartTime: 1_000, firstTokenTime: 2_200, completedTime: 5_200 },
+      usage: { outputTokens: 40 },
+    }
+    const h = makeHarness({
+      nodes: [user(1, 'hi'), settled],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 20_000 }]]),
+      turnEnds: new Map([[1, 20]]),
+      turnUsages: new Map([[1, {
+        uncachedInputTokens: 1_000_000,
+        outputTokens: 500_000,
+        totalTokens: 1_500_000,
+        routes: [{ provider: 'deepseek', model: 'deepseek-chat' }],
+        attempts: [{
+          time: 2_000,
+          inputTokens: 1_000_000,
+          outputTokens: 500_000,
+          route: { provider: 'deepseek', model: 'deepseek-chat' },
+        }],
+      }]]),
+    })
+    const prices: ReadonlyMap<string, LlmModelPricing> = new Map([
+      [modelPricingKey('deepseek', 'deepseek-chat'), { inputCacheHit: 0, inputCacheMiss: 2, output: 3 }],
+    ])
+    h.setModelPricing({ status: 'ready', byRoute: prices })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(h.ensureModelPricing).toHaveBeenCalledOnce()
+    const trigger = view.getByRole('button', { name: /用量/ })
+    fireEvent.click(trigger)
+    expect(view.getByRole('dialog').textContent).toContain('费用3.50')
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    act(() => { h.setModelPricing({ status: 'ready', byRoute: new Map() }) })
+    fireEvent.click(trigger)
+    expect(view.getByRole('dialog').textContent).toContain('费用未配置价格')
+  })
+
+  it('prices a route-less retried attempt through the closing assistant route', () => {
+    const settled: AssistantMessageNode = {
+      kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1, blocks: [{ kind: 'text', text: 'answer' }],
+      requestConfig: { provider: 'deepseek', model: 'deepseek-chat' },
+      usage: { outputTokens: 40 },
+    }
+    const h = makeHarness({
+      nodes: [user(1, 'hi'), settled],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 20_000 }]]),
+      turnEnds: new Map([[1, 20]]),
+      turnUsages: new Map([[1, {
+        uncachedInputTokens: 1_000_000,
+        outputTokens: 0,
+        totalTokens: 1_000_000,
+        attempts: [{ time: 2_000, inputTokens: 1_000_000, outputTokens: 0 }],
+      }]]),
+    })
+    h.setModelPricing({
+      status: 'ready',
+      byRoute: new Map([
+        [modelPricingKey('deepseek', 'deepseek-chat'), { inputCacheHit: 0, inputCacheMiss: 2, output: 3 }],
+      ]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    fireEvent.click(view.getByRole('button', { name: /用量/ }))
+    expect(view.getByRole('dialog').textContent).toContain('费用2.00')
   })
 
   it('withholds the usage-details trigger when turn usage is outside the window', () => {

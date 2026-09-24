@@ -4,16 +4,20 @@
 // Mounted on 'conversation.composer.dock' so it sticks with the composer in the
 // active conversation scrollport (see ConversationRoot data-conversation-scroll).
 
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { InjectFace, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
 import type {} from '@deepseek-ai/dsh-session-stats/client'
-import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
+import {
+  estimateUsageByRouteCost, type CostEstimate, type TokenUsageProjection, type UsageByRouteProjection,
+} from '@deepseek-ai/dsh-token-meter/client'
 import type { ChatViewSlotProps, PerformanceUsageInjected } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
+import { formatCostAmount } from './cost-format.ts'
+import { modelPricingLookup } from '../model-pricing.ts'
 import { formatTokensPerSecond } from './message-chrome.ts'
 import { assistantStepReading } from '../contract/turn-metrics.ts'
 import { formatCacheHitPercent, formatExactTokens, formatTokens } from './token-format.ts'
@@ -232,8 +236,10 @@ function TimePill({ stats, t, dialog }: {
   )
 }
 
-function UsagePill({ usage, t, dialog }: {
+function UsagePill({ usage, cost, t, dialog }: {
   usage: TokenUsageProjection
+  /** Estimated session cost; absent while pricing is not ready or no route usage exists. */
+  cost?: CostEstimate | undefined
   t: ChatViewSlotProps['t']
   dialog: PillDialog
 }) {
@@ -286,6 +292,14 @@ function UsagePill({ usage, t, dialog }: {
               session that never wrote cache drops the row, as the per-turn panel
               drops its absent fields. */}
           <dl className={dialogCss.details} data-session-stats-usage>
+            {cost !== undefined && (
+              <>
+                <dt>{t('message.turnUsage.cost')}</dt>
+                <dd>{cost.kind === 'priced'
+                  ? formatCostAmount(cost.amount)
+                  : t('message.turnUsage.unpriced')}</dd>
+              </>
+            )}
             {cacheHit !== null && (
               <>
                 <dt>{t('message.turnUsage.cacheHit')}</dt>
@@ -313,10 +327,14 @@ function UsagePill({ usage, t, dialog }: {
   )
 }
 
-export const StatsPills = memo(function StatsPills({ useChat, useProjection, usePerformanceUsage, t }: StatsPillsProps) {
+export const StatsPills = memo(function StatsPills({
+  useChat, useProjection, usePerformanceUsage, useModelPricing, ensureModelPricing, t,
+}: StatsPillsProps) {
   const mode = usePerformanceUsage(value => value)
   const settledNodes = useChat(s => s.legacy.nodes)
   const usage = useProjection('tokenUsage')
+  const usageByRoute: UsageByRouteProjection | undefined = useProjection('usageByRoute')
+  const pricing = useModelPricing(snapshot => snapshot)
   // One exclusive slot for both dialogs: opening either pill closes the other.
   const [openPill, setOpenPill] = useState<'time' | 'usage' | null>(null)
   // Every figure rides the durable sessionStats projection, so paging and
@@ -329,6 +347,12 @@ export const StatsPills = memo(function StatsPills({ useChat, useProjection, use
   // billing (e.g. every request failed) shows its counts without a usage pill.
   const hasTokens = usage !== undefined
     && (billedInputTokens(usage) > 0 || usage.outputTokens > 0)
+  useEffect(() => {
+    if (hasTokens) ensureModelPricing()
+  }, [ensureModelPricing, hasTokens])
+  const cost = pricing.status === 'ready' && usageByRoute !== undefined
+    ? estimateUsageByRouteCost(usageByRoute, modelPricingLookup(pricing.byRoute))
+    : undefined
   if (mode === 'compact') {
     const speed = stats.decodeMs > 0
       ? t('message.tokensPerSecond', { tps: formatTokensPerSecond(stats.decodeTokens / (stats.decodeMs / 1_000)) })
@@ -360,6 +384,7 @@ export const StatsPills = memo(function StatsPills({ useChat, useProjection, use
       {hasTokens && (
         <UsagePill
           usage={usage}
+          cost={cost}
           t={t}
           dialog={{
             open: openPill === 'usage',

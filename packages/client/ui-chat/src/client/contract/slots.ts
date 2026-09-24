@@ -22,6 +22,8 @@ import type {
 } from './snapshot.ts'
 import type { TurnProcessSpec } from './turn-process.ts'
 import type { PerformanceUsageMode } from '../../chat-settings.ts'
+import type { GlobalUsageSnapshot } from '../global-usage.ts'
+import type { ModelPricingSnapshot } from '../model-pricing.ts'
 
 /** Selector hook over the current Conversation binding's Chat target. */
 export type UseChat = SnapshotSelectorHook<ChatSnapshot>
@@ -170,12 +172,29 @@ export interface ChatScrollPosition {
   readonly scrollTop: number
 }
 
-/** Shared settings source for the performance row, composer, and turn tail. */
+/** Shared settings sources for the performance row, composer, and turn tail. */
 export interface PerformanceUsageInjected {
   hooks: {
     /** Accepted performance and usage detail preference. */
     performanceUsage: ObservableSnapshot<PerformanceUsageMode>
+    /** Lazy model pricing status and validated per-route prices. */
+    modelPricing: ObservableSnapshot<ModelPricingSnapshot>
   }
+  /**
+   * Ask the plugin-owned pricing policy for its first read. Idempotent; a
+   * surface calls it only once it renders or enables usage data.
+   */
+  ensureModelPricing(): void
+}
+
+/** Cross-session usage source for the composer cost reading. */
+export interface GlobalCostInjected {
+  hooks: {
+    /** Aggregated all-Session usage projection. */
+    globalUsage: ObservableSnapshot<GlobalUsageSnapshot>
+  }
+  /** Ask the plugin-owned aggregation policy for its first cross-Session read. */
+  ensureGlobalUsage(): void
 }
 
 /** Business callbacks injected into the Chat view. */

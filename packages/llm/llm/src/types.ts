@@ -220,6 +220,40 @@ export interface LlmImageRequestPricing {
   priceImages(images: readonly ImageBlock[]): readonly LlmImageRequestPrice[]
 }
 
+/** One first-match time-of-day price band for one exact model route. */
+export interface LlmTimeOfDayPrice {
+  /** Inclusive `HH:mm` start aligned to 30 minutes, interpreted in the pricing's UTC offset. */
+  start: string
+  /** Exclusive `HH:mm` end aligned to 30 minutes; a value below `start` wraps past midnight. */
+  end: string
+  /** Price per 1,000,000 cached input tokens within this band. */
+  inputCacheHit: number
+  /** Price per 1,000,000 uncached input and cache-write tokens within this band. */
+  inputCacheMiss: number
+  /** Price per 1,000,000 output tokens within this band. */
+  output: number
+}
+
+/**
+ * Per-million-token prices for one exact provider/model route.
+ *
+ * Base prices apply outside every band; bands are matched in order and the
+ * first match wins. `utcOffsetMinutes` defaults to 480 (UTC+8) when a consumer
+ * computes cost. Cache-write tokens are billed at `inputCacheMiss`.
+ */
+export interface LlmModelPricing {
+  /** Base price per 1,000,000 cached input tokens. */
+  inputCacheHit: number
+  /** Base price per 1,000,000 uncached input and cache-write tokens. */
+  inputCacheMiss: number
+  /** Base price per 1,000,000 output tokens. */
+  output: number
+  /** Minutes added to UTC before selecting a time band; defaults to 480 (UTC+8). */
+  utcOffsetMinutes?: number
+  /** Ordered first-match time-of-day bands; omitted means base prices always apply. */
+  timeBands?: readonly LlmTimeOfDayPrice[]
+}
+
 /** Display metadata for one registered provider route. */
 export interface LlmProviderInfo {
   /** Provider route key used by {@link GenerateOptions.provider}. */

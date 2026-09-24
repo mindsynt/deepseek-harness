@@ -22,6 +22,7 @@ import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { ModelsOperations } from './operations.ts'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { en } from './locales.ts'
+import { ModelPricingFields } from './ModelPricingFields.tsx'
 import { ModelReasoningEfforts } from './ModelReasoningEfforts.tsx'
 import { ModelRow } from './ModelRow.tsx'
 import styles from './ModelsSection.module.css'
@@ -172,6 +173,10 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   const [candidateQuery, setCandidateQuery] = useState('')
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
+  // Row positions shift under the row-keyed component instances, so a removal
+  // or reset must remount every pricing editor rather than let one row's text
+  // buffers render over the next row's draft.
+  const [pricingEpoch, setPricingEpoch] = useState(0)
   // Capacities are edited as text, so a field's keystrokes are held here rather
   // than re-derived from the parsed count on every change — that would rewrite
   // `1000` to `1K` mid-word. Unreadable text is kept past blur so the refusal
@@ -335,7 +340,10 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
               type="button"
               className={styles['linkButton']}
               disabled={disabled}
-              onClick={props.onReset}
+              onClick={() => {
+                setPricingEpoch(current => current + 1)
+                props.onReset?.()
+              }}
             >
               {t('resetModels')}
             </button>
@@ -372,6 +380,16 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                 onChange={(next) => { onChange(models.map((row, at) => at === index ? next : row)) }}
               />
             }
+            pricing={
+              <ModelPricingFields
+                key={`pricing-${String(pricingEpoch)}`}
+                model={model}
+                position={index + 1}
+                disabled={disabled}
+                t={t}
+                onChange={(next) => { onChange(models.map((row, at) => at === index ? next : row)) }}
+              />
+            }
             expanded={expanded.has(index)}
             disabled={disabled}
             t={t}
@@ -389,6 +407,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             onChange={(next) => { onChange(models.map((row, at) => at === index ? next : row)) }}
             onToggle={() => { toggleExpanded(index) }}
             onRemove={() => {
+              setPricingEpoch(current => current + 1)
               onChange(models.filter((_model, at) => at !== index))
               setExpanded((current) => {
                 const next = new Set<number>()

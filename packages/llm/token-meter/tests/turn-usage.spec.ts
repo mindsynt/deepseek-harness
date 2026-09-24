@@ -78,6 +78,15 @@ describe('deriveTurnTokenUsage', () => {
       cacheWriteTokens: 0,
       reasoningTokens: 8,
       routes: [{ provider: 'deepseek', model: 'deepseek-chat' }],
+      attempts: [{
+        time: 3,
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheReadTokens: 50,
+        cacheWriteTokens: 0,
+        reasoningTokens: 8,
+        route: { provider: 'deepseek', model: 'deepseek-chat' },
+      }],
     })
   })
 
@@ -132,6 +141,16 @@ describe('deriveTurnTokenUsage', () => {
       outputTokens: 30,
       totalTokens: 240,
       cacheReadTokens: 70,
+      attempts: [
+        { time: 3, inputTokens: 100, outputTokens: 20, cacheReadTokens: 50 },
+        {
+          time: 7,
+          inputTokens: 40,
+          outputTokens: 10,
+          cacheReadTokens: 20,
+          route: { provider: 'deepseek', model: 'deepseek-chat' },
+        },
+      ],
     })
   })
 
@@ -201,7 +220,23 @@ describe('deriveTurnTokenUsage', () => {
       event(7, 'step/end', { turn: 1, step: 2 }),
       event(8, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
     ]
-    expect(deriveTurnTokenUsage(events)).toEqual({ uncachedInputTokens: 200, outputTokens: 40, totalTokens: 345 })
+    expect(deriveTurnTokenUsage(events)).toEqual({
+      uncachedInputTokens: 200,
+      outputTokens: 40,
+      totalTokens: 345,
+      attempts: [
+        {
+          time: 3,
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 50,
+          cacheWriteTokens: 5,
+          reasoningTokens: 2,
+          route: { provider: 'deepseek', model: 'deepseek-chat' },
+        },
+        { time: 6, inputTokens: 100, outputTokens: 20 },
+      ],
+    })
   })
 
   it('sums multiple steps and preserves distinct attributed routes', () => {
@@ -223,6 +258,22 @@ describe('deriveTurnTokenUsage', () => {
       routes: [
         { provider: 'deepseek', model: 'deepseek-chat' },
         { provider: 'openai', model: 'gpt-5' },
+      ],
+      attempts: [
+        {
+          time: 3,
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 50,
+          route: { provider: 'deepseek', model: 'deepseek-chat' },
+        },
+        {
+          time: 6,
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 50,
+          route: { provider: 'openai', model: 'gpt-5' },
+        },
       ],
     })
   })

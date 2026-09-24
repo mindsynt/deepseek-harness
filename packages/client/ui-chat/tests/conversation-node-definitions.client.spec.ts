@@ -1608,6 +1608,15 @@ describe('built-in conversation node Definitions', () => {
       cacheWriteTokens: 1,
       reasoningTokens: 1,
       routes: [{ provider: 'fake', model: 'fake' }],
+      attempts: [{
+        time: 1_700_000_000_003,
+        inputTokens: 10,
+        outputTokens: 4,
+        cacheReadTokens: 2,
+        cacheWriteTokens: 1,
+        reasoningTokens: 1,
+        route: { provider: 'fake', model: 'fake' },
+      }],
     })
   })
 

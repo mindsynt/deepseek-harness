@@ -3,6 +3,14 @@ import type {
   ConversationLocation, ConversationViewNode, ModelRetryNode, RunningToolCall,
   ToolCallBlock,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { TurnTokenUsage } from '@deepseek-ai/dsh-token-meter/client'
+
+/** Turn-token accounting owned by the token meter, re-exported as Chat's node currency. */
+export type {
+  TurnAttemptUsage,
+  TurnTokenUsage,
+  TurnTokenUsageRoute,
+} from '@deepseek-ai/dsh-token-meter/client'
 
 /** Final Chat render unit produced by a Chat business Definition. */
 export interface ChatConversationViewNode extends ConversationViewNode {
@@ -57,29 +65,6 @@ export interface ManualCompactionChatData {
 export interface RetryChatData {
   readonly attempts: readonly ModelRetryNode[]
   readonly current: ModelRetryNode
-}
-
-/** One provider/model route that contributed a billed request attempt. */
-export interface TurnTokenUsageRoute {
-  readonly provider: string
-  readonly model: string
-}
-
-/** Exact provider-reported token accounting for every attempt in one completed Turn. */
-export interface TurnTokenUsage {
-  /** Sum of uncached prompt input across all attempts. */
-  readonly uncachedInputTokens: number
-  readonly outputTokens: number
-  /** Exact aggregate prompt plus output total across all attempts. */
-  readonly totalTokens: number
-  /** Present only when every attempt reported the bucket. */
-  readonly cacheReadTokens?: number
-  /** Present only when every attempt reported the bucket. */
-  readonly cacheWriteTokens?: number
-  /** Output subset, present only when every attempt reported it. */
-  readonly reasoningTokens?: number
-  /** Present only when every billed attempt has provider/model attribution. */
-  readonly routes?: readonly TurnTokenUsageRoute[]
 }
 
 /** Turn-local footer row that owns actions and optional feature contributions. */

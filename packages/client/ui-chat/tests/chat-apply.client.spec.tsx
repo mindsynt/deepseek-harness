@@ -39,8 +39,20 @@ const SID = 'session-1' as SessionId
 async function bench() {
   const runtime = await SlotTestRuntime.create()
   const chatSettings = stubConfigForm<ChatSettings>()
+  const describeStore = createSnapshotStore({
+    status: 'ready' as const,
+    view: { writable: true, hasDocument: false, namespaces: [] },
+    error: null,
+  })
+  const describe = {
+    getSnapshot: () => describeStore.getSnapshot(),
+    subscribe: (listener: () => void) => describeStore.subscribe(listener),
+    ensure: vi.fn(async () => {}),
+    acceptView: vi.fn(),
+  }
   runtime.ctx.provide('configForms', {
     developerTools: { enabled: createSnapshotStore(true) },
+    describe: () => describe,
     get: (namespace: string) => namespace === CHAT_SETTINGS_NAMESPACE
       ? chatSettings.scope
       : stubConfigForm().scope,
@@ -61,8 +73,10 @@ async function bench() {
     }),
     openSession,
   } as never)
+  const listConfigurableProviders = vi.fn(async () => ({ ok: true as const, value: [] }))
   runtime.remote.provideNamespaces({
     session: { openWorkspacePath: vi.fn(async () => ({ ok: true, value: { opened: true } })) },
+    llm: { listConfigurableProviders },
   })
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
@@ -80,7 +94,7 @@ async function bench() {
   const chat = await runtime.mount({ inject: [...injectChat], apply: applyChat })
   const sourceDescriptor = provide.mock.calls[0]?.[0]
   if (sourceDescriptor === undefined) throw new Error('ui-chat did not provide its standard source')
-  return { runtime, conversation, chat, chatSettings, sourceDescriptor }
+  return { runtime, conversation, chat, chatSettings, sourceDescriptor, describeStore, listConfigurableProviders }
 }
 
 function storeOf(runtime: SlotTestRuntime, key: 'conversation.session' | 'conversation.session.header' | 'conversation.view') {
@@ -102,10 +116,60 @@ describe('Chat apply wiring', () => {
     expect(b.runtime.slots.spec('conversation.chat.node'))
       .toMatchObject({ kind: 'keyed', scope: 'session' })
     expect(b.runtime.slots.entries('conversation.composer.dock').map(row => row.options.id))
-      .toEqual(['stats'])
+      .toEqual(['stats', 'cost'])
     expect(b.runtime.slots.entries('settings.general.item').map(row => row.options.id))
       .toEqual(['transcript-view', 'performance-usage', 'link-opening', 'composer-enter'])
     await b.runtime.dispose()
+  })
+
+  it('keeps pricing lazy until usage asks, then follows adapter and reconnect events', async () => {
+    const b = await bench()
+    try {
+      const stats = b.runtime.slots.entries('conversation.composer.dock')
+        .find(entry => entry.options.id === 'stats')!
+      const injected = (stats.inject as () => Pick<PerformanceUsageRowInjected, 'ensureModelPricing'>)()
+      expect(b.listConfigurableProviders).not.toHaveBeenCalled()
+
+      // Background lifecycle events alone never start the pricing RPC.
+      b.runtime.remote.emit('llm/adapters-updated', [])
+      b.runtime.ctx.emit('connection/reset')
+      expect(b.listConfigurableProviders).not.toHaveBeenCalled()
+
+      injected.ensureModelPricing()
+      await vi.waitFor(() => { expect(b.listConfigurableProviders).toHaveBeenCalledTimes(1) })
+      b.runtime.remote.emit('llm/adapters-updated', [])
+      await vi.waitFor(() => { expect(b.listConfigurableProviders).toHaveBeenCalledTimes(2) })
+      b.runtime.ctx.emit('connection/reset')
+      await vi.waitFor(() => { expect(b.listConfigurableProviders).toHaveBeenCalledTimes(3) })
+
+      await b.chat.dispose()
+      b.runtime.remote.emit('llm/adapters-updated', [])
+      b.runtime.ctx.emit('connection/reset')
+      expect(b.listConfigurableProviders).toHaveBeenCalledTimes(3)
+    } finally {
+      await b.runtime.dispose()
+    }
+  })
+
+  it('exposes the DSH-wide cost source to the composer row on demand', async () => {
+    const b = await bench()
+    try {
+      const cost = b.runtime.slots.entries('conversation.composer.dock')
+        .find(entry => entry.options.id === 'cost')!
+      const inject = cost.inject
+      if (inject === undefined) throw new Error('cost entry has no inject face')
+      const face = inject()
+      const ensureGlobalUsage = face['ensureGlobalUsage']
+      if (typeof ensureGlobalUsage !== 'function') throw new Error('cost entry has no global usage ask')
+      const hooks = face['hooks'] as { globalUsage?: { getSnapshot(): { status: string } } } | undefined
+      const globalUsage = hooks?.globalUsage
+      if (globalUsage === undefined) throw new Error('cost entry has no global usage source')
+      expect(globalUsage.getSnapshot().status).toBe('idle')
+      Reflect.apply(ensureGlobalUsage, undefined, [])
+      await vi.waitFor(() => { expect(globalUsage.getSnapshot().status).toBe('ready') })
+    } finally {
+      await b.runtime.dispose()
+    }
   })
 
   it('mirrors the Host transcript preference into its Settings row', async () => {
@@ -137,10 +201,12 @@ describe('Chat apply wiring', () => {
     expect(face.hooks.performanceUsage.getSnapshot()).toBe('compact')
     for (const entry of [
       b.runtime.slots.entries('conversation.composer.dock').find(entry => entry.options.id === 'stats')!,
+      b.runtime.slots.entries('conversation.composer.dock').find(entry => entry.options.id === 'cost')!,
       b.runtime.slots.entries('conversation.chat.node').find(entry => entry.options.key === 'turn-tail')!,
     ]) {
-      const injected = (entry.inject as () => Pick<PerformanceUsageRowInjected, 'hooks'>)()
+      const injected = (entry.inject as () => Pick<PerformanceUsageRowInjected, 'hooks' | 'ensureModelPricing'>)()
       expect(injected.hooks.performanceUsage).toBe(face.hooks.performanceUsage)
+      expect(injected.hooks.modelPricing).toBe(face.hooks.modelPricing)
     }
     await b.runtime.dispose()
   })

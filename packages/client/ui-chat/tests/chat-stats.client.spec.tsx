@@ -5,11 +5,15 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type {
   AssistantMessageNode, ChatSnapshot, LegacyConversationSlice, ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { LlmModelPricing } from '@deepseek-ai/dsh-llm/types'
+import type { UsageByRouteProjection, UsageByRouteSlot } from '@deepseek-ai/dsh-token-meter/client'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { StatsPills, deriveStats, formatDuration, type StatsPillsProps } from '../src/client/chat/StatsPills.tsx'
 import { formatTokens } from '../src/client/chat/token-format.ts'
+import { modelPricingKey, type ModelPricingSnapshot } from '../src/client/model-pricing.ts'
 import { en, zh } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
@@ -144,8 +148,36 @@ describe('StatsPills', () => {
   function props(
     source: { getSnapshot(): ChatSnapshot; subscribe(fn: () => void): () => void },
     values: Record<string, unknown> = { tokenUsage: USAGE },
+    pricing: ModelPricingSnapshot = { status: 'idle', byRoute: new Map() },
+    ensureModelPricing: StatsPillsProps['ensureModelPricing'] = vi.fn(),
   ): StatsPillsProps {
-    return { usePerformanceUsage: selector => selector('detailed'), useChat: bindSnapshotSelector(source), useProjection: projections(values), t: tEn }
+    return {
+      usePerformanceUsage: selector => selector('detailed'),
+      useChat: bindSnapshotSelector(source),
+      useProjection: projections(values),
+      useModelPricing: bindSnapshotSelector(createSnapshotStore(pricing)),
+      ensureModelPricing,
+      t: tEn,
+    }
+  }
+
+  /** An all-zero route slot. */
+  function slot(overrides: Partial<UsageByRouteSlot> = {}): UsageByRouteSlot {
+    return {
+      uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, ...overrides,
+    }
+  }
+
+  /** One billed route whose first half-hour slot carries `active`; the rest are zero. */
+  function routeUsage(provider: string, model: string, active: Partial<UsageByRouteSlot>): UsageByRouteProjection {
+    const first = slot(active)
+    const slots = Array.from({ length: 48 }, () => slot())
+    slots[0] = first
+    return { routes: [{ provider, model, totals: first, slots }] }
+  }
+
+  function pricing(overrides: Partial<LlmModelPricing> = {}): LlmModelPricing {
+    return { inputCacheHit: 0, inputCacheMiss: 0, output: 0, ...overrides }
   }
 
   function tokenUsage(cacheReadTokens: number, uncachedInputTokens: number) {
@@ -279,6 +311,63 @@ describe('StatsPills', () => {
     expect(tokens.textContent).toContain('Output5 tok')
     // The time split lives on the counts pill's own dialog, not here.
     expect(dialog.textContent).not.toContain('LLM time')
+  })
+
+  it('asks for pricing once tokens exist and shows the estimated amount priced by route', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const ensureModelPricing = vi.fn<StatsPillsProps['ensureModelPricing']>()
+    const view = render(<StatsPills {...props(source, {
+      tokenUsage: USAGE,
+      usageByRoute: routeUsage('deepseek', 'deepseek-chat', {
+        uncachedInputTokens: 1_000_000,
+        outputTokens: 500_000,
+      }),
+    }, {
+      status: 'ready',
+      byRoute: new Map([[modelPricingKey('deepseek', 'deepseek-chat'), pricing({ inputCacheMiss: 2, output: 3 })]]),
+    }, ensureModelPricing)} />)
+
+    expect(ensureModelPricing).toHaveBeenCalledOnce()
+    fireEvent.click(view.getByRole('button'))
+    const dialog = view.getByRole('dialog')
+    expect(dialog.textContent).toContain('Cost3.50')
+  })
+
+  it('marks a billed route unpriced instead of inventing an estimate', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const view = render(<StatsPills {...props(source, {
+      tokenUsage: USAGE,
+      usageByRoute: routeUsage('unknown', 'route', { uncachedInputTokens: 1 }),
+    }, { status: 'ready', byRoute: new Map() })} />)
+
+    fireEvent.click(view.getByRole('button'))
+    expect(view.getByRole('dialog').textContent).toContain('CostPrice not set')
+  })
+
+  it('omits the cost row while pricing is not ready or no route projection exists', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const projection = routeUsage('deepseek', 'deepseek-chat', { outputTokens: 1 })
+    const idle = render(<StatsPills {...props(source, {
+      tokenUsage: USAGE,
+      usageByRoute: projection,
+    })} />)
+    fireEvent.click(idle.getByRole('button'))
+    expect(idle.getByRole('dialog').textContent).not.toContain('Cost')
+    idle.unmount()
+
+    const unpricedProjection = render(<StatsPills {...props(source, { tokenUsage: USAGE }, {
+      status: 'ready',
+      byRoute: new Map([[modelPricingKey('deepseek', 'deepseek-chat'), pricing()]]),
+    })} />)
+    fireEvent.click(unpricedProjection.getByRole('button'))
+    expect(unpricedProjection.getByRole('dialog').textContent).not.toContain('Cost')
+  })
+
+  it('does not ask for pricing before any billed token exists', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const ensureModelPricing = vi.fn<StatsPillsProps['ensureModelPricing']>()
+    render(<StatsPills {...props(source, {}, { status: 'idle', byRoute: new Map() }, ensureModelPricing)} />)
+    expect(ensureModelPricing).not.toHaveBeenCalled()
   })
 
   it('closes the dialog on Escape or outside pointerdown', () => {

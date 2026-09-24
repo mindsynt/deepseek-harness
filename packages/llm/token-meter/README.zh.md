@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用 `ctx.tokenMeter` 估算会话当前的请求与上下文压力，或为单条消息计价。测量会回放持久会话日志，结果确定且不进行模型调用，因此压缩、占用显示与遥测可以共享同一结果。会话投影可用时，消费方可以读取 `tokenUsage`、`contextPressure` 与 `contextBreakdown`；文本和没有图片定价的路由采用近似的固定启发式规则，存在声明时应用视觉 token 定价，文件则按模型可见的句柄文本计价。只有请求 envelope 完全相同时才复用提供方报告的用量；本包不添加模型可见内容，也不在 loop 中做决策。
+使用 `ctx.tokenMeter` 估算会话当前的请求与上下文压力，或为单条消息计价。测量会回放持久会话日志，结果确定且不进行模型调用，因此压缩、占用显示与遥测可以共享同一结果。会话投影可用时，消费方可以读取 `tokenUsage`、`contextPressure`、`contextBreakdown`、按路由的 `usageByRoute` 与按 UTC 日的 `usageByDay`；文本和没有图片定价的路由采用近似的固定启发式规则，存在声明时应用视觉 token 定价，文件则按模型可见的句柄文本计价。只有请求 envelope 完全相同时才复用提供方报告的用量；本包不添加模型可见内容，也不在 loop 中做决策。
 
 ## 目录
 
@@ -46,13 +46,15 @@ const price = ctx.tokenMeter.estimateMessage(message)
 
 ### 会话投影
 
-当组合提供 `ctx.sessionProjections` 时，token-meter 注册三个投影单元。`tokenUsage` 携带完整持久日志中的 `uncachedInputTokens`、`outputTokens`、`cacheReadTokens` 与 `cacheWriteTokens`。最终 assistant 消息样本会替换同一次尝试的流式用量；`llm/retry-started` 会结束该替换范围，因此同一步骤中的重试会贡献另一次计费用量。`contextPressure` 携带可选 `pressureTokens`（提供方报告的最新提示词规模）、可选 `projectedTokens`（下一个请求的提示词将花费多少）与来自最新一条 `request/context` 记录的可选 `contextWindow`。`contextBreakdown` 携带启发式 `systemTokens`、`toolsTokens` 与 `messageTokens`——上下文的构成，而非提供方计费规模。卸载插件会移除全部三个键。
+当组合提供 `ctx.sessionProjections` 时，token-meter 注册五个投影单元。`tokenUsage` 携带完整持久日志中的 `uncachedInputTokens`、`outputTokens`、`cacheReadTokens` 与 `cacheWriteTokens`。最终 assistant 消息样本会替换同一次尝试的流式用量；`llm/retry-started` 会结束该替换范围，因此同一步骤中的重试会贡献另一次计费用量。`contextPressure` 携带可选 `pressureTokens`（提供方报告的最新提示词规模）、可选 `projectedTokens`（下一个请求的提示词将花费多少）与来自最新一条 `request/context` 记录的可选 `contextWindow`。`contextBreakdown` 携带启发式 `systemTokens`、`toolsTokens` 与 `messageTokens`——上下文的构成，而非提供方计费规模。`usageByRoute` 把相同的提供方用量样本按 provider/model 路由拆入一个 UTC 日内 48 个半小时桶，`assistant/message` 以其来源归因，`assistant/attempt` 以最新 `request/header` 配置归因（两者都没有时使用空 provider/model），并省略全部桶为零的路由；只要路由内容不变，其视图复用同一个对象引用。`usageByDay` 镜像同一套替换契约，但每条路由按每个 UTC 日保留一个纯 JSON 的 48 槽数组，使浏览器消费方可以汇总自然月而不必为每个会话保留桶数据。卸载插件会移除全部五个键。
 
 图片省略重新计算现有节点的价格，同时保留此前的用量锚点。固定引用启发式规则不计入 `offloaded` 元数据，因此一次省略决定不改变 `contextBreakdown` 或标量启发式总量，按路由的测量则把所选图片的视觉价格换成占位文本价格。
 
 `contextBreakdown` 把 surface 顺序中最后一个非空且存活的 `system/message` 归入 `systemTokens`；休眠的空节点不贡献 token，没有非空系统消息时为零。`messageTokens` 包含其余所有可见节点，包括被取代的提示词。两者之和始终等于 `measure().nodes[].heuristicTokens`，未计量替换、压缩和逐节点清空提示词之后也成立。`toolsTokens` 跟随最新 `request/header`。三个数字都使用固定启发式规则，而非路由图片定价或文件句柄投影；它们是近似构成，不是计费数据或 `projectedTokens`。
 
-`deriveTurnTokenUsage(events)` 为浏览器消费方把一个完整轮次折叠为精确的逐次尝试与整轮用量。生命周期证据缺失、计数不安全或精确总量矛盾时不返回结果；只有每次参与的尝试都报告可选缓存、推理或路由值时，相应汇总才会出现。
+`deriveTurnTokenUsage(events)` 为浏览器消费方把一个完整轮次折叠为精确的逐次尝试与整轮用量。生命周期证据缺失、计数不安全或精确总量矛盾时不返回结果；只有每次参与的尝试都报告可选缓存、推理或路由值时，相应汇总才会出现。结果会在既有聚合字段旁携带 `attempts`，包含每个结算事件的 `time`、路由与互斥桶。
+
+浏览器安全的 client 表面还导出 `mergeUsageByDay(projections)`、`usageMonths(projection, offsetOf)`、`usageByDayForMonth(projection, monthKey, offsetOf)`、`mergeUsageByRoute(projections)`、按桶拆分的 `estimateUsageByRouteBreakdown(projection, lookup)`，以及费用估算函数 `estimateTurnCost(usage, lookup, fallbackRoute?)`、`estimateUsageByRouteCost(projection, lookup)`，各自返回 `{ kind: 'priced', amount }` 或 `{ kind: 'unpriced' }`，以及 `USAGE_SLOT_MS`（30 分钟）。两者都按每 1,000,000 token 计算 `(uncachedInputTokens + cacheWriteTokens) * inputCacheMiss + cacheReadTokens * inputCacheHit + outputTokens * output`；`timeBands` 按本地分钟数匹配，首个匹配项生效，`utcOffsetMinutes` 默认 480（UTC+8），`end` 早于 `start` 的时段跨越午夜。reasoning token 已包含在 `outputTokens` 内，cache-write token 按 `inputCacheMiss` 计费。未披露路由的 attempt 在调用方提供收尾轮次路由时按 `fallbackRoute` 计价；否则任何计费 attempt 或非零路由缺少路由或路由定价时，估算结果为 `unpriced`。
 
 ### 组合
 
@@ -91,6 +93,10 @@ const price = ctx.tokenMeter.estimateMessage(message)
 | [`src/surface-projection.ts`](src/surface-projection.ts) | O(1) 投影单元的影价协议 |
 | [`src/usage-projection.ts`](src/usage-projection.ts) | `tokenUsage` 与 `contextPressure` 投影定义 |
 | [`src/breakdown-projection.ts`](src/breakdown-projection.ts) | `contextBreakdown` 投影定义 |
+| [`src/usage-by-route.ts`](src/usage-by-route.ts) | `usageByRoute` 投影：按路由的半小时 UTC 日桶 |
+| [`src/usage-by-day.ts`](src/usage-by-day.ts) | `usageByDay` 投影：按路由的 UTC 日桶，用于自然月汇总 |
+| [`src/usage-merge.ts`](src/usage-merge.ts) | 浏览器安全的按路由/按日合并与月份折叠 |
+| [`src/cost.ts`](src/cost.ts) | 面向轮次与按路由投影的浏览器安全计价逻辑 |
 | [`src/client.ts`](src/client.ts) | 面向投影消费方、可安全用于浏览器的客户端接口 |
 | [`src/turn-usage.ts`](src/turn-usage.ts) | 精确逐次尝试与逐 Turn 用量的纯 fold |
 
@@ -100,7 +106,7 @@ const price = ctx.tokenMeter.estimateMessage(message)
 
 ### 投影语义
 
-`contextBreakdown` 按 surface 顺序保留纯 JSON 的 `{ seq, heuristicTokens, system }` 条目，并复用测量服务的 plan/commit fold。其状态与 surface 转换成本为 O(当前保留 surface)，不是 O(1)，也不是 O(完整历史日志)；被替换条目和消息正文不保留。状态版本 5 使计入省略元数据的检查点失效。`contextPressure` 仍是标量影子价消费方：没有相邻 claim 的替换贡献零增量。用量 fold 保留一个最后样本槽，因为合法日志不会在更晚步骤报告用量后再次报告更早步骤的用量。
+`contextBreakdown` 按 surface 顺序保留纯 JSON 的 `{ seq, heuristicTokens, system }` 条目，并复用测量服务的 plan/commit fold。其状态与 surface 转换成本为 O(当前保留 surface)，不是 O(1)，也不是 O(完整历史日志)；被替换条目和消息正文不保留。状态版本 5 使计入省略元数据的检查点失效。`contextPressure` 仍是标量影子价消费方：没有相邻 claim 的替换贡献零增量。用量 fold 保留一个最后样本槽，因为合法日志不会在更晚步骤报告用量后再次报告更早步骤的用量。`usageByRoute` 在每条路由一个纯 JSON 的 48 槽数组旁保留相同的替换槽位，并以不可变路由数组为键缓存其视图，因此无关的 `request/header` 更新只改变状态、不会重新发布视图。`usageByDay` 在每条路由每个活跃 UTC 日一个 48 槽数组旁保留相同的替换槽位，同样以不可变路由数组为键缓存其视图。
 
 `./estimate` 导出无服务状态的文字与内容估算函数，供工具结果保留复用。图片的实际请求成本由模型适配器的 `imageRequestPricing` 提供。
 

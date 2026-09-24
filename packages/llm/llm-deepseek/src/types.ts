@@ -1,5 +1,5 @@
 /** Model catalog and request-local dependencies for DeepSeek Messages. */
-import type { ModelModality, SystemPromptUpdate, ResolvedRetryPolicy, ImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
+import type { ModelModality, SystemPromptUpdate, ResolvedRetryPolicy, ImageAttachmentAccess, LlmModelPricing } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type { AnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
@@ -20,6 +20,8 @@ export interface DeepSeekCatalogModel {
   maxTokens?: number
   /** Accepted request modalities; omission is text-only. */
   inputModalities?: ModelModality[]
+  /** Per-million-token prices for this exact model route, when the deployment declares them. */
+  pricing?: LlmModelPricing
   /**
    * Total-pixel budget replacing the published token-grid projection for one
    * deterministic request preview, or the 512-by-512 `low` preset; omission

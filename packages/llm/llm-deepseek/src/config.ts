@@ -3,8 +3,8 @@ import type { Volatile } from '@deepseek-ai/cordis'
 
 import z from '@deepseek-ai/schemastery'
 import { isVolatile } from '@deepseek-ai/cosmokit'
-import { resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
-import type { ModelModality, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
+import { LlmModelPricingSchema, resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
+import type { LlmModelPricing, ModelModality, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -87,6 +87,9 @@ const catalogModel: z<DeepSeekCatalogModel> = z.object({
   imagePixelBudget: z.union([z.number().step(1).min(1), 'low']),
   imageMaxBytes: z.number().step(1).min(1),
   systemPromptUpdate: z.const('in-history'),
+  // Union-of-one keeps an absent pricing object absent: schemastery otherwise
+  // materializes `{}`, which the required base prices would then reject.
+  pricing: z.union([LlmModelPricingSchema]),
 })
 
 export const Config = z.object({
@@ -125,6 +128,28 @@ const BASE_URL_ENV = 'DEEPSEEK_BASE_URL'
  */
 export type ResolvedDeepSeekOptions = DeepSeekConnectionOptions
 
+/**
+ * Validate and detach one model's declared pricing, if any.
+ * @param model - catalog entry whose pricing is being resolved.
+ * @returns validated detached pricing, or undefined when the entry declares none.
+ * @throws when programmatic configuration bypassed the schema with invalid prices.
+ */
+function resolveModelPricing(model: DeepSeekCatalogModel): LlmModelPricing | undefined {
+  if (model.pricing === undefined) return undefined
+  let pricing: LlmModelPricing
+  try {
+    pricing = LlmModelPricingSchema(model.pricing)
+  } catch (error) {
+    throw new Error(`llm-deepseek: catalog model "${model.id}" pricing is invalid`, { cause: error })
+  }
+  // An empty band can never match, so it would silently fall back to base
+  // prices; the schema cannot express the cross-field difference.
+  if ((pricing.timeBands ?? []).some(band => band.start === band.end)) {
+    throw new Error(`llm-deepseek: catalog model "${model.id}" pricing has a zero-length time band`)
+  }
+  return pricing
+}
+
 /** Resolve, validate, and detach the advisory model catalog. */
 function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): DeepSeekCatalogModel[] {
   const seen = new Set<string>()
@@ -148,6 +173,7 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
         `llm-deepseek: catalog model "${model.id}" maxTokens must be a positive integer`,
       )
     }
+    const pricing = resolveModelPricing(model)
     const inputModalities = model.inputModalities ?? ['text']
     if (inputModalities.length === 0) {
       throw new Error(`llm-deepseek: catalog model "${model.id}" inputModalities must not be empty`)
@@ -187,6 +213,7 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
       ...model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow },
       ...model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens },
       ...model.systemPromptUpdate === undefined ? {} : { systemPromptUpdate: model.systemPromptUpdate },
+      ...pricing === undefined ? {} : { pricing },
       inputModalities: [...inputModalities],
       ...hasImage
         ? {

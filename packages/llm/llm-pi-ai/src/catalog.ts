@@ -14,6 +14,8 @@
 
 import { builtinProviders, getBuiltinModels, getBuiltinProviders } from '@earendil-works/pi-ai/providers/all'
 import type { BuiltinProvider } from '@earendil-works/pi-ai/providers/all'
+import { LlmModelPricingSchema } from '@deepseek-ai/dsh-llm'
+import type { LlmModelPricing } from '@deepseek-ai/dsh-llm'
 import type {
   AnthropicMessagesCompat,
   Api,
@@ -597,6 +599,8 @@ export interface PiAiModelProfile {
    * mid-turn.
    */
   input?: PiAiModality[]
+  /** Per-million-token prices for this exact model route, when the deployment declares them. */
+  pricing?: LlmModelPricing
   /**
    * Selectable reasoning efforts. Absent inherits the installed catalog
    * entry's capability (a hand-declared model has none and does not reason);
@@ -943,6 +947,29 @@ export interface RouteCatalog {
 }
 
 /**
+ * Reject one model's invalid pricing before the model can be served. The
+ * schema boundary expires stored profiles, but programmatic configuration may
+ * bypass it; pricing is not carried onto pi-ai's model shape.
+ * @param provider - provider route key, for diagnostics.
+ * @param entry - the configured model entry.
+ * @throws PiAiCatalogError naming the model and schema diagnostic.
+ */
+function assertValidModelPricing(provider: string, entry: PiAiModelProfile): void {
+  if (entry.pricing === undefined) return
+  let pricing: LlmModelPricing
+  try {
+    pricing = LlmModelPricingSchema(entry.pricing)
+  } catch (error) {
+    invalid(provider, `model "${entry.id}" pricing is invalid (${String(error)})`)
+  }
+  // An empty band can never match, so it would silently fall back to base
+  // prices; the schema cannot express the cross-field difference.
+  if ((pricing.timeBands ?? []).some(band => band.start === band.end)) {
+    invalid(provider, `model "${entry.id}" pricing has a zero-length time band`)
+  }
+}
+
+/**
  * Materialize one route's catalog by merging the installed catalog defaults
  * under the configured entries. A route with no configured `models` serves the
  * installed catalog unchanged, which is what keeps an existing
@@ -1008,6 +1035,7 @@ export function resolveRouteModels(
   const resolveEntry = (entry: PiAiModelProfile): Model<Api> => {
     assertOfferedCompatFields(provider, `model "${entry.id}"`, entry.compat)
     if (entry.id.length === 0) invalid(provider, 'has a model with an empty id')
+    assertValidModelPricing(provider, entry)
     if (seen.has(entry.id)) invalid(provider, `lists model "${entry.id}" more than once`)
     seen.add(entry.id)
     const base = defaults.get(entry.id)

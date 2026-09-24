@@ -992,6 +992,70 @@ describe('ModelsSection', () => {
     ])
   })
 
+  it('edits model pricing and refuses an invalid record before writing', async () => {
+    const { mutate } = await mountDeepSeekCard({
+      mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
+    })
+    fireEvent.click(screen.getByText(en.customized))
+    expandRow(1)
+
+    const apply = screen.getByRole<HTMLButtonElement>('button', { name: en.apply })
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingCacheHit} 1`), { target: { value: '0.5' } })
+    expect(screen.getByText(`${en.model} 1: ${en.modelPricingInvalid}`)).toBeTruthy()
+    expect(apply.disabled).toBe(true)
+
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingCacheMiss} 1`), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingOutput} 1`), { target: { value: '2' } })
+    expect(screen.queryByText(`${en.model} 1: ${en.modelPricingInvalid}`)).toBeNull()
+    expect(apply.disabled).toBe(false)
+
+    // A band with blank times blocks on the time validator.
+    fireEvent.click(screen.getByLabelText(`${en.modelPricingAddBand} 1`))
+    expect(screen.getByText(`${en.model} 1: ${en.modelPricingTimeInvalid}`)).toBeTruthy()
+    expect(apply.disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingBandStart} 1-1`), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingBandEnd} 1-1`), { target: { value: '18:00' } })
+    // The band's own three prices are still required.
+    expect(screen.getByText(`${en.model} 1: ${en.modelPricingInvalid}`)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingCacheHit} 1-1`), { target: { value: '0.25' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingCacheMiss} 1-1`), { target: { value: '0.5' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingOutput} 1-1`), { target: { value: '1' } })
+
+    // An out-of-range offset blocks until corrected.
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingUtcOffset} 1`), { target: { value: '999' } })
+    expect(screen.getByText(`${en.model} 1: ${en.modelPricingOffsetInvalid}`)).toBeTruthy()
+    expect(apply.disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText(`${en.modelPricingUtcOffset} 1`), { target: { value: '480' } })
+    expect(screen.queryByText(`${en.model} 1: ${en.modelPricingOffsetInvalid}`)).toBeNull()
+    expect(apply.disabled).toBe(false)
+
+    fireEvent.click(apply)
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    expect(mutate.mock.calls[0]).toEqual([
+      'llm-deepseek',
+      [{
+        op: 'set',
+        path: ['models'],
+        value: [
+          {
+            ...DEFAULT_DEEPSEEK_MODELS[0],
+            pricing: {
+              inputCacheHit: 0.5,
+              inputCacheMiss: 1,
+              output: 2,
+              utcOffsetMinutes: 480,
+              timeBands: [{ start: '09:00', end: '18:00', inputCacheHit: 0.25, inputCacheMiss: 0.5, output: 1 }],
+            },
+          },
+          DEFAULT_DEEPSEEK_MODELS[1],
+        ],
+      }],
+      0,
+    ])
+    // A row without pricing never gains an empty record from a sibling edit.
+    expect((mutate.mock.calls[0]![1] as { value: object[] }[])[0]?.value[1]).not.toHaveProperty('pricing')
+  })
+
   it('settles a pasted id and refuses whitespace that would never match', async () => {
     await mountDeepSeekCard()
     fireEvent.click(screen.getByText(en.customized))

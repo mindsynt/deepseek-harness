@@ -50,6 +50,44 @@ describe('TurnUsagePanel', () => {
     expect(details.textContent).not.toContain('Total')
   })
 
+  it('shows the estimated cost amount when pricing is ready', () => {
+    const usage: TurnTokenUsage = {
+      uncachedInputTokens: 120,
+      outputTokens: 30,
+      totalTokens: 150,
+    }
+    const view = render(<TurnUsagePanel usage={usage} cost={{ kind: 'priced', amount: 0.0123 }} t={t} />)
+    fireEvent.click(view.getByRole('button'))
+    expect(view.getByRole('dialog').textContent).toContain('Cost0.01')
+  })
+
+  it('marks an unpriced route instead of inventing a price', () => {
+    const usage: TurnTokenUsage = {
+      uncachedInputTokens: 120,
+      outputTokens: 30,
+      totalTokens: 150,
+    }
+    const view = render(<TurnUsagePanel usage={usage} cost={{ kind: 'unpriced' }} t={t} />)
+    fireEvent.click(view.getByRole('button'))
+    expect(view.getByRole('dialog').textContent).toContain('CostPrice not set')
+  })
+
+  it('carries the per-turn cost beside the usage total', () => {
+    const usage: TurnTokenUsage = {
+      uncachedInputTokens: 120,
+      outputTokens: 30,
+      totalTokens: 150,
+    }
+    const priced = render(<TurnUsagePanel usage={usage} cost={{ kind: 'priced', amount: 0.0123 }} t={t} />)
+    expect(priced.getByRole('button').textContent).toBe('Usage 150 tok·Cost 0.01')
+    fireEvent.click(priced.getByRole('button'))
+    expect(priced.getByRole('dialog').textContent).toContain('Cost0.01')
+    priced.unmount()
+
+    const unpriced = render(<TurnUsagePanel usage={usage} cost={{ kind: 'unpriced' }} t={t} />)
+    expect(unpriced.getByRole('button').textContent).toBe('Usage 150 tok·Cost Price not set')
+  })
+
   it('omits unavailable optional facts instead of inventing values', () => {
     const usage: TurnTokenUsage = {
       uncachedInputTokens: 120,
@@ -66,6 +104,7 @@ describe('TurnUsagePanel', () => {
     expect(view.queryByText('Cached input')).toBeNull()
     expect(view.queryByText('Cache write')).toBeNull()
     expect(view.queryByText(/reasoning/)).toBeNull()
+    expect(view.getByRole('dialog').textContent).not.toContain('Cost')
   })
 
   it('keeps a partial cache hit below 100 in the dialog and closes on Escape or outside pointerdown', () => {

@@ -54,8 +54,19 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   const runtime = await SlotTestRuntime.create()
   const chatSettings = stubConfigForm<ChatSettings>()
   if (initialSettings !== undefined) chatSettings.publish({ value: initialSettings })
+  const describeStore = createSnapshotStore({
+    status: 'ready' as const,
+    view: { writable: true, hasDocument: false, namespaces: [] },
+    error: null,
+  })
   runtime.ctx.provide('configForms', {
     developerTools: { enabled: createSnapshotStore(true) },
+    describe: () => ({
+      getSnapshot: () => describeStore.getSnapshot(),
+      subscribe: (listener: () => void) => describeStore.subscribe(listener),
+      ensure: vi.fn(async () => {}),
+      acceptView: vi.fn(),
+    }),
     get: (id: string) => id === CHAT_SETTINGS_NAMESPACE ? chatSettings.scope : stubConfigForm().scope,
   } as never)
   const layout = { closeRightbar: vi.fn(), openRightbar: vi.fn() }
@@ -76,7 +87,10 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   const openWorkspacePath = vi.fn<ClientRemote['session']['openWorkspacePath']>(
     () => Promise.resolve({ ok: true, value: { opened: true } }),
   )
-  runtime.remote.provideNamespaces({ session: { openWorkspacePath } })
+  runtime.remote.provideNamespaces({
+    session: { openWorkspacePath },
+    llm: { listConfigurableProviders: vi.fn(async () => ({ ok: true as const, value: [] })) },
+  })
   const openSession = vi.fn<(id: SessionId) => void>()
   runtime.ctx.provide('uiWorkspace', {
     openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {

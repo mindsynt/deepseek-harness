@@ -18,7 +18,12 @@ const zeroBuckets = (): TokenUsageProjection => ({
   cacheWriteTokens: 0,
 })
 
-const bucketsFrom = (usage: TokenUsage): TokenUsageProjection => ({
+/**
+ * Normalize one provider usage sample into the four disjoint projection buckets.
+ * @param usage - provider-reported token usage.
+ * @returns uncached input, output, cache-read, and cache-write counts.
+ */
+export const usageBuckets = (usage: TokenUsage): TokenUsageProjection => ({
   uncachedInputTokens: usage.inputTokens,
   outputTokens: usage.outputTokens,
   cacheReadTokens: usage.cacheReadTokens ?? 0,
@@ -42,7 +47,8 @@ const addReplacing = (
   cacheWriteTokens: totals.cacheWriteTokens - (previous?.cacheWriteTokens ?? 0) + next.cacheWriteTokens,
 })
 
-const projectionSchema = z.object({
+/** The one strict schema for the four disjoint usage buckets. */
+export const usageBucketsSchema = z.object({
   uncachedInputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   cacheReadTokens: z.number().int().nonnegative(),
@@ -54,11 +60,11 @@ const projectionSchema = z.object({
  * shape; the state type is inferred from it.
  */
 const tokenUsageStateSchema = z.object({
-  totals: projectionSchema,
+  totals: usageBucketsSchema,
   last: z.object({
     turn: z.number().int().nonnegative(),
     step: z.number().int().nonnegative(),
-    buckets: projectionSchema,
+    buckets: usageBucketsSchema,
   }).nullable(),
 }).strict()
 
@@ -78,8 +84,12 @@ const pressureSchema: z.ZodType<ContextPressureProjection> = z.object({
 const pressureFrom = (usage: TokenUsage): number =>
   usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
 
-/** The usage one durable Assistant settlement reports for its attempt, if any. */
-function usageOf(event: SessionEvent): TokenUsage | undefined {
+/**
+ * The usage one durable Assistant settlement reports for its attempt, if any.
+ * @param event - committed session event to inspect.
+ * @returns provider-reported usage, or undefined when the event carries none.
+ */
+export function usageOf(event: SessionEvent): TokenUsage | undefined {
   if (event.type === 'assistant/message' && event.data.usage !== undefined) return event.data.usage
   if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') return undefined
   return lastAssistantStreamChunk(event.data.stream, 'usage')?.usage
@@ -133,7 +143,7 @@ export const tokenUsageProjectionDefinition = {
     const { turn, step } = event.data
     const usage: TokenUsage = sample
 
-    const buckets = bucketsFrom(usage)
+    const buckets = usageBuckets(usage)
     const previous = state.last !== null
       && state.last.turn === turn
       && state.last.step === step
@@ -146,7 +156,7 @@ export const tokenUsageProjectionDefinition = {
       last: { turn, step, buckets },
     }
   },
-  wire: { viewSchema: projectionSchema, view: state => state.totals },
+  wire: { viewSchema: usageBucketsSchema, view: state => state.totals },
 } satisfies ProjectionDefinition<'tokenUsage', TokenUsageState>
 
 /**

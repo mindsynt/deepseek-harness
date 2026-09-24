@@ -37,7 +37,7 @@ Host 配置 `credentialOnboarding` 默认为 `true`。Electron preload 标记会
 
 ### 编辑提供商
 
-收起的「自定义设置」折叠区承载精选的额外字段：两个家族都有 `baseURL`（deepseek 的占位符显示公共端点）、各适配器自己的模型目录，以及适配器未提供的 pi-ai 路由的**显示名称**与 **API 协议**。对 OpenAI Chat Completions 的 pi-ai 路由，折叠区还会提供**思考方言**选择：即路由级 `compat.thinkingFormat`，pi-ai 用它来说网关的推理方言（例如顶层 `enable_thinking` 选 `qwen`）。它按路由配置，因为方言属于端点；pi-ai 会跳过协议不接受该字段的模型。保持默认时会按路由 id 或端点域名继承已安装目录的方言；显式选择覆盖该推断。Profile `headers` 仍是 `cordis.patch.yml` 或 Cordis 配置中的部署配置，Models 页面不提供编辑器。Provider ID 保持固定：它是 settings 的键、其他每个 namespace 与每一条已记录会话引用的名字，也是页面读不回、因而搬不走的凭据引用词干。推理等级不做成提供商级控件：它是按模型的能力，提供商级的值只可能被设成某些模型会拒绝的档位。每个模型行可编辑 `id`、可选显示 `name`、可选 `contextWindow`/`maxTokens`、输入类型和它自己的推理等级；无关的模型字段在编辑后仍会保留。
+收起的「自定义设置」折叠区承载精选的额外字段：两个家族都有 `baseURL`（deepseek 的占位符显示公共端点）、各适配器自己的模型目录，以及适配器未提供的 pi-ai 路由的**显示名称**与 **API 协议**。对 OpenAI Chat Completions 的 pi-ai 路由，折叠区还会提供**思考方言**选择：即路由级 `compat.thinkingFormat`，pi-ai 用它来说网关的推理方言（例如顶层 `enable_thinking` 选 `qwen`）。它按路由配置，因为方言属于端点；pi-ai 会跳过协议不接受该字段的模型。保持默认时会按路由 id 或端点域名继承已安装目录的方言；显式选择覆盖该推断。Profile `headers` 仍是 `cordis.patch.yml` 或 Cordis 配置中的部署配置，Models 页面不提供编辑器。Provider ID 保持固定：它是 settings 的键、其他每个 namespace 与每一条已记录会话引用的名字，也是页面读不回、因而搬不走的凭据引用词干。推理等级不做成提供商级控件：它是按模型的能力，提供商级的值只可能被设成某些模型会拒绝的档位。每个模型行可编辑 `id`、可选显示 `name`、可选 `contextWindow`/`maxTokens`、输入类型和它自己的推理等级；无关的模型字段在编辑后仍会保留。模型还支持每 1,000,000 token 的**命中缓存**、**未命中缓存**与**输出**价格、可选 UTC 偏移以及有序的半小时时段；缓存写入 token 按未命中缓存价格计费，没有价格的模型行保存时不会写入 pricing 记录。
 
 `llm-deepseek` 的 DeepSeek 卡片编辑端点、凭据和模型目录。它使用 Messages，默认端点占位符为 `https://api.deepseek.com/anthropic`。
 

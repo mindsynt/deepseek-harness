@@ -9,6 +9,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { en } from './locales.ts'
+import { ModelPricingFields, validateModelPricing } from './ModelPricingFields.tsx'
 import { ModelRow } from './ModelRow.tsx'
 import styles from './ModelsSection.module.css'
 
@@ -16,7 +17,7 @@ import styles from './ModelsSection.module.css'
 export type DeepSeekModelDraft = Record<string, unknown>
 
 /** The catalog fields this editor writes. */
-type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens'
+type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens' | 'pricing'
 
 /** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
 type CapacityField = 'contextWindow' | 'maxTokens'
@@ -74,6 +75,7 @@ export interface DeepSeekModelsValidationFailure {
   /** Message key owned by the Models settings section. */
   key: 'modelIdRequired' | 'modelIdDuplicate' | 'modelNameInvalid' | 'modelContextInvalid'
   | 'modelMaxTokensInvalid' | 'modelReasoningInvalid'
+  | 'modelPricingInvalid' | 'modelPricingTimeInvalid' | 'modelPricingOffsetInvalid'
 }
 
 /** Convert a schema-validated catalog value into records without dropping hidden fields. */
@@ -126,6 +128,8 @@ export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidation
         || !Object.keys(efforts).some(level => level !== 'off'))) {
       return { index, key: 'modelReasoningInvalid' }
     }
+    const pricingFailure = validateModelPricing(model['pricing'])
+    if (pricingFailure !== undefined) return { index, key: pricingFailure }
   }
   return undefined
 }
@@ -170,6 +174,10 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   // because the rows they annotated are gone.
   const [editing, setEditing] = useState<ReadonlyMap<string, string>>(() => new Map())
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set())
+  // Row positions shift under the row-keyed component instances, so a removal
+  // or reset must remount every pricing editor rather than let one row's text
+  // buffers render over the next row's draft.
+  const [pricingEpoch, setPricingEpoch] = useState(0)
 
   const update = (index: number, key: CatalogField, value: unknown): void => {
     const next = props.models.map((model, at) => {
@@ -183,6 +191,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   }
 
   const remove = (index: number): void => {
+    setPricingEpoch(current => current + 1)
     setEditing((current) => {
       const next = new Map<string, string>()
       for (const [key, text] of current) {
@@ -205,6 +214,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   }
 
   const reset = (): void => {
+    setPricingEpoch(current => current + 1)
     setEditing(new Map())
     setExpanded(new Set())
     props.onReset()
@@ -287,6 +297,16 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                 inputField="inputModalities"
                 expanded={expanded.has(index)}
                 disabled={props.disabled}
+                pricing={
+                  <ModelPricingFields
+                    key={`pricing-${String(pricingEpoch)}`}
+                    model={model}
+                    position={index + 1}
+                    disabled={props.disabled}
+                    t={props.t}
+                    onChange={(next) => { props.onChange(props.models.map((row, at) => at === index ? next : row)) }}
+                  />
+                }
                 t={props.t}
                 contextWindow={capacityInput(model, index, 'contextWindow', props.defaultContextWindow)}
                 maxTokens={capacityInput(model, index, 'maxTokens', props.defaultMaxTokens)}

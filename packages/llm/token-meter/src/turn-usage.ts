@@ -9,6 +9,23 @@ export interface TurnTokenUsageRoute {
   readonly model: string
 }
 
+/** Exact provider-reported accounting for one billed request attempt in a Turn. */
+export interface TurnAttemptUsage {
+  /** Unix epoch milliseconds of the attempt's settlement event, used for time-of-day pricing. */
+  readonly time: number
+  /** Uncached prompt input tokens. */
+  readonly inputTokens: number
+  readonly outputTokens: number
+  /** Present when the attempt reported the bucket. */
+  readonly cacheReadTokens?: number
+  /** Present when the attempt reported the bucket. */
+  readonly cacheWriteTokens?: number
+  /** Output subset, present when the attempt reported it. */
+  readonly reasoningTokens?: number
+  /** Provider/model route, present when the attempt disclosed one. */
+  readonly route?: TurnTokenUsageRoute
+}
+
 /** Exact provider-reported token accounting for every attempt in one completed Turn. */
 export interface TurnTokenUsage {
   /** Sum of uncached prompt input across all attempts. */
@@ -24,9 +41,12 @@ export interface TurnTokenUsage {
   readonly reasoningTokens?: number
   /** Present only when every billed attempt has provider/model attribution. */
   readonly routes?: readonly TurnTokenUsageRoute[]
+  /** Exact per-attempt samples in settlement order, once the lifecycle is proven. */
+  readonly attempts?: readonly TurnAttemptUsage[]
 }
 
 interface NormalizedAttempt {
+  readonly time: number
   readonly inputTokens: number
   readonly outputTokens: number
   readonly totalTokens: number
@@ -78,7 +98,7 @@ function streamUsage(stream: SessionEvent<'assistant/message'>['data']['stream']
   return lastAssistantStreamChunk(stream, 'usage')?.usage
 }
 
-function normalizeUsage(usage: TokenUsage, route?: TurnTokenUsageRoute): NormalizedAttempt | undefined {
+function normalizeUsage(usage: TokenUsage, time: number, route?: TurnTokenUsageRoute): NormalizedAttempt | undefined {
   const {
     inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens, totalTokens,
   } = usage
@@ -113,6 +133,7 @@ function normalizeUsage(usage: TokenUsage, route?: TurnTokenUsageRoute): Normali
   }
 
   return {
+    time,
     inputTokens,
     outputTokens,
     totalTokens: exactTotal,
@@ -155,6 +176,15 @@ function aggregateAttempts(attempts: readonly NormalizedAttempt[]): TurnTokenUsa
     ...cacheWriteTokens === undefined ? {} : { cacheWriteTokens },
     ...reasoningTokens === undefined ? {} : { reasoningTokens },
     ...routes === undefined ? {} : { routes },
+    attempts: attempts.map(attempt => ({
+      time: attempt.time,
+      inputTokens: attempt.inputTokens,
+      outputTokens: attempt.outputTokens,
+      ...attempt.cacheReadTokens === undefined ? {} : { cacheReadTokens: attempt.cacheReadTokens },
+      ...attempt.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: attempt.cacheWriteTokens },
+      ...attempt.reasoningTokens === undefined ? {} : { reasoningTokens: attempt.reasoningTokens },
+      ...attempt.route === undefined ? {} : { route: attempt.route },
+    })),
   }
 }
 
@@ -182,9 +212,9 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
   let sawEnd = false
   let invalid = false
 
-  const closeOpen = (route?: TurnTokenUsageRoute): boolean => {
+  const closeOpen = (time: number, route?: TurnTokenUsageRoute): boolean => {
     if (state.kind !== 'open' || state.sample === undefined) return false
-    const normalized = normalizeUsage(state.sample, route)
+    const normalized = normalizeUsage(state.sample, time, route)
     if (normalized === undefined) return false
     attempts.push(normalized)
     return true
@@ -232,7 +262,7 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
       }
       const sample: TokenUsage | undefined = streamUsage(event.data.stream) ?? state.sample
       state = { kind: 'open', turn, step: event.data.step, ...(sample === undefined ? {} : { sample }) }
-      if (!closeOpen()) invalid = true
+      if (!closeOpen(event.time)) invalid = true
       else state = { kind: 'finishClosed', turn, step: event.data.step }
       continue
     }
@@ -245,7 +275,7 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
       }
       const sample = event.data.usage ?? streamUsage(event.data.stream)
       if (sample !== undefined) state = { ...state, sample }
-      if (!closeOpen(messageRoute(event.data.message))) invalid = true
+      if (!closeOpen(event.time, messageRoute(event.data.message))) invalid = true
       else state = { kind: 'settled', turn, step: event.data.step, by: 'message' }
       continue
     }
@@ -255,7 +285,7 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
         invalid = true
         continue
       }
-      if (state.kind === 'settled' || (state.kind === 'open' && !closeOpen())) invalid = true
+      if (state.kind === 'settled' || (state.kind === 'open' && !closeOpen(event.time))) invalid = true
       if (!invalid) state = { kind: 'settled', turn, step: event.data.step, by: 'retry' }
       continue
     }
@@ -265,7 +295,7 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
         invalid = true
         continue
       }
-      if (state.kind === 'open' && !closeOpen()) invalid = true
+      if (state.kind === 'open' && !closeOpen(event.time)) invalid = true
       if (!invalid) state = { kind: 'idle' }
     }
   }
