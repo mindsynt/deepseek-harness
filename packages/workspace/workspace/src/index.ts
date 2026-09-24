@@ -297,7 +297,7 @@ export class WorkspaceRegistry extends Service {
       const canonical = await realpathNormalize(path)
       // A Session can start outside the registry queue while directory preparation awaits I/O.
       if ((await this.listStoredHeaders()).length > 0 || sessions.list().length > 0) return undefined
-      return this.createCanonical(LOCAL_HOST_ID, canonical, title, true)
+      return this.createCanonical(LOCAL_HOST_ID, canonical, undefined, true)
     })
   }
 
