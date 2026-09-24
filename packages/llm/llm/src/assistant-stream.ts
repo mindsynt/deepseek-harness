@@ -495,7 +495,9 @@ function validateRecord(value: unknown): AssistantStreamRecord {
       try {
         chunk = snapshotChunk(record.chunk as StreamChunk)
       } catch (error: unknown) {
-        throw new TypeError('Assistant stream raw chunk must be a lossless JSON object', { cause: error })
+        const chunkType = (record.chunk as { type?: unknown }).type
+        const namedType = typeof chunkType === 'string' ? ` ${JSON.stringify(chunkType)}` : ''
+        throw new TypeError(`Assistant stream raw chunk${namedType} must be a lossless JSON object`, { cause: error })
       }
       return deepFreeze({ type: 'chunk', time, chunk })
     }

@@ -235,6 +235,14 @@ describe('AssistantStreamAccumulator', () => {
   ])('rejects malformed compact record %#', (record, message) => {
     expect(() => expandAssistantStream([record] as never)).toThrow(message)
   })
+
+  it('names the raw chunk type when a raw chunk is not lossless JSON', () => {
+    expect(() => expandAssistantStream([{
+      type: 'chunk',
+      time: 1,
+      chunk: { type: 'finish', reason: { kind: 'error', failure: { message: 'x', code: 'y', status: undefined } } },
+    }] as never)).toThrow('Assistant stream raw chunk "finish" must be a lossless JSON object')
+  })
 })
 
 /** Fragment array that counts index reads, so a scan's early exit is observable. */
