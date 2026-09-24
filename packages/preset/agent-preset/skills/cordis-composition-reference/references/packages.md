@@ -23,6 +23,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-api-terminal-controller` | yes | Session-owned interactive terminals with shell discovery, screen recovery and typed Remote control |
 | `@deepseek-ai/dsh-api-workspace-controller` | yes | Workspace Remote commands and reconnect-safe state transport |
 | `@deepseek-ai/dsh-api-workspace-files` | yes | Workspace file service and Client resource provider: bounded reads, directory listing, and live metadata over the workspaceFiles Remote namespace |
+| `@deepseek-ai/dsh-hosts-controller` | no | Host Remote owner for listing, adding, removing and checking GUI-managed SSH hosts |
 
 ## attachment
 
@@ -84,6 +85,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-client-ui-plan` | no | Plan mode controls, persistent transcript plan cards, and sidebar Markdown previews |
 | `@deepseek-ai/dsh-client-ui-plugin-manager` | yes | Plugin management for the dsh web client: the sidebar Plugins panel installs, enables, disables, retries, and composes installed plugin packages |
 | `@deepseek-ai/dsh-client-ui-reference` | no | Unified Web @file and @session reference source |
+| `@deepseek-ai/dsh-client-ui-remote-hosts` | no | Remote host management settings section over the generated hosts Remote namespace |
 | `@deepseek-ai/dsh-client-ui-renderer` | no | Browser UI renderer: React slot bindings, ctx.uiRenderer, and the assembled application root |
 | `@deepseek-ai/dsh-client-ui-schedule` | no | Read-only active Schedule catalog in the Web Session header |
 | `@deepseek-ai/dsh-client-ui-session` | no | Session Controller adapter for React and session-scoped slots |
@@ -409,8 +411,11 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-fs-ssh` | no | Filesystem provider over the shared POSIX SSH helper |
+| `@deepseek-ai/dsh-helper-installer` | yes | Remote SSH helper provisioning over the local OpenSSH client |
+| `@deepseek-ai/dsh-host-credentials` | yes | One stored SSH login per remote host, and the DSH-controlled OpenSSH configuration, identity and known_hosts it materializes |
 | `@deepseek-ai/dsh-sandbox-ssh` | no | Remote POSIX sandbox argv provider over the shared SSH helper |
 | `@deepseek-ai/dsh-ssh` | yes | Shared OpenSSH connection and versioned POSIX remote helper |
+| `@deepseek-ai/dsh-ssh-host-registry` | yes | One isolated SSH execution world per registered remote host |
 | `@deepseek-ai/dsh-subprocess-ssh` | no | Subprocess and terminal provider over the shared POSIX SSH helper |
 
 ## storage

@@ -114,6 +114,13 @@ export function deriveKeyRef(provider: string): string {
   return `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`
 }
 
+/** The string members of one serialized union node, in schema order. */
+function unionStrings(node: unknown): string[] {
+  const list = (node as { type?: string; list?: readonly { value?: unknown }[] } | undefined)
+  if (list?.type !== 'union' || list.list === undefined) return []
+  return list.list.map(entry => entry.value).filter((value): value is string => typeof value === 'string')
+}
+
 /**
  * The wire protocols a hand-declared route may name, read out of the owning
  * namespace's own schema. This stays a schema read rather than a wire field so
@@ -123,13 +130,6 @@ export function deriveKeyRef(provider: string): string {
  * @param schema - settings schema operations.
  * @returns the protocol identifiers, or an empty list when the schema has none.
  */
-/** The string members of one serialized union node, in schema order. */
-function unionStrings(node: unknown): string[] {
-  const list = (node as { type?: string; list?: readonly { value?: unknown }[] } | undefined)
-  if (list?.type !== 'union' || list.list === undefined) return []
-  return list.list.map(entry => entry.value).filter((value): value is string => typeof value === 'string')
-}
-
 export function protocolChoices(
   namespace: SettingsNamespaceView | undefined,
   schema: SettingsSchemaOperations,

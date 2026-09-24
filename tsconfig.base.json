@@ -105,6 +105,7 @@
       "@deepseek-ai/dsh-api-workspace-controller": ["./packages/api/workspace-controller/src/index.ts"],
       "@deepseek-ai/dsh-api-workspace-controller/client": ["./packages/api/workspace-controller/src/client/index.ts"],
       "@deepseek-ai/dsh-api-workspace-controller/types": ["./packages/api/workspace-controller/src/types.ts"],
+      "@deepseek-ai/dsh-hosts-controller/types": ["./packages/api/hosts-controller/src/types.ts"],
       "@deepseek-ai/dsh-typert-protocol": ["./packages/typert/protocol/src/index.ts"],
       "@deepseek-ai/dsh-typert-protocol/types": ["./packages/typert/protocol/src/types.ts"],
       "@deepseek-ai/dsh-typert-loader": ["./packages/typert/loader/src/index.ts"],

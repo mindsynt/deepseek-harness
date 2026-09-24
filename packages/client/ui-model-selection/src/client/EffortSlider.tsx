@@ -76,10 +76,20 @@ export function EffortSlider({
       onPreview(Math.min(last, Math.max(0, next)))
     }
     switch (event.key) {
-      case 'ArrowLeft': case 'ArrowUp': return move(index - 1)
-      case 'ArrowRight': case 'ArrowDown': return move(index + 1)
-      case 'Home': return move(0)
-      case 'End': return move(last)
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        move(index - 1)
+        return
+      case 'ArrowRight':
+      case 'ArrowDown':
+        move(index + 1)
+        return
+      case 'Home':
+        move(0)
+        return
+      case 'End':
+        move(last)
+        return
       case 'Enter': {
         event.preventDefault()
         event.stopPropagation()

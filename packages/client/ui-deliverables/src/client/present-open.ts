@@ -23,12 +23,20 @@ export type PresentedOpenState =
   | PresentedOpenPhase
   | { readonly phase: 'remoteUnavailable'; readonly hostId: string }
 
-/** Phase of one open state, whether or not it carries a remote host. */
+/**
+ * Phase of one open state, whether or not it carries a remote host.
+ * @param state - open state to read, absent when no gesture has published one.
+ * @returns the phase, or undefined when the state is unset.
+ */
 export function presentedOpenPhase(state: PresentedOpenState | undefined): PresentedOpenPhase | undefined {
   return typeof state === 'string' ? state : state?.phase
 }
 
-/** The remote host a remote-world refusal names, absent for every other state. */
+/**
+ * The remote host a remote-world refusal names, absent for every other state.
+ * @param state - open state to read.
+ * @returns the host reference when the state is a remote-world refusal.
+ */
 export function presentedOpenRemoteHost(state: PresentedOpenState | undefined): { readonly hostId: string } | undefined {
   return typeof state === 'object' ? state : undefined
 }

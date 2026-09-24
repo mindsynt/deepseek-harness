@@ -382,13 +382,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing>',
-        description: 'List one Host directory level.',
-        parameters: [{ name: 'path', description: 'directory path; absent selects the Host home.' }, { name: 'signal', description: 'cancellation for a superseded scan.' }],
+        description: 'List one directory level of the addressed execution world.',
+        parameters: [{ name: 'path', description: 'directory path; absent selects that world\'s anchor: the Harness home for the local world, the realm root for a remote host.' }, { name: 'signal', description: 'cancellation for a superseded scan.' }],
         returns: 'directory entries and breadcrumb ancestry.',
       },
       {
         signature: 'createDirectory(path: string, name: string): Promise<string>',
-        description: 'Create a child directory.',
+        description: 'Create a child directory in the addressed execution world.',
         parameters: [{ name: 'path', description: 'existing parent directory.' }, { name: 'name', description: 'child directory name.' }],
         returns: 'created absolute path.',
       },
@@ -400,9 +400,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Workspace Controller\'s Client service face.',
     methods: [
       {
-        signature: 'create(input: { path: string }): Promise<WorkspaceView>',
+        signature: 'create(input: { path: string; hostId?: string }): Promise<WorkspaceView>',
         description: 'Register an existing path as a Workspace.',
-        parameters: [{ name: 'input', description: 'Host create payload.' }],
+        parameters: [{ name: 'input', description: 'Host create payload: the path and the host that interprets it.' }],
         returns: 'the created or idempotently resolved Workspace.',
       },
       {
@@ -1033,7 +1033,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkspaceView',
-    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly hostId: string;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
   },
 ]
 

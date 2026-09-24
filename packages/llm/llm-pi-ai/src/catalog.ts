@@ -796,7 +796,7 @@ function providerCompatConsensus(provider: string): PiAiCompatProfile | undefine
     if (values.length !== models.length) continue
     if (values.every(value => value === values[0])) consensus[field] = values[0]
   }
-  return Object.keys(consensus).length === 0 ? undefined : consensus as PiAiCompatProfile
+  return Object.keys(consensus).length === 0 ? undefined : consensus
 }
 
 /** Every catalog provider that carries an inferable consensus, computed once. */
@@ -830,7 +830,7 @@ function mergeCompatDefaults(matches: readonly CatalogCompatDefault[]): PiAiComp
     const values = matches.map(match => (match.compat as Record<string, unknown>)[field])
     if (values.every(value => value !== undefined && value === values[0])) merged[field] = values[0]
   }
-  return Object.keys(merged).length === 0 ? undefined : merged as PiAiCompatProfile
+  return Object.keys(merged).length === 0 ? undefined : merged
 }
 
 /**
@@ -868,7 +868,7 @@ function inferredCompatDefaults(
   for (const [field, value] of Object.entries(inferred)) {
     if (gate[field] === 'offer') filtered[field] = value
   }
-  return Object.keys(filtered).length === 0 ? undefined : filtered as PiAiCompatProfile
+  return Object.keys(filtered).length === 0 ? undefined : filtered
 }
 
 /**
