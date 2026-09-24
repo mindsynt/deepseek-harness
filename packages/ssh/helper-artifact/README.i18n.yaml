@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ssh/helper-artifact/README.md
-README.md: ab04bac303485214c3f534b3a8aa26f02e8e5d9a
-README.zh.md: ea5940efccaaeaba942836318d0ab293d243580c
+/:
+  en: 1200b8b8003cb8d0
+  zh: c268d3e4715e8863
+/deepseek-ai-dsh-helper-artifact:
+  en: d3974057f87550eb
+  zh: 45f81c0e65aa4007
+/deepseek-ai-dsh-helper-artifact/summary:
+  en: b6a35a41c0c901d0
+  zh: d991e55db5228fea
+/deepseek-ai-dsh-helper-artifact/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-helper-artifact/use-this-package:
+  en: 2b1a12beb49219f1
+  zh: 3bfd4e5767f7c759
+/deepseek-ai-dsh-helper-artifact/understand-the-implementation:
+  en: 6b032f44af4f5a52
+  zh: a25a0255652ee6ed
+/deepseek-ai-dsh-helper-artifact/further-exploration:
+  en: e1223f50a54518d8
+  zh: 28fbfbab40d66318
+/deepseek-ai-dsh-helper-artifact/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-helper-artifact/model-experience/build-invocation:
+  en: f6e5ce9d5acd1a37
+  zh: d6361275c474eb42
+/deepseek-ai-dsh-helper-artifact/model-experience/build-invocation/what-the-model-sees:
+  en: 69ce2f55b496cc3c
+  zh: e62476178a41af35
+/deepseek-ai-dsh-helper-artifact/model-experience/build-invocation/token-effect:
+  en: a904c8e17aa20e49
+  zh: 1fe75adc8bb628ab
+/deepseek-ai-dsh-helper-artifact/model-experience/build-invocation/kv-cache-effect:
+  en: 68a6bb9c1aaab4ff
+  zh: b2f194f8c886a11b
+/deepseek-ai-dsh-helper-artifact/known-limitations-and-deferred-work:
+  en: 76681fa5233da12f
+  zh: 42b3cf7308520832
+/deepseek-ai-dsh-helper-artifact/known-limitations-and-deferred-work/dev-note:
+  en: cb70fc6618789622
+  zh: f2fc12e512d42518

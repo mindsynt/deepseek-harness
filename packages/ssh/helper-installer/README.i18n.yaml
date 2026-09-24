@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ssh/helper-installer/README.md
-README.md: ea2fb8e05f26a1c74743bcc8c0a046014a9a36bf
-README.zh.md: e8e02999f1355f312bfced533bb50fdfd4df0ad2
+/:
+  en: 34e2a831f843c27f
+  zh: 4825227ae8b38fc8
+/deepseek-ai-dsh-helper-installer:
+  en: 3441758377ed35ef
+  zh: d358b9e09801eb65
+/deepseek-ai-dsh-helper-installer/summary:
+  en: 3ee3ccff57bdf8b3
+  zh: af263f218e95e165
+/deepseek-ai-dsh-helper-installer/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-helper-installer/use-this-package:
+  en: 41c68589c262866e
+  zh: 427bf8dc8fe73f86
+/deepseek-ai-dsh-helper-installer/understand-the-implementation:
+  en: 62ef63a31121264e
+  zh: ce06414889dc6ce3
+/deepseek-ai-dsh-helper-installer/further-exploration:
+  en: 747ae27192ec0d47
+  zh: 839a1309b941322f
+/deepseek-ai-dsh-helper-installer/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-helper-installer/model-experience/installer-calls:
+  en: d2e48725c9073a64
+  zh: dc4e2caaa1b136c6
+/deepseek-ai-dsh-helper-installer/model-experience/installer-calls/what-the-model-sees:
+  en: ab0eec844bae712b
+  zh: 9caa6f40a3d7606c
+/deepseek-ai-dsh-helper-installer/model-experience/installer-calls/token-effect:
+  en: d0f0f419180a589f
+  zh: 3dc9adab754dbea0
+/deepseek-ai-dsh-helper-installer/model-experience/installer-calls/kv-cache-effect:
+  en: 24107c5eefd40b53
+  zh: a4a7b9bcf9aa28aa
+/deepseek-ai-dsh-helper-installer/known-limitations-and-deferred-work:
+  en: d9f42a42dfbed5d9
+  zh: 45c2826e86f63a8b
+/deepseek-ai-dsh-helper-installer/known-limitations-and-deferred-work/dev-note:
+  en: e93a8a2c6a0dfb86
+  zh: 61e043ef50704245

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-18-process-bound-browser-session.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-18-process-bound-browser-session.md
-2026-09-18-process-bound-browser-session.md: 867b1432d4d697d75a46d39e5d8082d1d68d4071
-2026-09-18-process-bound-browser-session.zh.md: 7de51ef59974099ac272eaf3c476235d9c2e81fb
+/agent-note-process-bound-browser-sessions:
+  en: 0acde15f445c4e23
+  zh: c9c1831bf40f2b62
+/agent-note-process-bound-browser-sessions/problem:
+  en: 1e99916f9661fcc9
+  zh: 5eb56730f9deed7c
+/agent-note-process-bound-browser-sessions/decision:
+  en: 87e8ea4b7ea51124
+  zh: 5ec115c8994a92cf
+/agent-note-process-bound-browser-sessions/alternatives-considered:
+  en: fbc032b8331253e0
+  zh: b2b43e2347de74f8
+/agent-note-process-bound-browser-sessions/consequences:
+  en: 4d8f75aba644d8e3
+  zh: 0d8b4a4d9238d08f

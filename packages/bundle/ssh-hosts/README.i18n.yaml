@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/ssh-hosts/README.md
-README.md: 7f2e931bc7bc11dbf4724b954582737c1fe5ef3e
-README.zh.md: 0baf3e85ccbe818095edf372072e5167d79de2e9
+/:
+  en: 937c251e9e9b8781
+  zh: 8a8879cfe5f447f1
+/deepseek-ai-dsh-ssh-hosts:
+  en: 807ee8122a7c07cd
+  zh: d08220cc8de69e15
+/deepseek-ai-dsh-ssh-hosts/summary:
+  en: 2c526533a331e29d
+  zh: 45dd28dd64d59270
+/deepseek-ai-dsh-ssh-hosts/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-ssh-hosts/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-ssh-hosts/use-this-package/add-the-layer-to-a-profile:
+  en: aa6a9091a069cb04
+  zh: a34d14d39d21eca6
+/deepseek-ai-dsh-ssh-hosts/use-this-package/declare-hosts:
+  en: 862a0c4c5e0686cc
+  zh: e5f553148b61ce9d
+/deepseek-ai-dsh-ssh-hosts/use-this-package/what-you-get:
+  en: 62efc46d3b162ef9
+  zh: bca8f6886183d2da
+/deepseek-ai-dsh-ssh-hosts/understand-the-implementation:
+  en: 307b0239dbf48dd4
+  zh: b9ac90c449c6e778
+/deepseek-ai-dsh-ssh-hosts/understand-the-implementation/composition-mechanics:
+  en: 1b4d707c6c9b0c07
+  zh: 39fa2a4e44a9b6ea
+/deepseek-ai-dsh-ssh-hosts/understand-the-implementation/activation:
+  en: 1aeaca424a3df137
+  zh: 91f3431673d5a8cc
+/deepseek-ai-dsh-ssh-hosts/understand-the-implementation/source-map:
+  en: d2f1788f453ee14b
+  zh: aaf283cd4461514e
+/deepseek-ai-dsh-ssh-hosts/understand-the-implementation/invariant-ownership:
+  en: db0df53017877982
+  zh: 328f1fa2a3089991
+/deepseek-ai-dsh-ssh-hosts/further-exploration:
+  en: 42559567eade15c5
+  zh: 345b17805bb2c2bf
+/deepseek-ai-dsh-ssh-hosts/model-experience:
+  en: 67a4cf6cedeb4d37
+  zh: 66c6f2109fda51b1
+/deepseek-ai-dsh-ssh-hosts/model-experience/kv-cache-effect:
+  en: be55d2a1581b197d
+  zh: 56e2216af00970c7
+/deepseek-ai-dsh-ssh-hosts/known-limitations-and-deferred-work:
+  en: ab1949dc24913f62
+  zh: 729b7abb4399bf5c
+/deepseek-ai-dsh-ssh-hosts/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

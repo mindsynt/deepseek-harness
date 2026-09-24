@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-remote-hosts/README.md
-README.md: 9859376c0afadd804746b07c32fb2791e7ba848f
-README.zh.md: c1b7f57a7563c19838829b44b4560a7de7b7d193
+/:
+  en: 7d4e6307223b99e1
+  zh: 95fb5f69852fe997
+/deepseek-ai-dsh-client-ui-remote-hosts:
+  en: 7911ed89531ab6ae
+  zh: ed4c51098f867ebc
+/deepseek-ai-dsh-client-ui-remote-hosts/summary:
+  en: 562c6054ebdbc699
+  zh: 159d8ce08c3b698e
+/deepseek-ai-dsh-client-ui-remote-hosts/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-remote-hosts/use-this-package:
+  en: d70f3f3dc64912ce
+  zh: 98aba012cb732875
+/deepseek-ai-dsh-client-ui-remote-hosts/use-this-package/adding-a-host:
+  en: 2b6513377b02428b
+  zh: 94f6f46b4a460f57
+/deepseek-ai-dsh-client-ui-remote-hosts/use-this-package/removing-a-host:
+  en: 020a61944442490c
+  zh: 4cfea44dbbf712d5
+/deepseek-ai-dsh-client-ui-remote-hosts/use-this-package/checking-a-connection:
+  en: c95e2a0da5e0e96a
+  zh: 17158898444f8939
+/deepseek-ai-dsh-client-ui-remote-hosts/use-this-package/keeping-the-list-fresh:
+  en: af641994b9437f02
+  zh: bd3b848460ba592f
+/deepseek-ai-dsh-client-ui-remote-hosts/use-this-package/choosing-the-workspace-host:
+  en: 76dc242fcb568773
+  zh: 78d00b82bc66fe55
+/deepseek-ai-dsh-client-ui-remote-hosts/understand-the-implementation:
+  en: d87f15f68d1ee969
+  zh: 4018a24b3a1cda36
+/deepseek-ai-dsh-client-ui-remote-hosts/understand-the-implementation/source-map:
+  en: ec42398864b0e6e3
+  zh: 3c06137ae31c6438
+/deepseek-ai-dsh-client-ui-remote-hosts/understand-the-implementation/registration-and-live-data:
+  en: 907fa819d59e9c65
+  zh: 80811eb27fb0118a
+/deepseek-ai-dsh-client-ui-remote-hosts/understand-the-implementation/stream-and-call-outcomes:
+  en: a977f48b49456e74
+  zh: 35a2aa40f352bf8d
+/deepseek-ai-dsh-client-ui-remote-hosts/further-exploration:
+  en: e328c050876a4a0c
+  zh: ae874f0cf8610ed7
+/deepseek-ai-dsh-client-ui-remote-hosts/model-experience:
+  en: 6b7c6f82ab6c8435
+  zh: 7df0cbf2f927ac4d
+/deepseek-ai-dsh-client-ui-remote-hosts/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-client-ui-remote-hosts/known-limitations-and-deferred-work:
+  en: 8892bd451c83ade8
+  zh: 8c87a395d5569abd
+/deepseek-ai-dsh-client-ui-remote-hosts/known-limitations-and-deferred-work/dev-note:
+  en: ceced6a31b1ba582
+  zh: 730a4ad559634b02

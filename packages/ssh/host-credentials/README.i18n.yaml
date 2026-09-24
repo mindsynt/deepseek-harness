@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ssh/host-credentials/README.md
-README.md: 0faf75c1f47edfc6c5215781ab7c0ace2fff6297
-README.zh.md: 20f8caf42db9aabd7c6efc04644886efdbc99f12
+/:
+  en: 1c4c45a53a8a3039
+  zh: 6958acc24eae99f6
+/deepseek-ai-dsh-host-credentials:
+  en: 66ec643287a593aa
+  zh: 37838b586ca151bb
+/deepseek-ai-dsh-host-credentials/summary:
+  en: bc8056cbecac7a14
+  zh: a355a922e134eaea
+/deepseek-ai-dsh-host-credentials/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-host-credentials/use-this-package:
+  en: 2558b16a1dedf009
+  zh: 0b36877f4dedfa47
+/deepseek-ai-dsh-host-credentials/understand-the-implementation:
+  en: 711957419fb5467f
+  zh: 628d9adea2e56aaa
+/deepseek-ai-dsh-host-credentials/further-exploration:
+  en: ecf36a3163f5f666
+  zh: e325be25b9c2d947
+/deepseek-ai-dsh-host-credentials/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-host-credentials/model-experience/stored-ssh-logins:
+  en: 96ea9e29b49ad36e
+  zh: a7557672bc3d47a4
+/deepseek-ai-dsh-host-credentials/model-experience/stored-ssh-logins/what-the-model-sees:
+  en: f053ebf8d8b891fa
+  zh: 3058ef5dcfd26da0
+/deepseek-ai-dsh-host-credentials/model-experience/stored-ssh-logins/token-effect:
+  en: 394c6f1025b204bd
+  zh: e75c4557692779e4
+/deepseek-ai-dsh-host-credentials/model-experience/stored-ssh-logins/kv-cache-effect:
+  en: 69d356949807b2ef
+  zh: 654e58b75fc104c5
+/deepseek-ai-dsh-host-credentials/known-limitations-and-deferred-work:
+  en: ae836bde6a8c1fc3
+  zh: d3cf033dfbb50d03
+/deepseek-ai-dsh-host-credentials/known-limitations-and-deferred-work/dev-note:
+  en: 2a4b1cdfa5cf877a
+  zh: 5dc9adefd512a9fe

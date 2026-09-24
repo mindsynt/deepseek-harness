@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-18-workspace-branch-labels.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-18-workspace-branch-labels.md
-2026-09-18-workspace-branch-labels.md: 40310fc25680212c65b2d5334e619b3ce0bf7c71
-2026-09-18-workspace-branch-labels.zh.md: 382ac627b52bbd9b3139e990afa882ce05595c41
+/agent-note-workspace-branch-labels:
+  en: 3d99610d1dc6e980
+  zh: 8b8ea895216ec7c8
+/agent-note-workspace-branch-labels/problem:
+  en: 650bc22a34d7761f
+  zh: 0cfb222628bd893f
+/agent-note-workspace-branch-labels/decision:
+  en: 8a0a30a923445c33
+  zh: fb7d7e6705f62cd9
+/agent-note-workspace-branch-labels/alternatives-considered:
+  en: 1afb1e19cefb1a4f
+  zh: 9f9a329078ed00fa
+/agent-note-workspace-branch-labels/consequences:
+  en: 2967836f8a7a30a3
+  zh: d1e8951fa18a2c3e

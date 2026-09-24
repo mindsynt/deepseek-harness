@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 /**
  * Host home reaches the browsing region through the assembled renderer, which
  * memoizes a root entry's inject result for the whole registration — so a home
@@ -11,7 +12,6 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 
@@ -29,10 +29,10 @@ function SidebarFrame({ renderSlot }: FrameProps) {
 /** The assembled sidebar over one Workspace inside the POSIX home the Host reports. */
 async function bench() {
   const runtime = await SlotTestRuntime.create()
-  runtime.ctx.provide('layout', { selectPanel: vi.fn() })
-  // The workspace-creation host selection ui-remote-hosts owns: this assembly
-  // mounts ui-workspace alone, so the spec provides the service face.
+  runtime.ctx.provide('layout', { selectPanel: vi.fn(), beginNavigation: () => new AbortController().signal })
+  runtime.ctx.provide('shortcuts', { register: () => () => {}, catalog: createSnapshotStore([]) })
   runtime.ctx.provide('remoteHostSelection', { source: createSnapshotStore({}) })
+  runtime.ctx.provide('uiConversation', {})
   runtime.releaseWorkspaceSource()
   const directoryPicker = {}
   const { remote } = runtime

@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-22-session-host-sidecar.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-22-session-host-sidecar.md
-2026-09-22-session-host-sidecar.md: 2042d2cbe12cff379f81c6c68e54a9f4211edccd
-2026-09-22-session-host-sidecar.zh.md: 3ce92d4a348bd06c18af161bad09cef86022542c
+/agent-note-session-to-host-identity-as-a-storage-domain-sidecar:
+  en: dab4542d30847cc2
+  zh: c7bea3b9824d57ac
+/agent-note-session-to-host-identity-as-a-storage-domain-sidecar/problem:
+  en: 13da5e3c2114b045
+  zh: 17a562a0f0d70afe
+/agent-note-session-to-host-identity-as-a-storage-domain-sidecar/decision:
+  en: f82483d970e3f387
+  zh: d4617ea34d16bc1f
+/agent-note-session-to-host-identity-as-a-storage-domain-sidecar/returning-to-a-log-carried-host:
+  en: dc63df655ef74ecd
+  zh: 12e4b0c0df051efa
+/agent-note-session-to-host-identity-as-a-storage-domain-sidecar/alternatives-considered:
+  en: 6e7e2759081c860a
+  zh: 28b3d58967357d9c
+/agent-note-session-to-host-identity-as-a-storage-domain-sidecar/consequences:
+  en: bf74ab69746b32c9
+  zh: e2496f0bbb24c5ff
+/agent-note-session-to-host-identity-as-a-storage-domain-sidecar/verification:
+  en: 4a487dcb0f144676
+  zh: cf6afad5c6396eb5
+/agent-note-session-to-host-identity-as-a-storage-domain-sidecar/related:
+  en: 3952a4f0a4faf59a
+  zh: a3a2670508aa6bde

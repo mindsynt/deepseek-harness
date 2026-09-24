@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-21-gui-managed-ssh-remote-hosts.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-21-gui-managed-ssh-remote-hosts.md
-2026-09-21-gui-managed-ssh-remote-hosts.md: 8a2ad3a47dbd244f89ebdbeb6e3164f6bc060c27
-2026-09-21-gui-managed-ssh-remote-hosts.zh.md: e7d057e31259aa6fca800682b0ec10e552af00d8
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds:
+  en: a72535e18d732811
+  zh: f3341cdb0d99a5f4
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/problem:
+  en: 989e2b7e93c3ed99
+  zh: d7c752a97bf6c0b0
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal:
+  en: f2e3614999b283f4
+  zh: 1e59eb4dbaff9413
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/settled-scope:
+  en: 44a44f00177900d0
+  zh: c1ed4ebfb2d9b9a9
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/host-registry-and-per-session-realms:
+  en: 7c9263ff58dc54d9
+  zh: 49531eb208d222ae
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/per-host-addressing:
+  en: 6183f3e2bc9ad1b1
+  zh: 12f0016c1f882948
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/credentials-and-host-key-trust:
+  en: c9a624fb4112c213
+  zh: 18cf4f803b5ed8fb
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/automatic-helper-provisioning:
+  en: 6cade45b5b10421d
+  zh: 49c945ffbb06df2c
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/persistence-and-identity-changes:
+  en: 7d8d73640e07d7dd
+  zh: 7c9d4303358d6da7
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/gui-surfaces:
+  en: 9c725513085e7893
+  zh: d649637f9cd36f94
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/workspace-creation-host-selection:
+  en: 32c09319e2cda354
+  zh: 238c4ef3231c935e
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/package-topology:
+  en: 8cb960961c1434f6
+  zh: 70a2dd31c6660068
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/delivery-phases:
+  en: 48fe54a5c7d79d58
+  zh: 4f6f568a79fd561f
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/proposal/presentation-contracts-the-recorded-web-lane-pins:
+  en: 6bb2b8adaec26ee8
+  zh: e4712585413d4085
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/alternatives-considered:
+  en: a5222dd044470f8a
+  zh: 4843fa408ced1ead
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/acceptance-criteria:
+  en: 8c47e3a0881d8614
+  zh: 25a5914cbc9a0738
+/agent-note-gui-managed-ssh-remote-hosts-and-per-session-execution-worlds/risks:
+  en: 01ddc3231085a89b
+  zh: 56819dad05119fc7

@@ -12,6 +12,7 @@
     "src/branch-watch.ts",
     "src/remote-events.ts",
     "src/commands.ts",
+    "src/default-workspace.ts",
     "src/directory-picker.ts",
     "src/feed.ts",
     "src/default-directory.ts"

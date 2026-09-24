@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/api/hosts-controller/README.md
-README.md: bd26b7a7dcf6aaa1be20d5ec3bec106ff1afd03c
-README.zh.md: c448963455ea5ba141bba67f607d51650bf7b5f9
+/:
+  en: f075e067b3673d3c
+  zh: 5eb26d6e2789e078
+/hosts-controller:
+  en: e8d5cc799f203c15
+  zh: a6170217f1111058
+/hosts-controller/summary:
+  en: fd179f2430b4b2e4
+  zh: 463e60dc7bd56beb
+/hosts-controller/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/hosts-controller/use-this-package:
+  en: 82bddd6fb4610efe
+  zh: 30d5a89867ae6a93
+/hosts-controller/use-this-package/what-the-remote-namespace-serves:
+  en: 7d5c88ebc0104322
+  zh: 04e821eff9a8a450
+/hosts-controller/use-this-package/add-is-one-transaction:
+  en: dc733f5c8b030df8
+  zh: e2541b959b561b54
+/hosts-controller/understand-the-implementation:
+  en: b861e7ab8b4b076e
+  zh: 80aa6532ec14e5cf
+/hosts-controller/further-exploration:
+  en: 25e0b544722a0dbc
+  zh: 5de424e7e7037a96
+/hosts-controller/model-experience:
+  en: 659c3d17d48d4d16
+  zh: d480ad6ef01e5203
+/hosts-controller/model-experience/kv-cache-effect:
+  en: 624ab48dd4bf7133
+  zh: 4ea71827f95d5aed
+/hosts-controller/known-limitations-and-deferred-work:
+  en: c1139f8b52fa0a5a
+  zh: 6cac01b7b25169f5
+/hosts-controller/known-limitations-and-deferred-work/dev-note:
+  en: 6f02b26266532046
+  zh: 5d6b2648fca68d12

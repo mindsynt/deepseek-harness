@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-19-settings-persistence-follows-the-host-fence.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-19-settings-persistence-follows-the-host-fence.md
-2026-09-19-settings-persistence-follows-the-host-fence.md: 2e3082649457f6d8307ada8bf0e5636adc1c265b
-2026-09-19-settings-persistence-follows-the-host-fence.zh.md: 5e2ee6dda1efd26264a5640e5359c7874be36131
+/agent-note-settings-persistence-follows-the-host-api-fence:
+  en: 6bf90766601f50f0
+  zh: 3bab8b01e6e2fdd1
+/agent-note-settings-persistence-follows-the-host-api-fence/problem:
+  en: 44100b50cec808dc
+  zh: 69510eeabd20f802
+/agent-note-settings-persistence-follows-the-host-api-fence/decision:
+  en: 26f46d6198c5256f
+  zh: 73fe9ed3350c8b6e
+/agent-note-settings-persistence-follows-the-host-api-fence/alternatives-considered:
+  en: 400cc97928b65b92
+  zh: 33d3648593e210ba
+/agent-note-settings-persistence-follows-the-host-api-fence/consequences:
+  en: 45bacb76cb0fe80f
+  zh: 6bd9348629133d20

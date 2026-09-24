@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-22-filesystem-directory-creation-primitive.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-22-filesystem-directory-creation-primitive.md
-2026-09-22-filesystem-directory-creation-primitive.md: 7ace870b7cb20270d1bd3be9dd323ade36c98e33
-2026-09-22-filesystem-directory-creation-primitive.zh.md: 97885e8384af61ec4ca53da396a13c1e29e58f41
+/agent-note-directory-creation-on-the-filesystem-seam:
+  en: 530aba4455049531
+  zh: e58b9be8b45be8e8
+/agent-note-directory-creation-on-the-filesystem-seam/problem:
+  en: 25f74ef91689f6de
+  zh: 70ec3c4d38dee741
+/agent-note-directory-creation-on-the-filesystem-seam/decision:
+  en: dfa00fd7fcba9309
+  zh: d66db7acde399c78
+/agent-note-directory-creation-on-the-filesystem-seam/remote-helper-and-wire-version:
+  en: 0525a07ceae6facd
+  zh: 42c724c139e5c9bb
+/agent-note-directory-creation-on-the-filesystem-seam/alternatives-considered:
+  en: a3d5f5923e36e0bf
+  zh: f203efad93727335
+/agent-note-directory-creation-on-the-filesystem-seam/consequences:
+  en: b11fb8d2ecf65391
+  zh: f89841ac80ed0d2b
+/agent-note-directory-creation-on-the-filesystem-seam/verification:
+  en: 075788f993ae636c
+  zh: fd1fd05f730d3494
+/agent-note-directory-creation-on-the-filesystem-seam/session-root-provisioning-authorization:
+  en: a561d0e96467a4f3
+  zh: 7d05ac320532716d
+/agent-note-directory-creation-on-the-filesystem-seam/deferred-the-picker-s-remote-half:
+  en: b0657b9af08cce9a
+  zh: 8f01d2d0ff2115be

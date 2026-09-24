@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ssh/host-registry/README.md
-README.md: 5be47dd683e82857e3fbeb2e6099a9272e9a1c5f
-README.zh.md: db2486b5b3f6e7eb5c30cd71e4ddbbf644cb92e3
+/:
+  en: 8eddb7f240f3c3ff
+  zh: 9e3493a0ecdd27d1
+/deepseek-ai-dsh-ssh-host-registry:
+  en: b14cd82523c60ccd
+  zh: 927b7d80e07a0d53
+/deepseek-ai-dsh-ssh-host-registry/summary:
+  en: 50cc4dc18a23d77d
+  zh: 96003bb03317e69f
+/deepseek-ai-dsh-ssh-host-registry/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-ssh-host-registry/use-this-package:
+  en: a4ae4322b76d8ee8
+  zh: ea9b274cf08d9f49
+/deepseek-ai-dsh-ssh-host-registry/understand-the-implementation:
+  en: 49d8a77cd6c22041
+  zh: e9053e47aab97c34
+/deepseek-ai-dsh-ssh-host-registry/further-exploration:
+  en: de3aa4329a2fefea
+  zh: 43232771b2426ee6
+/deepseek-ai-dsh-ssh-host-registry/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-ssh-host-registry/model-experience/remote-execution-services:
+  en: 1a1fbdb1a0fa82f0
+  zh: ad58e59ae474f055
+/deepseek-ai-dsh-ssh-host-registry/model-experience/remote-execution-services/what-the-model-sees:
+  en: 2dadb4e34f77e36e
+  zh: f3f4811d9ad58292
+/deepseek-ai-dsh-ssh-host-registry/model-experience/remote-execution-services/token-effect:
+  en: 9037569ea1403d72
+  zh: 0e968afd66b3a187
+/deepseek-ai-dsh-ssh-host-registry/model-experience/remote-execution-services/kv-cache-effect:
+  en: 42768562cc259342
+  zh: 74b19dd7a7d61db3
+/deepseek-ai-dsh-ssh-host-registry/known-limitations-and-deferred-work:
+  en: 034ff1e9add6fada
+  zh: 8fc22e5cf9c17580
+/deepseek-ai-dsh-ssh-host-registry/known-limitations-and-deferred-work/dev-note:
+  en: 9365ef702963bd5a
+  zh: c55f6acb7319ee4d
