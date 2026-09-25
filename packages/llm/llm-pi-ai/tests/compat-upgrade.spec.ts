@@ -26,6 +26,16 @@ describe('pi-ai gateway compatibility declarations', () => {
       .toMatchObject({ supportsMaxOutputTokens: false })
   })
 
+  it('preserves session-affinity headers on the protocol that sends them', () => {
+    expect(resolved({ sendSessionAffinityHeaders: true }, 'anthropic-messages'))
+      .toMatchObject({ sendSessionAffinityHeaders: true })
+  })
+
+  it('withholds session-affinity headers from a protocol that cannot send them', () => {
+    expect(() => resolved({ sendSessionAffinityHeaders: true }, 'openai-responses'))
+      .toThrow(/no model on the route speaks a protocol that takes it/)
+  })
+
   it.each(['chatTemplateKwargs', 'chatTemplateArgs'])('accepts thinking.budget in %s', (field) => {
     const value = { budget: { $var: 'thinking.budget' } }
     expect(resolved({ [field]: value })).toMatchObject({ [field]: value })

@@ -282,6 +282,7 @@ const compatProfile: z<PiAiCompatProfile> = z.object({
   forceAdaptiveThinking: z.boolean(),
   allowEmptySignature: z.boolean(),
   supportsStrictTools: z.boolean(),
+  sendSessionAffinityHeaders: z.boolean(),
 })
 
 /**

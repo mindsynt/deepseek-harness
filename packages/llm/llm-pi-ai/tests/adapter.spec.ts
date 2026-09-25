@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { Branded } from '@deepseek-ai/dsh-brand'
 import { AttachmentId, AttachmentStore, ImageVariantId } from '@deepseek-ai/dsh-attachment'
 import type {
   ImageAttachmentLimits,
@@ -121,6 +123,24 @@ describe('PiAiAdapter provider routing', () => {
     await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
     expect(server.headers[0]?.['x-company']).toBe('private')
     expect(server.headers[0]?.['user-agent']).toBe(userAgent())
+  })
+
+  it.each([
+    { optIn: true, expected: 'session-1' },
+    { optIn: false, expected: undefined },
+  ])('sends x-session-affinity from the session id only when an anthropic route opts in ($optIn)', async ({ optIn, expected }) => {
+    const server = await mockServer([{ status: 500, body: '{}' }])
+    const ctx = await harness(server.url, {
+      api: 'anthropic-messages',
+      models: [{ id: 'anthropic-sonnet' }],
+      ...optIn ? { compat: { sendSessionAffinityHeaders: true } } : {},
+    })
+    const result = await assemble(ctx, {
+      model: 'anthropic-sonnet', messages: [],
+      sessionId: brandString<Branded<'SessionId'>>('session-1'),
+    })
+    expect(result.finish.kind).toBe('error')
+    expect(server.headers[0]?.['x-session-affinity']).toBe(expected)
   })
 
   it('forwards common stream options and profile reasoning', async () => {

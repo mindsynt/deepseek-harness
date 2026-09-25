@@ -281,7 +281,7 @@ const ANTHROPIC_COMPAT_GATE = {
   forceAdaptiveThinking: 'offer',
   allowEmptySignature: 'offer',
   supportsStrictTools: 'offer',
-  sendSessionAffinityHeaders: 'withhold',
+  sendSessionAffinityHeaders: 'offer',
   supportsToolReferences: 'withhold',
   supportsMidConvoEffort: 'withhold',
   allowedFallbackModels: 'withhold',
@@ -430,6 +430,13 @@ export interface PiAiCompatProfile {
   allowEmptySignature?: boolean
   /** Whether the endpoint accepts Anthropic strict tool schemas; `anthropic-messages`. */
   supportsStrictTools?: boolean
+  /**
+   * Whether pi-ai sends the `x-session-affinity` request header carrying the
+   * session id while caching is enabled. Required for gateways that route
+   * cache hits by replica affinity — a request that lands on a different
+   * replica re-bills its whole prefix; `anthropic-messages`.
+   */
+  sendSessionAffinityHeaders?: boolean
 }
 
 /** Compile-time constraint that `T` is `never`. */

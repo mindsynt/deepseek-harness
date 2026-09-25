@@ -1871,6 +1871,13 @@ export interface PiAiCompatProfile {
   allowEmptySignature?: boolean
   /** Whether the endpoint accepts Anthropic strict tool schemas; `anthropic-messages`. */
   supportsStrictTools?: boolean
+  /**
+   * Whether pi-ai sends the `x-session-affinity` request header carrying the
+   * session id while caching is enabled. Required for gateways that route
+   * cache hits by replica affinity — a request that lands on a different
+   * replica re-bills its whole prefix; `anthropic-messages`.
+   */
+  sendSessionAffinityHeaders?: boolean
 }
 
 /** One request modality a pi-ai model may accept. */
