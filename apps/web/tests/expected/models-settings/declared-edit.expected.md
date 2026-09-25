@@ -51,6 +51,11 @@
           - option "qwen-chat-template"
           - option "string-thinking"
           - option "ant-ling"
+        - text: 系统提示词角色
+        - combobox "系统提示词角色":
+          - option "system — 始终以 system 角色发送系统提示词" [selected]
+          - option "developer — 推理模型以 developer 角色发送"
+          - option "默认（按端点/目录自动推断）"
         - region "模型目录":
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"

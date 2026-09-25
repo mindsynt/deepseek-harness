@@ -16,8 +16,10 @@
  * it, so a provider-wide value can only be set to a level some of them reject.
  * The composer's model picker offers each model its own levels, and a pi-ai
  * model row's advanced section declares them. The route's **Thinking format**
- * picks the dialect those levels travel in; a per-level wire-spelling rename
- * stays in `cordis.patch.yml`. Everything else stays
+ * picks the dialect those levels travel in, and the route's **System prompt
+ * role** picks whether a reasoning model's system prompt travels as `developer`
+ * or stays `system`; a per-level wire-spelling rename stays in
+ * `cordis.patch.yml`. Everything else stays
  * owned by `cordis.patch.yml`. Profile edits land as minimal `settings.mutate`
  * path ops against the stored section — the card names only the fields it can
  * see instead of rebuilding the whole subtree from a partial descriptor.
@@ -112,7 +114,9 @@ function draftAt(
  * The minimal path ops carrying `after` over `before`, both as the card sees
  * them. Only keys the card observed are named; fields absent from both sides
  * produce no op, which is why edits are path-addressed rather than a rebuilt
- * section.
+ * section. A nested plain-object pair (the route `compat` block) is diffed
+ * recursively so a one-switch edit does not restate its siblings; arrays and
+ * scalars stay atomic.
  * @param base - path of the edited subtree inside the user section.
  * @param before - the subtree as loaded, or undefined when it is new.
  * @param after - the subtree as edited.
@@ -128,13 +132,24 @@ export function pathOps(
     : {}
   const ops: SettingsPathOpView[] = []
   for (const [key, value] of Object.entries(after)) {
-    if (JSON.stringify(previous[key]) === JSON.stringify(value)) continue
-    ops.push({ op: 'set', path: [...base, key], value: value as JsonValue })
+    const prior = previous[key]
+    if (JSON.stringify(prior) === JSON.stringify(value)) continue
+    if (isPlainObject(value) && isPlainObject(prior)) {
+      ops.push(...pathOps([...base, key], prior, value))
+    }
+    else {
+      ops.push({ op: 'set', path: [...base, key], value: value as JsonValue })
+    }
   }
   for (const key of Object.keys(previous)) {
     if (!(key in after)) ops.push({ op: 'unset', path: [...base, key] })
   }
   return ops
+}
+
+/** A plain object value: object, non-null, non-array. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** The editor layout the owning namespace selects. */
@@ -201,6 +216,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     [layout, namespace, schema],
   )
   const thinkingFormat = schema.getPath(draft, ['compat', 'thinkingFormat'])
+  const developerRole = schema.getPath(draft, ['compat', 'supportsDeveloperRole'])
 
   useEffect(() => {
     if (accountProvider) return
@@ -233,9 +249,15 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
    * Set or clear one `compat` switch, preserving the sibling switches. The
    * `compat` object itself leaves the draft when it empties, so a profile does
    * not carry an `{}` the schema would materialize back into a real layer.
+   * String values are trimmed; booleans pass through for switches like
+   * `supportsDeveloperRole`.
+   * @param key - the compat field name.
+   * @param next - the value to set, or undefined/empty-string to clear.
    */
-  const setCompatField = (key: string, next: string | undefined): void => {
-    const value = next === undefined || next.trim().length === 0 ? undefined : next
+  const setCompatField = (key: string, next: string | boolean | undefined): void => {
+    const value = next === undefined || (typeof next === 'string' && next.trim().length === 0)
+      ? undefined
+      : next
     setDraft((current) => {
       if (value !== undefined) return schema.setPath(current, ['compat', key], value)
       const cleared = schema.deletePath(current, ['compat', key])
@@ -508,6 +530,34 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                   >
                     <option value="">{t('thinkingFormatDefault')}</option>
                     {thinkingFormats.map(choice => <option key={choice} value={choice}>{choice}</option>)}
+                  </select>
+                </div>
+              )
+              : null}
+            {/* Whether pi-ai may send a reasoning model's system prompt as the
+                `developer` role. Offered by the OpenAI-completions and
+                Responses protocols; kept off a route that names one whose
+                compat gate does not take it, because a route-level value no
+                model's protocol takes fails resolution. */}
+            {family === 'pi-ai'
+              && (probeApi === undefined || probeApi === 'openai-completions' || probeApi === 'openai-responses')
+              ? (
+                <div className={styles['field']}>
+                  <span className={styles['fieldLabel']}>{t('systemPromptRole')}</span>
+                  <select
+                    className={`${styles['input']} ${styles['selectInput']}`}
+                    value={developerRole === false ? 'false' : developerRole === true ? 'true' : ''}
+                    aria-label={t('systemPromptRole')}
+                    disabled={disabled}
+                    onChange={(event) => {
+                      const next = event.target.value
+                      setCompatField('supportsDeveloperRole',
+                        next === '' ? undefined : next === 'true')
+                    }}
+                  >
+                    <option value="false">{t('systemPromptRoleSystem')}</option>
+                    <option value="true">{t('systemPromptRoleDeveloper')}</option>
+                    <option value="">{t('systemPromptRoleDefault')}</option>
                   </select>
                 </div>
               )

@@ -43,6 +43,7 @@ const PiAiConfig = Schema.object({
     compat: Schema.object({
       thinkingFormat: Schema.union(THINKING_FORMATS),
       supportsReasoningEffort: Schema.boolean(),
+      supportsDeveloperRole: Schema.boolean(),
     }),
   })),
 })
@@ -916,6 +917,7 @@ describe('hand-declared providers', () => {
           apiKeyEnv: 'ACME_GATEWAY_API_KEY',
           api: 'openai-completions',
           baseURL: 'https://gateway.acme.example/v1',
+          compat: { supportsDeveloperRole: false },
           models: [{ id: 'acme-large', contextWindow: 65_536 }],
         },
       }],
@@ -936,7 +938,10 @@ describe('hand-declared providers', () => {
 
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    expect(fields()).toEqual([en.customRoute, en.customDisplayName, en.baseUrl, en.customApi, en.thinkingFormat, en.keyInput])
+    expect(fields()).toEqual([
+      en.customRoute, en.customDisplayName, en.baseUrl, en.customApi,
+      en.thinkingFormat, en.systemPromptRole, en.keyInput,
+    ])
     cleanup()
 
     // A shipped route's models each carry their own protocol, so its editor
@@ -944,7 +949,7 @@ describe('hand-declared providers', () => {
     await mountSection({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
     openEditor('openai')
     fireEvent.click(screen.getByText(en.customized))
-    expect(fields()).toEqual([en.keyInput, en.baseUrl, en.thinkingFormat])
+    expect(fields()).toEqual([en.keyInput, en.baseUrl, en.thinkingFormat, en.systemPromptRole])
     cleanup()
 
     // A hand-declared route named its own protocol at creation, so editing it
@@ -954,7 +959,7 @@ describe('hand-declared providers', () => {
       declaredRoutes: ['acme-gateway'],
     })
     openEditor('acme-gateway')
-    expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi, en.thinkingFormat])
+    expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi, en.thinkingFormat, en.systemPromptRole])
   })
 
   it('renames a declared route and falls back to its id when the name is cleared', async () => {
@@ -1096,6 +1101,127 @@ describe('hand-declared providers', () => {
     expect(firstMutate(mutate).ops).toEqual([{
       op: 'set', path: ['providers', 'acme-gateway', 'compat', 'thinkingFormat'], value: 'deepseek',
     }])
+  })
+
+  it('defaults a new custom provider to forcing the system prompt role', async () => {
+    // pi-ai's inference sends `developer` to reasoning models on any OpenAI-ish
+    // endpoint it cannot name, and gateways that reject it answer with a
+    // generic 400, so the create card defaults to `supportsDeveloperRole: false`.
+    const { mutate, onClose } = mountCard()
+
+    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'k' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
+    fireEvent.click(screen.getByText(en.create))
+
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(firstMutate(mutate).ops[0]?.value).toMatchObject({
+      api: 'openai-completions',
+      compat: { supportsDeveloperRole: false },
+    })
+  })
+
+  it('honors the developer and inferred choices on the create card', async () => {
+    const { mutate } = mountCard()
+    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    // Pick developer; the profile carries `supportsDeveloperRole: true`.
+    fireEvent.change(screen.getByLabelText(en.systemPromptRole), { target: { value: 'true' } })
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'k' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
+    fireEvent.click(screen.getByText(en.create))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ compat: { supportsDeveloperRole: true } })
+  })
+
+  it('drops the system prompt role when the protocol cannot take it', async () => {
+    // A route-level `supportsDeveloperRole` no model's protocol takes fails
+    // resolution, so leaving the OpenAI protocols must not carry the value
+    // into an Anthropic Messages route.
+    const { mutate } = mountCard()
+    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'anthropic-messages' } })
+    // The field is gone; no compat block should carry it.
+    expect(screen.queryByLabelText(en.systemPromptRole)).toBeNull()
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'k' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
+    fireEvent.click(screen.getByText(en.create))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    expect(firstMutate(mutate).ops[0]?.value).not.toHaveProperty('compat')
+  })
+
+  it('pins the route-level system prompt role without restating sibling compat switches', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'ACME_GATEWAY_API_KEY',
+          api: 'openai-completions',
+          baseURL: 'https://gateway.acme.example/v1',
+          compat: { supportsReasoningEffort: false },
+          models: [{ id: 'acme-think' }],
+        },
+      },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+
+    const role = screen.getByLabelText<HTMLSelectElement>(en.systemPromptRole)
+    expect(role.value).toBe('')
+    fireEvent.change(role, { target: { value: 'false' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    // Only the new switch travels; the sibling compat switch is not restated.
+    expect(firstMutate(mutate).ops).toEqual([{
+      op: 'set', path: ['providers', 'acme-gateway', 'compat', 'supportsDeveloperRole'], value: false,
+    }])
+  })
+
+  it('reads back a stored system prompt role and clears it', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://gateway.acme.example/v1',
+          compat: { supportsDeveloperRole: true },
+          models: [{ id: 'acme-think' }],
+        },
+      },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+
+    const role = screen.getByLabelText<HTMLSelectElement>(en.systemPromptRole)
+    expect(role.value).toBe('true')
+    fireEvent.change(role, { target: { value: '' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    // Clearing the last compat switch leaves the draft without a `compat`
+    // block at all, so the whole block is unset rather than one nested key.
+    expect(firstMutate(mutate).ops).toEqual([{
+      op: 'unset', path: ['providers', 'acme-gateway', 'compat'],
+    }])
+  })
+
+  it('hides the system prompt role for an Anthropic Messages route', async () => {
+    await mountSection({
+      providers: {
+        'acme-gateway': {
+          api: 'anthropic-messages',
+          baseURL: 'https://gateway.acme.example',
+          models: [{ id: 'acme-think' }],
+        },
+      },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+    expect(screen.queryByLabelText(en.systemPromptRole)).toBeNull()
   })
 
   it('selects nothing for a declared route whose profile names no protocol', async () => {

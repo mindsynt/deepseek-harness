@@ -556,6 +556,18 @@ describe('ModelsSection', () => {
       .toEqual([{ op: 'set', path: ['b'], value: 2 }, { op: 'set', path: ['d'], value: 3 }])
     expect(pathOps([], undefined, {})).toEqual([])
     expect(pathOps([], { a: 1 }, { a: 1 })).toEqual([])
+    // A nested object is diffed key by key, so one switch edit does not
+    // restate its siblings; a scalar sibling stays a whole-value op.
+    expect(pathOps([], { compat: { a: 1, b: 2 } }, { compat: { a: 1, b: 3 } }))
+      .toEqual([{ op: 'set', path: ['compat', 'b'], value: 3 }])
+    expect(pathOps([], { compat: { a: 1 } }, { compat: { a: 1, b: false } }))
+      .toEqual([{ op: 'set', path: ['compat', 'b'], value: false }])
+    expect(pathOps([], { compat: { a: 1 } }, { compat: { a: 1 } })).toEqual([])
+    expect(pathOps([], { compat: { a: 1 } }, { compat: {} }))
+      .toEqual([{ op: 'unset', path: ['compat', 'a'] }])
+    // Arrays stay atomic: a reordered model row is one set, not index ops.
+    expect(pathOps([], { models: [{ id: 'a' }] }, { models: [{ id: 'b' }] }))
+      .toEqual([{ op: 'set', path: ['models'], value: [{ id: 'b' }] }])
   })
 
   it('stores a typed key write-only from the setup card without touching settings', async () => {

@@ -23,7 +23,12 @@
  * composer's model picker offers each model its own levels, and a model row's
  * advanced section declares the levels that model offers. The card does ask
  * for the route's **Thinking format**, because the dialect is a property of
- * the endpoint; pi-ai skips models whose protocol cannot take it.
+ * the endpoint; pi-ai skips models whose protocol cannot take it. It also asks
+ * for the route's **System prompt role**: whether pi-ai may send a reasoning
+ * model's system prompt as the `developer` role. New custom routes default to
+ * `system`, because pi-ai's inference sends `developer` on any OpenAI-ish
+ * endpoint it cannot name, and most gateways reject that role; the choice
+ * lands on the route and skips models whose protocol cannot take it.
  */
 
 import { useEffect, useState } from 'react'
@@ -105,6 +110,10 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   const [baseURL, setBaseURL] = useState('')
   const [protocol, setProtocol] = useState(protocols[0] ?? '')
   const [thinkingFormat, setThinkingFormat] = useState('')
+  // The select value: '' (inferred), 'false' (force system), 'true' (developer).
+  // New custom routes default to system: pi-ai's inference sends `developer` to
+  // reasoning models on endpoints it cannot recognize, and most gateways reject it.
+  const [systemPromptRole, setSystemPromptRole] = useState('false')
   const [keyDraft, setKeyDraft] = useState('')
   const [models, setModels] = useState<readonly ModelDraft[]>([])
   const [busy, setBusy] = useState(false)
@@ -160,6 +169,13 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
     const keyRef = deriveKeyRef(route)
     const storesKey = keyValue.length > 0
     if (!committed) {
+      const roleTakes = protocol === 'openai-completions' || protocol === 'openai-responses'
+      const compat = {
+        ...thinkingFormat.length === 0 ? {} : { thinkingFormat },
+        ...roleTakes && systemPromptRole !== ''
+          ? { supportsDeveloperRole: systemPromptRole === 'true' }
+          : {},
+      }
       const profile = {
         ...displayName.length === 0 ? {} : { displayName },
         // The profile names the conventional reference only when this card is
@@ -169,7 +185,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         ...storesKey ? { apiKeyEnv: keyRef } : {},
         api: protocol,
         baseURL: normalizedBaseURL,
-        ...thinkingFormat.length === 0 ? {} : { compat: { thinkingFormat } },
+        ...Object.keys(compat).length === 0 ? {} : { compat },
         models: models.map(model => ({ ...model })),
       }
       // `taken` is a snapshot too, so the id check alone cannot see a route
@@ -273,6 +289,10 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
             // The dialect belongs to the OpenAI-completions wire; leaving that
             // protocol must not carry a hidden value into the created profile.
             if (next !== 'openai-completions') setThinkingFormat('')
+            // `supportsDeveloperRole` is offered by both OpenAI protocols, but
+            // not Anthropic Messages; a route-level value no model's protocol
+            // takes fails resolution, so it must not travel to the other side.
+            if (next !== 'openai-completions' && next !== 'openai-responses') setSystemPromptRole('')
           }}
         >
           {protocols.map(choice => <option key={choice} value={choice}>{protocolLabel(t, choice)}</option>)}
@@ -293,6 +313,28 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
             >
               <option value="">{t('thinkingFormatDefault')}</option>
               {(props.thinkingFormats ?? []).map(choice => <option key={choice} value={choice}>{choice}</option>)}
+            </select>
+          </div>
+        )
+        : null}
+      {/* Whether the endpoint accepts the `developer` role for a reasoning
+          model's system prompt. pi-ai's inference says yes for any OpenAI-ish
+          endpoint it cannot name, and gateways that reject it answer with a
+          generic 400; new custom routes default to system for that reason. */}
+      {protocol === 'openai-completions' || protocol === 'openai-responses'
+        ? (
+          <div className={styles['field']}>
+            <span className={styles['fieldLabel']}>{t('systemPromptRole')}</span>
+            <select
+              className={`${styles['input']} ${styles['selectInput']}`}
+              value={systemPromptRole}
+              aria-label={t('systemPromptRole')}
+              disabled={profileDisabled}
+              onChange={(event) => { setSystemPromptRole(event.target.value) }}
+            >
+              <option value="false">{t('systemPromptRoleSystem')}</option>
+              <option value="true">{t('systemPromptRoleDeveloper')}</option>
+              <option value="">{t('systemPromptRoleDefault')}</option>
             </select>
           </div>
         )
