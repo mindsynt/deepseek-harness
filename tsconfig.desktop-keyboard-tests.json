@@ -3,7 +3,7 @@
   "extends": "./tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "lib/desktop-keyboard-test-types",
+    "outDir": "lib/desktop-keyboard-tests/types",
     "emitDeclarationOnly": true,
     "types": ["node"]
   },
