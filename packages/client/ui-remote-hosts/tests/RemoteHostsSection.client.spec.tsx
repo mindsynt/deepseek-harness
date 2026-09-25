@@ -82,11 +82,13 @@ function bench(
 
 /** Fill every add-dialog field except the private key. */
 function fillDraft(secret?: string): void {
-  fireEvent.change(screen.getByLabelText(en.fieldId), { target: { value: 'alpha' } })
+  // The registry identity is derived from the name, so the name is entered
+  // first and the three remote paths are opened through advanced options.
   fireEvent.change(screen.getByLabelText(en.fieldLabel), { target: { value: 'Alpha' } })
   fireEvent.change(screen.getByLabelText(en.fieldHost), { target: { value: 'alpha.example' } })
   fireEvent.change(screen.getByLabelText(en.fieldPort), { target: { value: '22' } })
   fireEvent.change(screen.getByLabelText(en.fieldUser), { target: { value: 'deploy' } })
+  fireEvent.click(screen.getByRole('button', { name: en.showAdvanced }))
   fireEvent.change(screen.getByLabelText(en.fieldRoot), { target: { value: '/srv/dsh' } })
   fireEvent.change(screen.getByLabelText(en.fieldWorkspace), { target: { value: '/srv/work' } })
   fireEvent.change(screen.getByLabelText(en.fieldManifest), { target: { value: '/tmp/helper.json' } })
@@ -282,6 +284,61 @@ describe('RemoteHostsSection', () => {
       manifest: '/tmp/helper.json',
       login: { host: 'alpha.example', port: 22, user: 'deploy' },
     })
+  })
+
+  it('reveals the remote paths through advanced options, and hides them again', () => {
+    const b = bench({ rows: [], ready: true })
+    render(<RemoteHostsSection {...b.props} />)
+    fireEvent.click(screen.getByRole('button', { name: en.addHost }))
+
+    expect(screen.queryByLabelText(en.fieldRoot)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.showAdvanced }))
+    expect(screen.getByLabelText(en.fieldRoot)).toBeTruthy()
+    expect(screen.getByLabelText(en.fieldManifest)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.closeAdvanced }))
+    expect(screen.queryByLabelText(en.fieldRoot)).toBeNull()
+    expect(screen.queryByLabelText(en.fieldManifest)).toBeNull()
+  })
+
+  it('expands a pasted ssh url into the host, port, and user fields', () => {
+    const b = bench({ rows: [], ready: true })
+    render(<RemoteHostsSection {...b.props} />)
+    fireEvent.click(screen.getByRole('button', { name: en.addHost }))
+    fireEvent.change(screen.getByLabelText(en.fieldHost), {
+      target: { value: 'ssh://deploy@alpha.example:2222' },
+    })
+    expect(screen.getByLabelText(en.fieldHost)).toHaveProperty('value', 'alpha.example')
+    expect(screen.getByLabelText(en.fieldPort)).toHaveProperty('value', '2222')
+    expect(screen.getByLabelText(en.fieldUser)).toHaveProperty('value', 'deploy')
+
+    // A url without a user or a port stays in the field for the human to finish.
+    fireEvent.change(screen.getByLabelText(en.fieldHost), { target: { value: 'ssh://alpha.example' } })
+    expect(screen.getByLabelText(en.fieldHost)).toHaveProperty('value', 'ssh://alpha.example')
+  })
+
+  it('sends the entered password instead of a private key when password login is chosen', async () => {
+    const b = bench({ rows: [], ready: true })
+    render(<RemoteHostsSection {...b.props} />)
+    fireEvent.click(screen.getByRole('button', { name: en.addHost }))
+    fireEvent.change(screen.getByLabelText(en.fieldLabel), { target: { value: 'Alpha' } })
+    fireEvent.change(screen.getByLabelText(en.fieldHost), { target: { value: 'alpha.example' } })
+    fireEvent.change(screen.getByLabelText(en.fieldPort), { target: { value: '22' } })
+    fireEvent.change(screen.getByLabelText(en.fieldUser), { target: { value: 'deploy' } })
+
+    expect(screen.getByLabelText(en.fieldPrivateKey)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.authPassword }))
+    expect(screen.queryByLabelText(en.fieldPrivateKey)).toBeNull()
+    fireEvent.change(screen.getByLabelText(en.fieldPassword), { target: { value: 's3cret' } })
+    fireEvent.click(screen.getByRole('button', { name: en.submit }))
+
+    await vi.waitFor(() => { expect(b.addHost).toHaveBeenCalledTimes(1) })
+    expect(b.addHost).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'alpha',
+      root: '~/work',
+      workspace: '~/work',
+      manifest: '~/dist/ssh-helper/manifest.json',
+      login: { host: 'alpha.example', port: 22, user: 'deploy', privateKey: 's3cret' },
+    }))
   })
 
   it('keeps the entered draft on a refusal and never renders the private key', async () => {

@@ -5,7 +5,9 @@ export type RemoteHostsLocaleKey =
   | 'nav' | 'title' | 'intro' | 'refresh'
   | 'addHost' | 'addTitle' | 'addDescription' | 'submit' | 'submitting'
   | 'fieldId' | 'fieldLabel' | 'fieldHost' | 'fieldPort' | 'fieldUser'
-  | 'fieldPrivateKey' | 'privateKeyHint' | 'fieldRoot' | 'fieldWorkspace' | 'fieldManifest'
+  | 'authKey' | 'authPassword' | 'fieldPrivateKey' | 'fieldPassword'
+  | 'privateKeyHint' | 'fieldRoot' | 'fieldWorkspace' | 'fieldManifest'
+  | 'showAdvanced' | 'closeAdvanced'
   | 'cancel' | 'close' | 'portInvalid'
   | 'empty' | 'loading' | 'listFailed'
   | 'workspaceHost' | 'localLabel' | 'useLocal' | 'select' | 'selected' | 'selectAria'
@@ -30,11 +32,16 @@ export const zh: Record<RemoteHostsLocaleKey, string> = {
   fieldHost: '主机地址',
   fieldPort: '端口',
   fieldUser: '登录用户',
+  authKey: '私钥',
+  authPassword: '密码',
   fieldPrivateKey: '私钥',
+  fieldPassword: '密码',
   privateKeyHint: '留空则使用环境中的 SSH agent 与默认密钥。',
   fieldRoot: '远端根目录',
   fieldWorkspace: '远端工作区',
   fieldManifest: '本地制品 manifest',
+  showAdvanced: '高级选项',
+  closeAdvanced: '收起高级选项',
   cancel: '取消',
   close: '关闭',
   portInvalid: '端口必须是 1 到 65535 之间的整数。',
@@ -82,11 +89,16 @@ export const en: Record<RemoteHostsLocaleKey, string> = {
   fieldHost: 'Address',
   fieldPort: 'Port',
   fieldUser: 'Login user',
+  authKey: 'Private key',
+  authPassword: 'Password',
   fieldPrivateKey: 'Private key',
+  fieldPassword: 'Password',
   privateKeyHint: 'Leave blank to use the environment SSH agent and default keys.',
   fieldRoot: 'Remote root directory',
   fieldWorkspace: 'Remote workspace',
   fieldManifest: 'Local artifact manifest',
+  showAdvanced: 'Advanced options',
+  closeAdvanced: 'Collapse advanced options',
   cancel: 'Cancel',
   close: 'Close',
   portInvalid: 'The port must be an integer between 1 and 65535.',
