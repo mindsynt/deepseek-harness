@@ -880,6 +880,7 @@ export function WorkspaceBrowser({
   // Ordering remains live while the rail or search replaces the list body.
   const list = useSessions(state => state)
   const storedWorkspaces = useWorkspaces(state => state.items)
+  const branches = useWorkspaces(state => state.branches)
   // The resolved name, not `t`, is the memo dependency: the bound seat keeps
   // its identity across a language switch.
   const defaultWorkspaceName = t('workspace.defaultName')

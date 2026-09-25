@@ -563,7 +563,7 @@ describe('workspaces', () => {
       const signal = new AbortController().signal
       await expect(runtime.workspaces.initializeDefault(signal)).resolves.toBeUndefined()
       const workspace = {
-        workspaceId: 'default' as WorkspaceId, hostId: 'local', title: request.title, path: '/default', sessionIds: [],
+        workspaceId: 'default' as WorkspaceId, hostId: 'local', title: 'Default', path: '/default', sessionIds: [],
         createdAt: '2026-09-20T00:00:00Z', updatedAt: '2026-09-20T00:00:00Z',
       }
       const initialize = vi.fn(async () => workspace)

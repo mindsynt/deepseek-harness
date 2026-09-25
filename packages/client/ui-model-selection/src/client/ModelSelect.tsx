@@ -499,7 +499,7 @@ export function ModelSelect(
                               <span className={css.modelName}>{model.name}</span>
                             </span>
                             <span className={css.check}>
-                              {pending?.provider === group.id && pending.model === model.id
+                              {state.pending?.provider === group.id && state.pending.model === model.id
                                 ? <StateDot state="ongoing" />
                                 : selected ? <IconCheckOutlineRegular /> : null}
                             </span>

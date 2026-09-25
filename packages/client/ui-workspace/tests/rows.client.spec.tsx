@@ -521,7 +521,7 @@ describe('workspace browser rows', () => {
     vi.useFakeTimers()
     try {
       const group: GroupNode = {
-        key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project',
+        key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project', branch: undefined,
         sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
       }
       render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
@@ -554,7 +554,7 @@ describe('workspace browser rows', () => {
     vi.useFakeTimers()
     try {
       const group: GroupNode = {
-        key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project',
+        key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project', branch: undefined,
         sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
       }
       render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
