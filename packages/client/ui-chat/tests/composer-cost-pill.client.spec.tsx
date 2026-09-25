@@ -77,12 +77,13 @@ function globalStore(init: GlobalUsageSnapshot) {
 }
 
 function snapshot(init: {
+  status?: GlobalUsageSnapshot['status']
   routes?: ReadonlyMap<SessionId, UsageByRouteProjection>
   days?: ReadonlyMap<SessionId, UsageByDayProjection>
   subagents?: ReadonlySet<SessionId>
 } = {}): GlobalUsageSnapshot {
   return {
-    status: 'ready',
+    status: init.status ?? 'ready',
     bySession: init.routes ?? new Map([[SID, routeProjection(route('deepseek', 'chat', 1_000_000))]]),
     daysBySession: init.days ?? new Map([[SID, dayProjection(dayRoute('deepseek', 'chat', 200, 1_000_000))]]),
     subagentSessions: init.subagents ?? new Set(),
@@ -122,16 +123,36 @@ function harness(init: {
 }
 
 describe('ComposerCostPill', () => {
-  it('asks the two lazy sources, shows a summarizing reading, then the current month spend', () => {
+  it('asks the two lazy sources and prices the current Session while the join is outstanding', () => {
     const global = globalStore({ status: 'idle', bySession: new Map(), daysBySession: new Map(), subagentSessions: new Set() })
     const { props, ensureModelPricing, ensureGlobalUsage } = harness({ global })
     const view = render(<ComposerCostPill {...props} />)
     expect(ensureModelPricing).toHaveBeenCalledOnce()
     expect(ensureGlobalUsage).toHaveBeenCalledOnce()
-    expect(view.container.textContent).toBe('模型花费汇总中…')
-
-    act(() => { global.set(snapshot()) })
     expect(view.getByRole('button').textContent).toBe('模型花费 2.00')
+
+    fireEvent.click(view.getByRole('button'))
+    expect(view.getByRole('dialog').firstChild?.textContent).toBe('模型花费2.00')
+
+    act(() => {
+      global.set(snapshot({
+        status: 'loading',
+        routes: new Map([
+          [SID, routeProjection(route('deepseek', 'chat', 1_000_000))],
+          [OTHER, routeProjection(route('deepseek', 'chat', 3_000_000))],
+        ]),
+        days: new Map([
+          [SID, dayProjection(dayRoute('deepseek', 'chat', 200, 1_000_000))],
+          [OTHER, dayProjection(dayRoute('deepseek', 'chat', 200, 3_000_000))],
+        ]),
+      }))
+    })
+    expect(view.getByRole('button').textContent).toBe('模型花费 8.00')
+    expect(view.getByRole('dialog').firstChild?.textContent).toBe('模型花费8.00')
+    fireEvent.change(view.getByLabelText('范围'), { target: { value: 'current' } })
+    expect(view.getByRole('button').textContent).toBe('模型花费 2.00')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(view.queryByRole('dialog')).toBeNull()
   })
 
   it('opens month and scope selectors with the default latest month breakdown', () => {

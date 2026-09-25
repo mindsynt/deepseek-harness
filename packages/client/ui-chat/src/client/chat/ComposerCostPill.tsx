@@ -151,24 +151,15 @@ export const ComposerCostPill = memo(function ComposerCostPill({
     ? undefined
     : estimateUsageByRouteBreakdown(modelProjection, modelPricingLookup(pricing.byRoute))
   const hasScopeData = mergedRoutes.routes.length > 0 || mergedDays.routes.length > 0
-  const ready = detailed && tokens && pricing.status === 'ready'
-    && globalUsage.status === 'ready' && hasScopeData && modelCost?.kind === 'priced'
+  const priced = detailed && tokens && pricing.status === 'ready'
+    && hasScopeData && modelCost?.kind === 'priced'
   useEffect(() => {
-    if (!ready && open) setOpen(false)
-  }, [open, ready, setOpen])
+    if (!priced && open) setOpen(false)
+  }, [open, priced, setOpen])
 
-  if (!detailed || !tokens || pricing.status !== 'ready') return null
-  if (globalUsage.status !== 'ready') {
-    return (
-      <span ref={rootRef} className={css.costRoot}>
-        <span className={`${css.pill} ${css.cost}`} data-composer-cost>
-          {t('composerCost.loading')}
-        </span>
-      </span>
-    )
-  }
-  /* v8 ignore next 4 -- the ready flag above already required scope data and a priced breakdown */
-  if (current === null || modelCost === undefined || modelCost.kind !== 'priced' || !hasScopeData) return null
+  if (!priced) return null
+  /* v8 ignore next 3 -- priced above already required a selection, scope data, and a priced breakdown */
+  if (current === null || modelCost === undefined || modelCost.kind !== 'priced') return null
   const scopeOptions: readonly CostScope[] = ['all', 'main', 'current']
   const monthOptions = [
     { value: 'all', label: t('composerCost.monthAll') },
