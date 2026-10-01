@@ -415,13 +415,11 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
-| `@deepseek-ai/dsh-fs-ssh` | no | Filesystem provider over the shared POSIX SSH helper |
-| `@deepseek-ai/dsh-helper-installer` | yes | Remote SSH helper provisioning over the local OpenSSH client |
+| `@deepseek-ai/dsh-fs-sftp` | no | Filesystem provider over SSH SFTP subsystem |
 | `@deepseek-ai/dsh-host-credentials` | yes | One stored SSH login per remote host, and the DSH-controlled OpenSSH configuration, identity and known_hosts it materializes |
-| `@deepseek-ai/dsh-sandbox-ssh` | no | Remote POSIX sandbox argv provider over the shared SSH helper |
-| `@deepseek-ai/dsh-ssh` | yes | Shared OpenSSH connection and versioned POSIX remote helper |
 | `@deepseek-ai/dsh-ssh-host-registry` | yes | One isolated SSH execution world per registered remote host |
-| `@deepseek-ai/dsh-subprocess-ssh` | no | Subprocess and terminal provider over the shared POSIX SSH helper |
+| `@deepseek-ai/dsh-ssh-native` | yes | Native SSH connection service over ssh2, without a remote helper daemon |
+| `@deepseek-ai/dsh-subprocess-ssh-exec` | no | Subprocess and terminal provider over SSH exec channels |
 
 ## storage
 

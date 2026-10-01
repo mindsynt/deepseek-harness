@@ -8,14 +8,11 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import type { RemoteHostLogin } from '@deepseek-ai/dsh-host-credentials'
-import type { RemoteHelperArtifact } from '@deepseek-ai/dsh-helper-installer'
-import type { SandboxProvider } from '@deepseek-ai/dsh-sandbox'
-import type { SshConnection } from '@deepseek-ai/dsh-ssh'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import type { NativeRemoteHostSpec } from './composition-native.ts'
 import type { RemoteHostRecord } from './spec.ts'
 
 export type { RemoteHostLogin } from '@deepseek-ai/dsh-host-credentials'
-export type { RemoteHelperArtifact } from '@deepseek-ai/dsh-helper-installer'
 export type { RemoteHostRecord } from './spec.ts'
 
 /** Branded id of one registered remote host. */
@@ -56,8 +53,6 @@ export interface RemoteHostProvisionRequest {
   readonly root: string
   /** Absolute remote default workspace recorded in the opened realm. */
   readonly workspace: string
-  /** Artifact the installer places on the host. */
-  readonly artifact: RemoteHelperArtifact
 }
 
 /** One host to provision from entered login material. */
@@ -72,8 +67,6 @@ export interface RemoteHostLoginProvisionRequest {
   readonly root: string
   /** Absolute remote default workspace. */
   readonly workspace: string
-  /** Artifact the installer places on the host. */
-  readonly artifact: RemoteHelperArtifact
   /**
    * Absolute local path of the artifact manifest this host installs from.
    * Omission persists no host record, so a host provisioned without it is
@@ -84,15 +77,13 @@ export interface RemoteHostLoginProvisionRequest {
 
 /** Execution services resolved inside one host's isolated realm. */
 export interface RemoteHostWorld {
-  readonly ssh: SshConnection
   readonly fs: FileSystem
   readonly subprocess: SubprocessRuntime
-  readonly sandbox: SandboxProvider
 }
 
 /** One open host realm. */
 export interface RemoteHostHandle {
-  readonly spec: RemoteHostSpec
+  readonly spec: NativeRemoteHostSpec
   readonly world: RemoteHostWorld
   /** Settles when the realm has been disposed. */
   readonly closed: Promise<void>
@@ -103,7 +94,7 @@ export interface RemoteHostHandle {
 /** Registry of open remote-host execution realms and their persisted records. */
 export interface RemoteHostRegistry {
   /** Open one host realm; a duplicate id fails loud. */
-  open(spec: RemoteHostSpec): Promise<RemoteHostHandle>
+  open(spec: NativeRemoteHostSpec): Promise<RemoteHostHandle>
   /**
    * Install the helper on a host, then open its realm from the returned coordinates.
    * @param request - host, remote root, workspace and artifact.

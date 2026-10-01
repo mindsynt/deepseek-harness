@@ -34,10 +34,8 @@ export function remoteHostRecordView(record: RemoteHostRecord): RemoteHostRecord
     id: record.id,
     label: record.label,
     host: record.host,
-    root: record.root,
-    workspace: record.workspace,
-    manifest: record.manifest,
-    helperHash: record.helperHash,
+    port: record.port,
+    user: record.user,
   }
 }
 

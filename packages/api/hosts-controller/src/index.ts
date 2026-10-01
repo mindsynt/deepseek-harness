@@ -1,25 +1,23 @@
 /**
  * Host Remote owner for GUI-managed SSH hosts: it lists the durable host
  * records with their live execution-world state, adds a host from entered login
- * material and a local helper-artifact manifest, removes one, checks that a
- * stored login still reaches its endpoint, and streams host-list changes.
+ * material, removes one, checks that a stored login still reaches its endpoint,
+ * and streams host-list changes.
  *
- * The registry (`ctx.remoteHosts`) owns records, realms and helper
- * provisioning, and the credentials store (`ctx.sshHostCredentials`) owns the
- * login material and the controlled OpenSSH identity. This package composes
- * both and adds no SSH behavior of its own; every entered secret stays in the
- * credential store and never reaches a returned value.
+ * The registry (`ctx.remoteHosts`) owns records and realms, and the credentials
+ * store (`ctx.sshHostCredentials`) owns the login material and the controlled
+ * OpenSSH identity. This package composes both and adds no SSH behavior of its
+ * own; every entered secret stays in the credential store and never reaches a
+ * returned value.
  *
  * @module @deepseek-ai/dsh-hosts-controller
  */
 
 import { readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ControlledSshIdentity } from '@deepseek-ai/dsh-host-credentials'
-import { readHelperArtifact } from '@deepseek-ai/dsh-ssh-host-registry'
-import type { RemoteHostHandle, RemoteHostId, RemoteHostSpec } from '@deepseek-ai/dsh-ssh-host-registry'
+import type { NativeRemoteHostSpec, RemoteHostHandle, RemoteHostId } from '@deepseek-ai/dsh-ssh-host-registry'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { followRemoteHosts, remoteHostView } from './feed.ts'
 import type {
@@ -71,15 +69,14 @@ export class HostsController extends TypertRemoteService {
   }
 
   /**
-   * Store entered login material, install the helper from a local artifact
-   * manifest, and open the host's execution world.
+   * Store entered login material and open the host's execution world.
    *
    * These steps are one transaction: a failure removes the stored login, the
    * persisted record and any realm the registry opened, and reports that
    * outcome in a `hosts/add-failed` message. An id that a record or an open
    * world already uses is refused before anything is stored, so a failed add
    * never removes an existing host.
-   * @param request - identity, remote paths, artifact manifest and entered login.
+   * @param request - identity, label and entered login.
    * @returns the registered host as this call opened it.
    * @throws RemoteError when the id is taken or the add failed.
    */
@@ -90,22 +87,13 @@ export class HostsController extends TypertRemoteService {
     let handle: RemoteHostHandle
     try {
       await this.ctx.sshHostCredentials.store(request.id, request.login)
-      const artifact = await readHelperArtifact({
+      handle = await this.ctx.remoteHosts.open({
         id,
         label: request.label,
         host: request.login.host,
-        root: request.root,
-        workspace: request.workspace,
-        manifest: request.manifest,
-      })
-      handle = await this.ctx.remoteHosts.provisionFromLogin({
-        id,
-        label: request.label,
-        login: request.login,
-        root: request.root,
-        workspace: request.workspace,
-        artifact,
-        manifest: request.manifest,
+        port: request.login.port,
+        user: request.login.user,
+        ...(request.login.privateKey !== undefined ? { privateKey: request.login.privateKey } : {}),
       })
     } catch (error) {
       throw await this.rollback(request.id, error)
@@ -116,10 +104,8 @@ export class HostsController extends TypertRemoteService {
           id: request.id,
           label: request.label,
           host: handle.spec.host,
-          root: request.root,
-          workspace: request.workspace,
-          manifest: request.manifest,
-          helperHash: handle.spec.helperHash,
+          port: handle.spec.port ?? 22,
+          user: handle.spec.user,
         },
         open: true,
       },
@@ -254,23 +240,14 @@ export class HostsController extends TypertRemoteService {
  * @returns the identity the credentials store wrote for that host.
  * @throws RemoteError when the world was opened from a configured artifact instead.
  */
-function liveIdentity(spec: RemoteHostSpec): ControlledSshIdentity {
-  const configPath = spec.sshConfigFile
-  if (configPath === undefined) {
-    throw new RemoteError(
-      'hosts/no-login-identity',
-      `remote host '${String(spec.id)}' is open from a configured helper artifact, so it has no stored-login identity to check`,
-      { id: String(spec.id) },
-    )
-  }
-  const directory = dirname(configPath)
-  return {
-    alias: spec.host,
-    configPath,
-    directory,
-    knownHostsPath: join(directory, 'known_hosts'),
-    dispose: () => Promise.resolve(),
-  }
+function liveIdentity(spec: NativeRemoteHostSpec): ControlledSshIdentity {
+  // NativeRemoteHostSpec doesn't have sshConfigFile; the identity is managed by the credentials store
+  // For now, we can't borrow an identity from an open native host
+  throw new RemoteError(
+    'hosts/no-login-identity',
+    `remote host '${String(spec.id)}' is open from native SSH, so it has no stored-login identity to check`,
+    { id: String(spec.id) },
+  )
 }
 
 /**

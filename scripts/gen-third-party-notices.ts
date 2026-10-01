@@ -88,6 +88,7 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
   // No repository field in the published manifest.
   'node-addon-require-builtin': { repo: 'https://www.npmjs.com/package/node-addon-require-builtin' },
   // No `license` field in the published manifest; the tarball's LICENSE.txt is the MIT text.
+  'ssh2': { license: 'MIT', repo: 'https://github.com/fb55/ssh2' },
 }
 
 /**

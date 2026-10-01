@@ -17,16 +17,12 @@ export interface RemoteHostRecordView {
   readonly id: string
   /** Caller-facing label. */
   readonly label: string
-  /** OpenSSH alias the materialized identity addresses; the login itself stays in the credential store. */
+  /** SSH host name or address. */
   readonly host: string
-  /** Absolute remote directory holding the digest-named install directory. */
-  readonly root: string
-  /** Absolute remote default workspace. */
-  readonly workspace: string
-  /** Absolute local path of the artifact manifest this host installs from. */
-  readonly manifest: string
-  /** Lowercase SHA-256 of the helper entry last installed for this host. */
-  readonly helperHash: string
+  /** TCP port. */
+  readonly port: number
+  /** Login user. */
+  readonly user: string
 }
 
 /** One registered host: its durable record and whether its execution world is open here. */
@@ -59,13 +55,7 @@ export interface RemoteHostAddRequest {
   readonly id: string
   /** Caller-facing label. */
   readonly label: string
-  /** Absolute remote directory receiving the digest-named install directory. */
-  readonly root: string
-  /** Absolute remote default workspace. */
-  readonly workspace: string
-  /** Absolute local path of the artifact manifest this host installs from. */
-  readonly manifest: string
-  /** Entered login material, stored before the helper is installed. */
+  /** Entered login material. */
   readonly login: RemoteHostLogin
 }
 

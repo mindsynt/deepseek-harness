@@ -67,30 +67,26 @@ describe('dsh-ssh-hosts bundle', () => {
     const layers = parsedPatch()
     expect(layers).toHaveLength(1)
     const rows = layers.flatMap(layer => layer.insert ?? [])
-    expect(rows).toHaveLength(4)
+    expect(rows).toHaveLength(3)
     expect(rows.map(row => row.id)).toEqual([
       'ssh-host-registry',
-      'ssh-helper-installer',
       'ssh-host-credentials',
       'ssh-hosts-controller',
     ])
     expect(rows.map(row => row.name)).toEqual([
       '@deepseek-ai/dsh-ssh-host-registry',
-      '@deepseek-ai/dsh-helper-installer',
       '@deepseek-ai/dsh-host-credentials',
       '@deepseek-ai/dsh-hosts-controller',
     ])
     expect(rows[0]?.config).toEqual({
-      manifest: { __jsExpr: 'process.env.DSH_SSH_HELPER_MANIFEST' },
       hosts: [],
     })
     // The credentials row relies on its derived `<DSH home>/ssh-hosts` default,
     // so it must stay config-free for a deployment that configures nothing.
     expect(rows[1]?.config).toBeUndefined()
-    expect(rows[2]?.config).toBeUndefined()
     // The controller reads the registry and the credential store it injects, so
     // it carries no config of its own either.
-    expect(rows[3]?.config).toBeUndefined()
+    expect(rows[2]?.config).toBeUndefined()
   })
 
   it('layers no local filesystem, subprocess or sandbox row', () => {
@@ -110,13 +106,11 @@ describe('dsh-ssh-hosts bundle', () => {
     const pkg = manifest()
     expect(pkg.dependencies).toMatchObject({
       '@deepseek-ai/dsh-ssh-host-registry': 'workspace:^',
-      '@deepseek-ai/dsh-helper-installer': 'workspace:^',
+      '@deepseek-ai/dsh-ssh-native': 'workspace:^',
+      '@deepseek-ai/dsh-fs-sftp': 'workspace:^',
+      '@deepseek-ai/dsh-subprocess-ssh-exec': 'workspace:^',
       '@deepseek-ai/dsh-host-credentials': 'workspace:^',
       '@deepseek-ai/dsh-hosts-controller': 'workspace:^',
-      '@deepseek-ai/dsh-ssh': 'workspace:^',
-      '@deepseek-ai/dsh-fs-ssh': 'workspace:^',
-      '@deepseek-ai/dsh-subprocess-ssh': 'workspace:^',
-      '@deepseek-ai/dsh-sandbox-ssh': 'workspace:^',
     })
     expect(pkg.peerDependencies).toHaveProperty('@deepseek-ai/cordis', 'workspace:^')
     expect(pkg.devDependencies).toHaveProperty('@deepseek-ai/cordis', 'workspace:^')

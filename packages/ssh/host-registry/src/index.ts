@@ -13,9 +13,9 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SshHostCredentials } from '@deepseek-ai/dsh-host-credentials'
-import type { SshHelperInstaller } from '@deepseek-ai/dsh-helper-installer'
 import type { Domain, KvTable } from '@deepseek-ai/dsh-storage-domain'
-import { sshComposition } from './composition.ts'
+import { nativeSshComposition } from './composition-native.ts'
+import type { NativeRemoteHostSpec, NativeRemoteHostWorld } from './composition-native.ts'
 import { declaredHosts, provisionDeclaredHosts, restorePersistedHosts } from './config.ts'
 import { remoteHostDomainSpec } from './spec.ts'
 import type { RemoteHostRecord } from './spec.ts'
@@ -25,7 +25,6 @@ import type {
   RemoteHostLoginProvisionRequest,
   RemoteHostProvisionRequest,
   RemoteHostRegistry,
-  RemoteHostSpec,
   RemoteHostWorld,
 } from './types.ts'
 
@@ -42,7 +41,8 @@ export type {
 } from './types.ts'
 export { remoteHostDomainSpec, remoteHostRecord } from './spec.ts'
 export { readHelperArtifact } from './config.ts'
-export { sshComposition } from './composition.ts'
+export { nativeSshComposition } from './composition-native.ts'
+export type { NativeRemoteHostSpec, NativeRemoteHostWorld } from './composition-native.ts'
 
 /** Stable plugin name of the remote-host registry. */
 export const name = 'ssh-host-registry'
@@ -98,7 +98,7 @@ export const Config: z<Config> = z.object({
  * @param spec - resolved connection and helper coordinates of that host.
  * @returns the execution services resolved inside `realm`.
  */
-export type RemoteHostComposition = (realm: Context, spec: RemoteHostSpec) => Promise<RemoteHostWorld>
+export type RemoteHostComposition = (realm: Context, spec: NativeRemoteHostSpec) => Promise<NativeRemoteHostWorld>
 
 /**
  * Compose the registry on a context: validate the declared hosts, mount the
@@ -176,8 +176,7 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
    */
   constructor(
     ctx: Context,
-    private readonly composition: RemoteHostComposition = sshComposition,
-    private readonly installer?: SshHelperInstaller,
+    private readonly composition: RemoteHostComposition = nativeSshComposition,
     private readonly credentials?: SshHostCredentials,
   ) {
     super(ctx, 'remoteHosts')
@@ -198,7 +197,7 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
    * @returns the open handle.
    * @throws when the id is already open, or when the composition fails to provide a world.
    */
-  async open(spec: RemoteHostSpec): Promise<RemoteHostHandle> {
+  async open(spec: NativeRemoteHostSpec): Promise<RemoteHostHandle> {
     return this.openHandle(spec)
   }
 
@@ -209,7 +208,7 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
    * @returns the open handle.
    * @throws when the id is already open, or when the composition fails to provide a world.
    */
-  private async openHandle(spec: RemoteHostSpec, release?: () => Promise<void>): Promise<RemoteHostHandle> {
+  private async openHandle(spec: NativeRemoteHostSpec, release?: () => Promise<void>): Promise<RemoteHostHandle> {
     this.assertAvailable(spec.id)
     this.opening.add(spec.id)
     try {
@@ -247,27 +246,12 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
 
   /**
    * Install the helper on a host, then open its realm from the returned coordinates.
-   * @param request - host, remote root, workspace and artifact.
+   * @param _request - host, remote root, workspace and artifact.
    * @returns the opened handle.
    * @throws when the id is already open, when no installer is mounted, or when the install fails.
    */
-  async provision(request: RemoteHostProvisionRequest): Promise<RemoteHostHandle> {
-    this.assertAvailable(request.id)
-    const installation = await this.resolveInstaller().install({
-      host: request.host,
-      root: request.root,
-      workspace: request.workspace,
-      artifact: request.artifact,
-    })
-    return this.open({
-      id: request.id,
-      label: request.label,
-      host: request.host,
-      node: installation.node,
-      helper: installation.helper,
-      helperHash: installation.helperHash,
-      workspace: installation.workspace,
-    })
+  async provision(_request: RemoteHostProvisionRequest): Promise<RemoteHostHandle> {
+    throw new Error('helper-based provisioning is no longer supported; use native SSH composition')
   }
 
   /**
@@ -286,64 +270,13 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
    * its identity before rethrowing, so a failed call leaves no open host.
    * Without `manifest` the realm still opens and no record is written — the
    * host then survives no restart.
-   * @param request - identity, login material, remote root, workspace and artifact.
+   * @param _request - identity, login material, remote root, workspace and artifact.
    * @returns the opened handle.
    * @throws when the id is already open, when no credentials service is
    * reachable, or when trust, install, composition or record persistence fails.
    */
-  async provisionFromLogin(request: RemoteHostLoginProvisionRequest): Promise<RemoteHostHandle> {
-    this.assertAvailable(request.id)
-    const credentials = this.resolveCredentials()
-    const identity = await credentials.materialize(request.login)
-    let handle: RemoteHostHandle
-    let record: RemoteHostRecord | undefined
-    try {
-      await credentials.trustFirstUse(identity, { host: request.login.host, port: request.login.port })
-      const installation = await this.resolveInstaller().install({
-        host: identity.alias,
-        root: request.root,
-        workspace: request.workspace,
-        artifact: request.artifact,
-        sshConfigFile: identity.configPath,
-      })
-      record = request.manifest === undefined ? undefined : {
-        id: request.id,
-        label: request.label,
-        host: identity.alias,
-        root: request.root,
-        workspace: request.workspace,
-        manifest: request.manifest,
-        helperHash: installation.helperHash,
-      }
-      handle = await this.openHandle({
-        id: request.id,
-        label: request.label,
-        host: identity.alias,
-        sshConfigFile: identity.configPath,
-        node: installation.node,
-        helper: installation.helper,
-        helperHash: installation.helperHash,
-        workspace: installation.workspace,
-      }, () => identity.dispose())
-    } catch (error) {
-      try {
-        await identity.dispose()
-      } catch (removalError) {
-        throw new Error(`remote host ${request.id}: provisioning failed and the materialized identity could not be removed: ${String(removalError)}`, { cause: error })
-      }
-      throw error
-    }
-    if (record !== undefined) {
-      try {
-        await this.save(record)
-      } catch (error) {
-        // The handle owns the identity, so closing it is the single removal;
-        // the outer failure path must not dispose the identity a second time.
-        await handle.close()
-        throw error
-      }
-    }
-    return handle
+  async provisionFromLogin(_request: RemoteHostLoginProvisionRequest): Promise<RemoteHostHandle> {
+    throw new Error('helper-based provisioning is no longer supported; use native SSH composition')
   }
 
   /**
@@ -467,19 +400,6 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
    */
   private assertAvailable(id: RemoteHostId): void {
     if (this.hosts.has(id) || this.opening.has(id)) throw new Error(`remote host ${id} is already open`)
-  }
-
-  /**
-   * The installer provisioning runs through.
-   * @returns the constructor-injected installer, else the mounted `sshHelperInstaller` service.
-   * @throws when this context has neither.
-   */
-  private resolveInstaller(): SshHelperInstaller {
-    const installer = this.installer ?? this.ctx.get('sshHelperInstaller')
-    if (installer === undefined) {
-      throw new Error('remote host provisioning needs @deepseek-ai/dsh-helper-installer mounted in this context')
-    }
-    return installer
   }
 
   /**

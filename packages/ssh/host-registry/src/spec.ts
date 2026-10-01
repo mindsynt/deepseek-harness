@@ -7,7 +7,6 @@
  * @module @deepseek-ai/dsh-ssh-host-registry/src/spec
  */
 
-import { isAbsolute } from 'node:path'
 import { z } from 'zod'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { RemoteHostId } from './types.ts'
@@ -21,16 +20,12 @@ export interface RemoteHostRecord {
   readonly id: string
   /** Caller-facing label. */
   readonly label: string
-  /** OpenSSH alias the materialized identity addresses; the login itself lives in credentials. */
+  /** SSH host name or address. */
   readonly host: string
-  /** Absolute remote directory receiving the digest-named install directory. */
-  readonly root: string
-  /** Absolute remote default workspace. */
-  readonly workspace: string
-  /** Absolute local path of the artifact manifest this host installs from. */
-  readonly manifest: string
-  /** Lowercase SHA-256 of the helper entry last installed for this host. */
-  readonly helperHash: string
+  /** TCP port. */
+  readonly port: number
+  /** Login user. */
+  readonly user: string
 }
 
 /** Schema validating every stored host record at the durable boundary. */
@@ -38,12 +33,8 @@ export const remoteHostRecord: z.ZodType<RemoteHostRecord> = z.object({
   id: z.string(),
   label: z.string(),
   host: z.string(),
-  root: z.string(),
-  workspace: z.string(),
-  manifest: z.string().refine(value => value.length > 0 && isAbsolute(value), {
-    message: 'manifest must be a non-empty absolute local path',
-  }),
-  helperHash: z.string(),
+  port: z.number().int().min(1).max(65535),
+  user: z.string(),
 })
 
 /**
@@ -53,6 +44,6 @@ export const remoteHostRecord: z.ZodType<RemoteHostRecord> = z.object({
  */
 export const remoteHostDomainSpec = defineDomain({
   name: 'ssh_hosts',
-  version: 1,
+  version: 2,
   tables: { hosts: domainTable<RemoteHostId, RemoteHostRecord>(remoteHostRecord) },
 })

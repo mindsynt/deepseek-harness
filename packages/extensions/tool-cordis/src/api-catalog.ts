@@ -1260,8 +1260,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'add\') async add(request: RemoteHostAddRequest): Promise<RemoteHostAddValue>',
-        description: 'Store entered login material, install the helper from a local artifact manifest, and open the host\'s execution world.\n\nThese steps are one transaction: a failure removes the stored login, the persisted record and any realm the registry opened, and reports that outcome in a `hosts/add-failed` message. An id that a record or an open world already uses is refused before anything is stored, so a failed add never removes an existing host.',
-        parameters: [{ name: 'request', description: 'identity, remote paths, artifact manifest and entered login.' }],
+        description: 'Store entered login material and open the host\'s execution world.\n\nThese steps are one transaction: a failure removes the stored login, the persisted record and any realm the registry opened, and reports that outcome in a `hosts/add-failed` message. An id that a record or an open world already uses is refused before anything is stored, so a failed add never removes an existing host.',
+        parameters: [{ name: 'request', description: 'identity, label and entered login.' }],
         returns: 'the registered host as this call opened it.',
         throws: ['RemoteError when the id is taken or the add failed.'],
       },
@@ -1867,23 +1867,23 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Registry owning one isolated execution realm per open remote host.',
     methods: [
       {
-        signature: 'async open(spec: RemoteHostSpec): Promise<RemoteHostHandle>',
+        signature: 'async open(spec: NativeRemoteHostSpec): Promise<RemoteHostHandle>',
         description: 'Open one host realm; a duplicate id fails loud.',
         parameters: [{ name: 'spec', description: 'resolved connection and helper coordinates of the host.' }],
         returns: 'the open handle.',
         throws: ['when the id is already open, or when the composition fails to provide a world.'],
       },
       {
-        signature: 'async provision(request: RemoteHostProvisionRequest): Promise<RemoteHostHandle>',
+        signature: 'async provision(_request: RemoteHostProvisionRequest): Promise<RemoteHostHandle>',
         description: 'Install the helper on a host, then open its realm from the returned coordinates.',
-        parameters: [{ name: 'request', description: 'host, remote root, workspace and artifact.' }],
+        parameters: [{ name: '_request', description: 'host, remote root, workspace and artifact.' }],
         returns: 'the opened handle.',
         throws: ['when the id is already open, when no installer is mounted, or when the install fails.'],
       },
       {
-        signature: 'async provisionFromLogin(request: RemoteHostLoginProvisionRequest): Promise<RemoteHostHandle>',
+        signature: 'async provisionFromLogin(_request: RemoteHostLoginProvisionRequest): Promise<RemoteHostHandle>',
         description: 'Materialize entered login material, trust its host key, install the helper through that identity, then open the realm it addresses.\n\nThe returned handle owns the materialized identity: closing it releases the realm and then removes the identity\'s generated directory, once. A failure from host-key trust through composition removes the identity before the failure is rethrown; when that removal also fails, the failure is reported with the original provisioning error as its `cause`.\n\nA request carrying `manifest` persists one host record after the realm opens, with `host` taken from the materialized alias and `helperHash` from the installation. A record write that fails closes the opened realm and its identity before rethrowing, so a failed call leaves no open host. Without `manifest` the realm still opens and no record is written — the host then survives no restart.',
-        parameters: [{ name: 'request', description: 'identity, login material, remote root, workspace and artifact.' }],
+        parameters: [{ name: '_request', description: 'identity, login material, remote root, workspace and artifact.' }],
         returns: 'the opened handle.',
         throws: ['when the id is already open, when no credentials service is reachable, or when trust, install, composition or record persistence fails.'],
       },
@@ -2901,49 +2901,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'ssh',
-    summary: 'One non-reconnecting SSH session; loss invalidates all active operations.',
-    description: 'One non-reconnecting SSH session; loss invalidates all active operations.',
-    methods: [
-      {
-        signature: 'readonly ready: Promise<Hello>',
-        description: 'Verified remote helper coordinates; callers must await this before launch.',
-        parameters: [],
-      },
-      {
-        signature: 'async request<T>(method: string, params: unknown, result: z.ZodType<T>, signal?: AbortSignal, wait: boolean = false): Promise<T>',
-        description: 'Send a helper operation; cancellation never replays an ambiguous mutation.',
-        parameters: [{ name: 'method', description: 'the private helper operation.' }, { name: 'params', description: 'JSON request fields validated by the helper.' }, { name: 'result', description: 'response validation before returning provider-visible data.' }, { name: 'signal', description: 'cancellation, which does not undo completed remote effects.' }, { name: 'wait', description: 'allow a process observation to outlast the administrative deadline.' }],
-        returns: 'the validated remote result.',
-      },
-      {
-        signature: 'async connectStream(endpoint: SshStreamEndpoint, signal?: AbortSignal): Promise<Socket>',
-        description: 'Forward one authenticated stream through an independent SSH channel.',
-        parameters: [{ name: 'endpoint', description: 'private coordinates issued by this connection\'s helper.' }, { name: 'signal', description: 'cancellation of allocation and the resulting socket.' }],
-        returns: 'a paused socket; attach a consumer before resuming it.',
-      },
-      {
-        signature: 'dispose(): Promise<void>',
-        description: 'Tear down the helper\'s remote managed ranges before releasing the SSH master when reachable.',
-        parameters: [],
-      },
-    ],
-  },
-  {
-    key: 'sshHelperInstaller',
-    summary: 'Installer service: places one verified helper artifact on a host, or confirms an identical install already there.',
-    description: 'Installer service: places one verified helper artifact on a host, or confirms an identical install already there. Every remote command is single-line and single-quotes each interpolated path.',
-    methods: [
-      {
-        signature: 'async install(request: HelperInstallRequest): Promise<HelperInstallation>',
-        description: 'Provision one host, or confirm an identical install already exists.',
-        parameters: [{ name: 'request', description: 'host, remote root, workspace, artifact and optional local SSH client configuration.' }],
-        returns: 'verified coordinates for the SSH connection config.',
-        throws: ['when the host cannot run the engine range, a remote command fails, or the installed entry digest differs from the artifact.'],
-      },
-    ],
-  },
-  {
     key: 'sshHostCredentials',
     summary: 'Store one host\'s login material and materialize its DSH-controlled OpenSSH identity on demand.',
     description: 'Store one host\'s login material and materialize its DSH-controlled OpenSSH identity on demand.\n\nValidation happens before any file or record write, so a rejected login leaves both the credential store and the state directory untouched.',
@@ -2985,6 +2942,127 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Trust a host\'s published keys for the first time by scanning the real endpoint and recording what it publishes. Only lines the identity\'s `known_hosts` does not already carry are appended, so repeated calls for one endpoint change nothing and earlier lines survive untouched.',
         parameters: [{ name: 'identity', description: 'the identity whose `known_hosts` receives the keys.' }, { name: 'endpoint', description: 'real host and port whose keys are scanned.' }],
         throws: ['when the endpoint is malformed, the scan fails, a scanned line is malformed, or the host publishes no key.'],
+      },
+    ],
+  },
+  {
+    key: 'sshNative',
+    summary: 'Native SSH connection owner; one connection per service instance.',
+    description: 'Native SSH connection owner; one connection per service instance.',
+    methods: [
+      {
+        signature: 'readonly ready: Promise<void>',
+        description: 'Resolves when the connection and SFTP subsystem are ready.',
+        parameters: [],
+      },
+      {
+        signature: 'async dispose(): Promise<void>',
+        description: 'Dispose the connection and all running operations.',
+        parameters: [],
+      },
+      {
+        signature: 'async sftpStat(path: string): Promise<NativeSftpStat | undefined>',
+        description: 'Get file stat information.',
+        parameters: [{ name: 'path', description: 'absolute remote path.' }],
+        returns: 'stat information or undefined if not found.',
+      },
+      {
+        signature: 'async sftpLstat(path: string): Promise<NativeSftpStat | undefined>',
+        description: 'Get file stat information without following symlinks.',
+        parameters: [{ name: 'path', description: 'absolute remote path.' }],
+        returns: 'stat information or undefined if not found.',
+      },
+      {
+        signature: 'async sftpRead(path: string): Promise<Buffer>',
+        description: 'Read an entire file.',
+        parameters: [{ name: 'path', description: 'absolute remote path.' }],
+        returns: 'the file contents.',
+      },
+      {
+        signature: 'async sftpReadRange(path: string, offset: number, length: number): Promise<Buffer>',
+        description: 'Read a byte range from a file.',
+        parameters: [{ name: 'path', description: 'absolute remote path.' }, { name: 'offset', description: 'byte offset to start reading.' }, { name: 'length', description: 'number of bytes to read.' }],
+        returns: 'the file contents at the specified range.',
+      },
+      {
+        signature: 'async sftpWrite(path: string, data: Buffer): Promise<void>',
+        description: 'Write a file.',
+        parameters: [{ name: 'path', description: 'absolute remote path.' }, { name: 'data', description: 'file contents.' }],
+      },
+      {
+        signature: 'async sftpMkdir(path: string, recursive: boolean = false): Promise<void>',
+        description: 'Create a directory.',
+        parameters: [{ name: 'path', description: 'absolute remote path.' }, { name: 'recursive', description: 'create parent directories.' }],
+      },
+      {
+        signature: 'async sftpReaddir(path: string): Promise<NativeSftpEntry[]>',
+        description: 'List directory entries.',
+        parameters: [{ name: 'path', description: 'absolute remote path.' }],
+        returns: 'directory entries.',
+      },
+      {
+        signature: 'async sftpRealpath(path: string): Promise<string>',
+        description: 'Resolve a path to its canonical form.',
+        parameters: [{ name: 'path', description: 'remote path to resolve.' }],
+        returns: 'the canonical absolute path.',
+      },
+      {
+        signature: 'async sftpUnlink(path: string): Promise<void>',
+        description: 'Remove a file.',
+        parameters: [{ name: 'path', description: 'absolute remote path.' }],
+      },
+      {
+        signature: 'async exec(command: string, options: NativeExecOptions = {}): Promise<NativeExecHandle>',
+        description: 'Spawn a command on the remote host.',
+        parameters: [{ name: 'command', description: 'the command to execute.' }, { name: 'options', description: 'execution options.' }],
+        returns: 'a handle to the running process.',
+      },
+      {
+        signature: 'async resolveExecutable(command: string): Promise<string | undefined>',
+        description: 'Resolve an executable on the remote host.',
+        parameters: [{ name: 'command', description: 'command name to resolve.' }],
+        returns: 'the absolute path, or undefined if not found.',
+      },
+      {
+        signature: 'async sftpBatch(operations: NativeSftpBatchOperation[]): Promise<NativeSftpBatchResult[]>',
+        description: 'Execute multiple SFTP operations in a batch.',
+        parameters: [{ name: 'operations', description: 'array of SFTP operations to execute.' }],
+        returns: 'results for each operation.',
+      },
+      {
+        signature: 'async sftpReadStream( path: string, options: { start?: number; chunkSize?: number } = {}, ): Promise<NativeSftpReadStream>',
+        description: 'Create a streaming reader for a file.',
+        parameters: [{ name: 'path', description: 'absolute remote path.' }, { name: 'options', description: 'read options (start offset, chunk size).' }],
+        returns: 'a streaming reader.',
+      },
+      {
+        signature: 'async terminalEnvironment(): Promise<{ shellPath: string; shellArgs: string[] }>',
+        description: 'Get the terminal environment on the remote host.',
+        parameters: [],
+        returns: 'shell path and arguments.',
+      },
+      {
+        signature: 'async validateConfig(): Promise<ConfigValidationResult>',
+        description: 'Validate the configuration without connecting.',
+        parameters: [],
+        returns: 'validation result with errors and warnings.',
+      },
+      {
+        signature: 'async listProcesses(options: { user?: string; name?: string } = {}): Promise<NativeProcessInfo[]>',
+        description: 'List processes running on the remote host.',
+        parameters: [{ name: 'options', description: 'optional filter options.' }],
+        returns: 'array of process information.',
+      },
+      {
+        signature: 'async killProcess(pid: number, signal: NativeExecSignal = \'SIGTERM\'): Promise<void>',
+        description: 'Kill a process on the remote host.',
+        parameters: [{ name: 'pid', description: 'process ID to kill.' }, { name: 'signal', description: 'signal to send (default: SIGTERM).' }],
+      },
+      {
+        signature: 'async getSystemInfo(): Promise<NativeSystemInfo>',
+        description: 'Get system information from the remote host.',
+        parameters: [],
+        returns: 'system information including hostname, OS, memory, disk, etc.',
       },
     ],
   },
@@ -4993,6 +5071,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ComputerUseProviderName = Branded<\'ComputerUseProviderName\'>;',
   },
   {
+    name: 'ConfigValidationResult',
+    declaration: 'export interface ConfigValidationResult {\n    valid: boolean;\n    errors: string[];\n    warnings: string[];\n}',
+  },
+  {
     name: 'ConfinedArgv',
     declaration: 'export interface ConfinedArgv {\n    argv: string[];\n    enforcement: SandboxEnforcement;\n    denialSignatures: readonly string[];\n    runnerFailureRules: readonly RunnerFailureRule[];\n}',
   },
@@ -5533,14 +5615,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface GrantRecord {\n    readonly kind: \'grant\';\n    readonly payload: unknown;\n}',
   },
   {
-    name: 'HelperInstallation',
-    declaration: 'export interface HelperInstallation {\n    readonly node: string;\n    readonly helper: string;\n    readonly helperHash: string;\n    readonly workspace: string;\n}',
-  },
-  {
-    name: 'HelperInstallRequest',
-    declaration: 'export interface HelperInstallRequest {\n    readonly host: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly artifact: RemoteHelperArtifact;\n    readonly sshConfigFile?: string;\n}',
-  },
-  {
     name: 'HostConnectionFetch',
     declaration: 'export interface HostConnectionFetch {\n    register(route: ConnectionFetchRoute): () => Promise<void>;\n}',
   },
@@ -6061,8 +6135,52 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ModelReasoningEffort {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n}',
   },
   {
+    name: 'NativeExecHandle',
+    declaration: 'export interface NativeExecHandle {\n    done: Promise<{\n        code: number;\n        stdout: Buffer;\n        stderr: Buffer;\n    }>;\n    wait(signal?: AbortSignal): Promise<{\n        code: number;\n        stdout: Buffer;\n        stderr: Buffer;\n    }>;\n    terminate(): Promise<void>;\n    write(data: string): Promise<boolean>;\n    resize(cols: number, rows: number): Promise<void>;\n    signal(signal: NativeExecSignal): Promise<void>;\n}',
+  },
+  {
+    name: 'NativeExecOptions',
+    declaration: 'export interface NativeExecOptions {\n    cwd?: string;\n    env?: Record<string, string>;\n    pty?: boolean | {\n        cols?: number;\n        rows?: number;\n        term?: string;\n    };\n    maxOutputBytes?: number;\n    timeoutMs?: number;\n}',
+  },
+  {
+    name: 'NativeExecSignal',
+    declaration: 'export type NativeExecSignal = \'SIGTERM\' | \'SIGKILL\' | \'SIGINT\' | \'SIGHUP\';',
+  },
+  {
     name: 'NativeFileApplication',
     declaration: 'export interface NativeFileApplication {\n    readonly id: string;\n    readonly name: string;\n    readonly default: boolean;\n    readonly icon: string | null;\n}',
+  },
+  {
+    name: 'NativeProcessInfo',
+    declaration: 'export interface NativeProcessInfo {\n    pid: number;\n    name: string;\n    command: string;\n    cpu: number;\n    memory: number;\n    user: string;\n    state: \'running\' | \'sleeping\' | \'stopped\' | \'zombie\';\n}',
+  },
+  {
+    name: 'NativeRemoteHostSpec',
+    declaration: 'export interface NativeRemoteHostSpec {\n    readonly id: RemoteHostId;\n    readonly label: string;\n    readonly host: string;\n    readonly port?: number;\n    readonly user: string;\n    readonly privateKey?: string;\n    readonly password?: string;\n    readonly identityFile?: string;\n    readonly knownHostsFile?: string;\n}',
+  },
+  {
+    name: 'NativeSftpBatchOperation',
+    declaration: 'export interface NativeSftpBatchOperation {\n    type: \'stat\' | \'lstat\' | \'read\' | \'write\' | \'mkdir\' | \'readdir\' | \'realpath\' | \'unlink\';\n    path: string;\n    data?: Buffer;\n    offset?: number;\n    length?: number;\n}',
+  },
+  {
+    name: 'NativeSftpBatchResult',
+    declaration: 'export interface NativeSftpBatchResult {\n    success: boolean;\n    data?: unknown;\n    error?: string;\n}',
+  },
+  {
+    name: 'NativeSftpEntry',
+    declaration: 'export interface NativeSftpEntry {\n    name: string;\n    attrs: NativeSftpStat;\n}',
+  },
+  {
+    name: 'NativeSftpReadStream',
+    declaration: 'export interface NativeSftpReadStream {\n    read(): Promise<Buffer | null>;\n    isDone(): boolean;\n    close(): Promise<void>;\n}',
+  },
+  {
+    name: 'NativeSftpStat',
+    declaration: 'export interface NativeSftpStat {\n    size: number;\n    mode: number;\n    uid: number;\n    gid: number;\n    mtime: number;\n    atime: number;\n    isDirectory: () => boolean;\n    isFile: () => boolean;\n    isSymbolicLink: () => boolean;\n}',
+  },
+  {
+    name: 'NativeSystemInfo',
+    declaration: 'export interface NativeSystemInfo {\n    hostname: string;\n    os: string;\n    kernel: string;\n    uptime: number;\n    loadavg: number[];\n    memory: {\n        total: number;\n        free: number;\n        available: number;\n    };\n    disk: Array<{\n        mount: string;\n        total: number;\n        used: number;\n        free: number;\n    }>;\n}',
   },
   {
     name: 'NotFutureError',
@@ -6421,12 +6539,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RemoteEventHostInfo {\n    readonly home: string;\n}',
   },
   {
-    name: 'RemoteHelperArtifact',
-    declaration: 'export interface RemoteHelperArtifact {\n    readonly archive: Uint8Array;\n    readonly entry: string;\n    readonly digest: string;\n}',
-  },
-  {
     name: 'RemoteHostAddRequest',
-    declaration: 'export interface RemoteHostAddRequest {\n    readonly id: string;\n    readonly label: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly manifest: string;\n    readonly login: RemoteHostLogin;\n}',
+    declaration: 'export interface RemoteHostAddRequest {\n    readonly id: string;\n    readonly label: string;\n    readonly login: RemoteHostLogin;\n}',
   },
   {
     name: 'RemoteHostAddValue',
@@ -6434,7 +6548,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteHostHandle',
-    declaration: 'export interface RemoteHostHandle {\n    readonly spec: RemoteHostSpec;\n    readonly world: RemoteHostWorld;\n    readonly closed: Promise<void>;\n    close(): Promise<void>;\n}',
+    declaration: 'export interface RemoteHostHandle {\n    readonly spec: NativeRemoteHostSpec;\n    readonly world: RemoteHostWorld;\n    readonly closed: Promise<void>;\n    close(): Promise<void>;\n}',
   },
   {
     name: 'RemoteHostId',
@@ -6442,19 +6556,19 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteHostLoginProvisionRequest',
-    declaration: 'export interface RemoteHostLoginProvisionRequest {\n    readonly id: RemoteHostId;\n    readonly label: string;\n    readonly login: RemoteHostLogin;\n    readonly root: string;\n    readonly workspace: string;\n    readonly artifact: RemoteHelperArtifact;\n    readonly manifest?: string;\n}',
+    declaration: 'export interface RemoteHostLoginProvisionRequest {\n    readonly id: RemoteHostId;\n    readonly label: string;\n    readonly login: RemoteHostLogin;\n    readonly root: string;\n    readonly workspace: string;\n    readonly manifest?: string;\n}',
   },
   {
     name: 'RemoteHostProvisionRequest',
-    declaration: 'export interface RemoteHostProvisionRequest {\n    readonly id: RemoteHostId;\n    readonly label: string;\n    readonly host: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly artifact: RemoteHelperArtifact;\n}',
+    declaration: 'export interface RemoteHostProvisionRequest {\n    readonly id: RemoteHostId;\n    readonly label: string;\n    readonly host: string;\n    readonly root: string;\n    readonly workspace: string;\n}',
   },
   {
     name: 'RemoteHostRecord',
-    declaration: 'export interface RemoteHostRecord {\n    readonly id: string;\n    readonly label: string;\n    readonly host: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly manifest: string;\n    readonly helperHash: string;\n}',
+    declaration: 'export interface RemoteHostRecord {\n    readonly id: string;\n    readonly label: string;\n    readonly host: string;\n    readonly port: number;\n    readonly user: string;\n}',
   },
   {
     name: 'RemoteHostRecordView',
-    declaration: 'export interface RemoteHostRecordView {\n    readonly id: string;\n    readonly label: string;\n    readonly host: string;\n    readonly root: string;\n    readonly workspace: string;\n    readonly manifest: string;\n    readonly helperHash: string;\n}',
+    declaration: 'export interface RemoteHostRecordView {\n    readonly id: string;\n    readonly label: string;\n    readonly host: string;\n    readonly port: number;\n    readonly user: string;\n}',
   },
   {
     name: 'RemoteHostRemoveRequest',
@@ -6481,10 +6595,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RemoteHostsListValue {\n    readonly items: readonly RemoteHostView[];\n}',
   },
   {
-    name: 'RemoteHostSpec',
-    declaration: 'export interface RemoteHostSpec {\n    readonly id: RemoteHostId;\n    readonly label: string;\n    readonly host: string;\n    readonly sshConfigFile?: string;\n    readonly node: string;\n    readonly helper: string;\n    readonly helperHash: string;\n    readonly workspace: string;\n    readonly bootstrapPath?: string;\n    readonly bootstrapHash?: string;\n    readonly requestTimeoutMs?: number;\n    readonly maxFrameBytes?: number;\n    readonly maxPending?: number;\n    readonly leaseMs?: number;\n}',
-  },
-  {
     name: 'RemoteHostTestRequest',
     declaration: 'export interface RemoteHostTestRequest {\n    readonly id: string;\n}',
   },
@@ -6498,7 +6608,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteHostWorld',
-    declaration: 'export interface RemoteHostWorld {\n    readonly ssh: SshConnection;\n    readonly fs: FileSystem;\n    readonly subprocess: SubprocessRuntime;\n    readonly sandbox: SandboxProvider;\n}',
+    declaration: 'export interface RemoteHostWorld {\n    readonly fs: FileSystem;\n    readonly subprocess: SubprocessRuntime;\n}',
   },
   {
     name: 'RenderedDocumentBytes',
@@ -6595,10 +6705,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SandboxPolicyRequest',
     declaration: 'export interface SandboxPolicyRequest {\n    session?: Session;\n    mode?: SandboxMode;\n}',
-  },
-  {
-    name: 'SandboxProvider',
-    declaration: 'export abstract class SandboxProvider extends Service {\n    constructor(ctx: Context);\n    abstract confine(argv: readonly string[], policy: SandboxPolicy, signal?: AbortSignal): Promise<ConfinedArgv>;\n}',
   },
   {
     name: 'SaveFileAttachment',
@@ -7511,14 +7617,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SpillSource',
     declaration: 'export type SpillSource = {\n    kind: \'tool\';\n    toolName: string;\n    callId: ToolCallId;\n    label: string;\n} | {\n    kind: \'session-reference\';\n    sessionId: SessionId;\n    label: string;\n};',
-  },
-  {
-    name: 'SshConnection',
-    declaration: 'export class SshConnection extends Service {\n    static Config: schema<Config>;\n    readonly ready: Promise<Hello>;\n    constructor(ctx: Context, config: Config);\n    async [Service.init](): Promise<void>;\n    get nodeExecutable(): string;\n    get bootstrapPath(): string;\n    async request<T>(method: string, params: unknown, result: z.ZodType<T>, signal?: AbortSignal, wait: boolean = false): Promise<T>;\n    async connectStream(endpoint: SshStreamEndpoint, signal?: AbortSignal): Promise<Socket>;\n    dispose(): Promise<void>;\n}',
-  },
-  {
-    name: 'SshStreamEndpoint',
-    declaration: 'export type SshStreamEndpoint = z.infer<typeof streamEndpointSchema>;',
   },
   {
     name: 'StorageBackend',

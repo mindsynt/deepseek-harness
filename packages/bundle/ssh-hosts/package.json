@@ -34,14 +34,12 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-helper-installer": "workspace:^",
+    "@deepseek-ai/dsh-fs-sftp": "workspace:^",
     "@deepseek-ai/dsh-host-credentials": "workspace:^",
     "@deepseek-ai/dsh-hosts-controller": "workspace:^",
     "@deepseek-ai/dsh-ssh-host-registry": "workspace:^",
-    "@deepseek-ai/dsh-ssh": "workspace:^",
-    "@deepseek-ai/dsh-fs-ssh": "workspace:^",
-    "@deepseek-ai/dsh-subprocess-ssh": "workspace:^",
-    "@deepseek-ai/dsh-sandbox-ssh": "workspace:^"
+    "@deepseek-ai/dsh-ssh-native": "workspace:^",
+    "@deepseek-ai/dsh-subprocess-ssh-exec": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"
