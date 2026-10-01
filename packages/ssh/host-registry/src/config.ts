@@ -1,7 +1,9 @@
 /**
- * Config-driven host declaration: validates the plugin `Config`, reads each
- * declared host's artifact manifest from disk, and provisions every host
- * through the registry exactly once at activation.
+ * Config-driven host declaration: validates the plugin `Config` and hands every
+ * declared host to the registry. The native SSH composition installs no helper
+ * artifact, so a configured entry is refused at activation rather than opened;
+ * hosts are registered with their login material through the hosts controller
+ * and restored from it at startup.
  * @module @deepseek-ai/dsh-ssh-host-registry/config
  */
 
@@ -56,7 +58,9 @@ export function declaredHosts(config: Config): readonly DeclaredRemoteHost[] {
     seen.set(id, index)
     const manifest = absolutePath(entry.manifest, `${at}.manifest`) ?? pluginManifest
     if (manifest === undefined) {
-      throw new Error(`${at}.id '${id}' has no manifest and config.manifest is unset; every configured host needs an artifact manifest`)
+      throw new Error(
+        `${at}.id '${id}' cannot be opened from config: the native SSH composition installs no helper artifact, so config.hosts has nothing to provision. Register the host with its login material through the hosts controller instead; stored logins are restored at startup`,
+      )
     }
     return {
       id: brandString<RemoteHostId>(id),
@@ -77,7 +81,7 @@ export function declaredHosts(config: Config): readonly DeclaredRemoteHost[] {
  * @deprecated Helper-based provisioning is no longer supported.
  */
 export async function readHelperArtifact(_host: DeclaredRemoteHost): Promise<never> {
-  throw new Error('helper-based provisioning is no longer supported; use native SSH composition')
+  throw new Error('helper-based provisioning is no longer supported: the native SSH composition installs no helper artifact')
 }
 
 /**

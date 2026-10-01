@@ -48,11 +48,11 @@ export type { NativeRemoteHostSpec, NativeRemoteHostWorld } from './composition-
 export const name = 'ssh-host-registry'
 
 /**
- * Activation dependency: provisioning runs through the mounted installer, login
- * provisioning through the mounted credentials service, and host records through
- * the mounted domain data form.
+ * Activation dependencies: login material and startup recovery run through the
+ * mounted credentials service, and host records through the mounted domain data
+ * form.
  */
-export const inject = ['sshHelperInstaller', 'sshHostCredentials', 'storageDomain']
+export const inject = ['sshHostCredentials', 'storageDomain']
 
 /** One host a profile opens at startup. */
 export interface RemoteHostEntryConfig {
@@ -102,16 +102,19 @@ export type RemoteHostComposition = (realm: Context, spec: NativeRemoteHostSpec)
 
 /**
  * Compose the registry on a context: validate the declared hosts, mount the
- * service, provision every declared host exactly once through the mounted
- * `sshHelperInstaller`, then restore every persisted host the config does not
- * declare through the mounted `sshHostCredentials` (the declared injections
- * delay activation until all three services exist).
+ * service, then restore every persisted host through the mounted
+ * `sshHostCredentials` (the declared injections delay activation until both
+ * services exist).
+ *
+ * A host named in `config.hosts` fails activation rather than opening: the
+ * native SSH composition installs no helper artifact, so a configured entry has
+ * no installation to run. Hosts are registered from the Host's settings surface,
+ * which stores their login material, and are restored here at startup.
  * @param ctx - the context the plugin is mounted on.
- * @param config - the declared hosts and the default artifact manifest.
- * @returns a promise settling once every declared and restored host is open.
- * @throws when the config is invalid, a manifest or archive cannot be read, a
- * host cannot be provisioned, or a persisted record has no stored login
- * material.
+ * @param config - the declared hosts; none of them can be opened.
+ * @returns a promise settling once every restored host is open.
+ * @throws when the config names a host, when a persisted record has no stored
+ * login material, or when a restored host cannot be opened.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const hosts = declaredHosts(config)
@@ -128,6 +131,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
 /** No-op plugin body; the fiber it starts owns exactly one host realm. */
 function realmOwner(): void {}
+
+/**
+ * Why a helper-based provision call is refused: the native SSH composition
+ * mounts its providers directly and installs nothing on the host.
+ */
+const PROVISIONING_UNSUPPORTED =
+  'helper-based provisioning is no longer supported: the native SSH composition mounts its providers directly, so hosts are registered with their login material through the hosts controller instead of a helper install'
 
 /** Execution service names one host realm rebinds. */
 const REALM_SERVICES = ['ssh', 'fs', 'subprocess', 'sandbox'] as const
@@ -245,38 +255,25 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
   }
 
   /**
-   * Install the helper on a host, then open its realm from the returned coordinates.
+   * Refused in the native SSH composition: it installs no helper artifact, so a
+   * declared entry has nothing to install. Hosts open from their stored login
+   * through {@link open}.
    * @param _request - host, remote root, workspace and artifact.
-   * @returns the opened handle.
-   * @throws when the id is already open, when no installer is mounted, or when the install fails.
+   * @throws always, naming the unsupported path and the one that replaces it.
    */
   async provision(_request: RemoteHostProvisionRequest): Promise<RemoteHostHandle> {
-    throw new Error('helper-based provisioning is no longer supported; use native SSH composition')
+    throw new Error(PROVISIONING_UNSUPPORTED)
   }
 
   /**
-   * Materialize entered login material, trust its host key, install the helper
-   * through that identity, then open the realm it addresses.
-   *
-   * The returned handle owns the materialized identity: closing it releases the
-   * realm and then removes the identity's generated directory, once. A failure
-   * from host-key trust through composition removes the identity before the
-   * failure is rethrown; when that removal also fails, the failure is reported
-   * with the original provisioning error as its `cause`.
-   *
-   * A request carrying `manifest` persists one host record after the realm
-   * opens, with `host` taken from the materialized alias and `helperHash` from
-   * the installation. A record write that fails closes the opened realm and
-   * its identity before rethrowing, so a failed call leaves no open host.
-   * Without `manifest` the realm still opens and no record is written — the
-   * host then survives no restart.
+   * Refused in the native SSH composition: helper installation is gone. Open the
+   * realm with {@link open} after storing the login, and persist its record with
+   * {@link save} so it survives a restart.
    * @param _request - identity, login material, remote root, workspace and artifact.
-   * @returns the opened handle.
-   * @throws when the id is already open, when no credentials service is
-   * reachable, or when trust, install, composition or record persistence fails.
+   * @throws always, naming the unsupported path and the one that replaces it.
    */
   async provisionFromLogin(_request: RemoteHostLoginProvisionRequest): Promise<RemoteHostHandle> {
-    throw new Error('helper-based provisioning is no longer supported; use native SSH composition')
+    throw new Error(PROVISIONING_UNSUPPORTED)
   }
 
   /**
