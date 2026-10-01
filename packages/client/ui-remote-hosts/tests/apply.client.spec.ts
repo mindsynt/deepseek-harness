@@ -27,19 +27,14 @@ const RECORD: RemoteHostRecordView = {
   id: 'alpha',
   label: 'Alpha',
   host: 'alpha.example',
-  root: '/srv/dsh',
-  workspace: '/srv/work',
-  manifest: '/tmp/helper.json',
-  helperHash: 'a'.repeat(64),
+  port: 22,
+  user: 'deploy',
 }
 
 /** The entered host one add call carries. */
 const REQUEST: RemoteHostAddRequest = {
   id: 'alpha',
   label: 'Alpha',
-  root: '/srv/dsh',
-  workspace: '/srv/work',
-  manifest: '/tmp/helper.json',
   login: { host: 'alpha.example', port: 22, user: 'deploy' },
 }
 
@@ -145,7 +140,7 @@ describe('ui-remote-hosts browser plugin', () => {
     injected.sampleWorlds()
     await vi.waitFor(() => {
       expect(injected.hooks.list.getSnapshot().rows).toEqual([
-        { id: 'alpha', label: 'Alpha', host: 'alpha.example', workspace: '/srv/work', open: false },
+        { id: 'alpha', label: 'Alpha', host: 'alpha.example', open: false },
       ])
     })
     await expect(injected.addHost(REQUEST)).resolves.toEqual({ ok: true })

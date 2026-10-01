@@ -93,9 +93,6 @@ export function AddHostDialog({ t, onClose, onSubmit }: AddHostDialogProps) {
     const outcome = await onSubmit({
       id: draft.id,
       label: draft.label,
-      root: draft.root,
-      workspace: draft.workspace,
-      manifest: draft.manifest,
       login: {
         host: draft.host,
         port,

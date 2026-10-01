@@ -19,10 +19,8 @@ function view(id: string, open: boolean): RemoteHostView {
       id,
       label: id,
       host: `${id}.example`,
-      root: '/srv/dsh',
-      workspace: '/srv/work',
-      manifest: '/tmp/helper.json',
-      helperHash: 'a'.repeat(64),
+      port: 22,
+      user: 'deploy',
     },
     open,
   }

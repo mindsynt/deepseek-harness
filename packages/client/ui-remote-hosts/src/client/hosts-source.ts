@@ -81,7 +81,7 @@ export interface RemoteHostRow {
   /** OpenSSH alias the stored login addresses. */
   host: string
   /** Absolute remote default workspace. */
-  workspace: string
+  workspace?: string
   /** Whether this process currently holds an open execution world for that host. */
   open: boolean
 }
@@ -279,7 +279,6 @@ function toRow(view: RemoteHostView): RemoteHostRow {
     id: view.record.id,
     label: view.record.label,
     host: view.record.host,
-    workspace: view.record.workspace,
     open: view.open,
   }
 }

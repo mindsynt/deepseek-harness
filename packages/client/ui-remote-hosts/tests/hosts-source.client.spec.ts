@@ -61,9 +61,6 @@ class ScriptedStream<Item> implements AsyncIterable<Item> {
 const REQUEST: RemoteHostAddRequest = {
   id: 'alpha',
   label: 'Alpha',
-  root: '/srv/dsh',
-  workspace: '/srv/work',
-  manifest: '/tmp/helper.json',
   login: { host: 'alpha.example', port: 22, user: 'deploy', privateKey: 'key material' },
 }
 
@@ -75,17 +72,15 @@ const REQUEST: RemoteHostAddRequest = {
  */
 function view(
   id: string,
-  overrides: Partial<{ label: string; host: string; workspace: string; open: boolean }> = {},
+  overrides: Partial<{ label: string; host: string; port: number; user: string; open: boolean }> = {},
 ): RemoteHostView {
   return {
     record: {
       id,
       label: overrides.label ?? id,
       host: overrides.host ?? `${id}.example`,
-      root: '/srv/dsh',
-      workspace: overrides.workspace ?? '/srv/work',
-      manifest: '/tmp/helper.json',
-      helperHash: 'a'.repeat(64),
+      port: overrides.port ?? 22,
+      user: overrides.user ?? 'deploy',
     },
     open: overrides.open ?? false,
   }
@@ -165,8 +160,8 @@ describe('RemoteHostsSource', () => {
     expect(source.store.getSnapshot()).toMatchObject({
       ready: true,
       rows: [
-        { id: 'alpha', label: 'alpha', host: 'alpha.example', workspace: '/srv/work', open: false },
-        { id: 'bravo', label: 'bravo', host: 'bravo.example', workspace: '/srv/work', open: true },
+        { id: 'alpha', label: 'alpha', host: 'alpha.example', open: false },
+        { id: 'bravo', label: 'bravo', host: 'bravo.example', open: true },
       ],
     })
     // Only the opening baseline resets the supervisor's backoff.
