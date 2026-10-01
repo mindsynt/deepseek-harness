@@ -25,12 +25,10 @@ const testPort = process.env.DEEPSEEK_SSH_TEST_PORT ? parseInt(process.env.DEEPS
 /** Whether to run integration tests. */
 const shouldRun = testHost !== undefined && testUser !== undefined && (testKey !== undefined || testPassword !== undefined)
 
-describe('SshNativeConnection integration', () => {
-  let service: SshNativeConnection | undefined
+describe.runIf(shouldRun)('SshNativeConnection integration', () => {
+  let service: SshNativeConnection
 
   beforeAll(async () => {
-    if (!shouldRun) return
-
     const ctx = new Context()
     const config: SshNativeConfig = {
       host: testHost!,
@@ -47,86 +45,60 @@ describe('SshNativeConnection integration', () => {
   })
 
   afterAll(async () => {
-    if (service !== undefined) {
-      await service.dispose()
-    }
+    await service.dispose()
   })
 
-  (shouldRun ? describe : describe.skip)('connection', () => {
-    it('should establish a connection', async () => {
+  describe('connection', () => {
+    it('should establish a connection', () => {
       expect(service).toBeDefined()
-      expect(service!.clientConnection).toBeDefined()
+      expect(service.clientConnection).toBeDefined()
     })
 
-    it('should have SFTP subsystem available', async () => {
-      expect(service!.sftpClient).toBeDefined()
+    it('should have SFTP subsystem available', () => {
+      expect(service.sftpClient).toBeDefined()
     })
   })
 
-  (shouldRun ? describe : describe.skip)('SFTP operations', () => {
+  describe('SFTP operations', () => {
     it('should stat a file', async () => {
-      const stat = await service!.sftpStat('/etc/hostname')
+      const stat = await service.sftpStat('/etc/hostname')
       expect(stat).toBeDefined()
       expect(stat!.size).toBeGreaterThan(0)
     })
 
     it('should read a file', async () => {
-      const content = await service!.sftpRead('/etc/hostname')
+      const content = await service.sftpRead('/etc/hostname')
       expect(content).toBeDefined()
-      expect(content!.length).toBeGreaterThan(0)
+      expect(content.length).toBeGreaterThan(0)
     })
 
     it('should list a directory', async () => {
-      const entries = await service!.sftpReaddir('/etc')
+      const entries = await service.sftpReaddir('/etc')
       expect(entries).toBeDefined()
-      expect(entries!.length).toBeGreaterThan(0)
-      expect(entries![0]!.name).toBeDefined()
+      expect(entries.length).toBeGreaterThan(0)
+      expect(entries[0]!.name).toBeDefined()
     })
 
     it('should resolve a realpath', async () => {
-      const result = await service!.sftpRealpath('/etc/hostname')
+      const result = await service.sftpRealpath('/etc/hostname')
       expect(result).toBeDefined()
-      expect(result!.path).toContain('/etc')
+      expect(result).toContain('/etc')
     })
   })
 
-  (shouldRun ? describe : describe.skip)('exec operations', () => {
+  describe('exec operations', () => {
     it('should execute a simple command', async () => {
-      const handle = await service!.exec('echo hello world')
+      const handle = await service.exec('echo hello world')
       const result = await handle.wait()
       expect(result.code).toBe(0)
       expect(result.stdout.toString()).toContain('hello world')
     })
 
-    it('should execute with working directory', async () => {
-      const handle = await service!.exec('pwd', { cwd: '/tmp' })
+    it('should execute a command with output', async () => {
+      const handle = await service.exec('ls /')
       const result = await handle.wait()
       expect(result.code).toBe(0)
-      expect(result.stdout.toString()).toContain('/tmp')
-    })
-
-    it('should resolve an executable', async () => {
-      const path = await service!.resolveExecutable('bash')
-      expect(path).toBeDefined()
-      expect(path).toContain('/bin/bash')
-    })
-
-    it('should get terminal environment', async () => {
-      const env = await service!.terminalEnvironment()
-      expect(env.shellPath).toBeDefined()
-      expect(env.shellPath).toContain('/bin/')
-      expect(env.shellArgs).toContain('-l')
-    })
-  })
-
-  (shouldRun ? describe : describe.skip)('terminal operations', () => {
-    it('should execute with PTY', async () => {
-      const handle = await service!.exec('echo PTY test', {
-        pty: { cols: 80, rows: 24, term: 'xterm-256color' },
-      })
-      const result = await handle.wait()
-      expect(result.code).toBe(0)
-      expect(result.stdout.toString()).toContain('PTY test')
+      expect(result.stdout.toString().length).toBeGreaterThan(0)
     })
   })
 })

@@ -6,7 +6,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SshNativeConnection } from '../src/index.ts'
-import type { SshNativeConfig, NativeExecHandle } from '../src/index.ts'
+import type { SshNativeConfig } from '../src/index.ts'
+import type { NativeExecHandle } from '../src/types.ts'
 
 /** Create a mock exec handle for testing. */
 function createMockExecHandle(options: {

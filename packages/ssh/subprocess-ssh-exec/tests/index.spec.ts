@@ -9,7 +9,11 @@ import { SshExecSubprocessRuntime } from '../src/index.ts'
 
 describe('SshExecSubprocessRuntime', () => {
   let ctx: Context
-  let mockSshNative: unknown
+  let mockSshNative: {
+    resolveExecutable: ReturnType<typeof vi.fn>
+    terminalEnvironment: ReturnType<typeof vi.fn>
+    exec: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(() => {
     ctx = new Context()
