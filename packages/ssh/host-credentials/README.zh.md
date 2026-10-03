@@ -63,7 +63,7 @@ kind: "package-reference"
 
 - [SSH 子系统](../../../docs/subsystems/ssh.zh.md) — 共享执行坐标及传输归属。
 - [主机注册表](../host-registry/README.zh.md) — 连接所运行的每主机执行 realm。
-- [SSH 连接](../ssh/README.zh.md) — 返回的别名与配置如何到达主机。
+- [SSH 子系统](../../../docs/subsystems/ssh.zh.md) — 返回的别名与配置如何到达主机。
 
 -----
 

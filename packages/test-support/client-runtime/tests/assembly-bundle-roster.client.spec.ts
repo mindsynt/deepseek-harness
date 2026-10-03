@@ -14,7 +14,9 @@ function profileScope(name: string) {
 
 describe('webApp (the real web profile)', () => {
   it('composes dsh-base then dsh-web-app: unique names, inject edges on roster rows or platform seed words', () => {
-    expect(WEB_PROFILE_BUNDLES).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
+    expect(WEB_PROFILE_BUNDLES).toEqual([
+      '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-ssh-hosts', '@deepseek-ai/dsh-web-app',
+    ])
     const names = webApp.rows.map(row => row.name)
     expect(new Set(names).size).toBe(names.length)
     const known = new Set([...names, ...Object.keys(getStaticModules())])
@@ -35,7 +37,7 @@ describe('webApp (the real web profile)', () => {
     const names = webApp.rows.map(row => row.name)
     expect(names).toContain('@deepseek-ai/dsh-client-ui-settings-general')
     expect(names).not.toContain('@deepseek-ai/dsh-llm') // Host only
-    expect(names).not.toContain('@deepseek-ai/dsh-client-ui-schedule')
+    expect(names).toContain('@deepseek-ai/dsh-client-ui-schedule')
     expect(names).not.toContain('@deepseek-ai/dsh-web-app') // Host runtime glue, its `/startup` row is a subpath
   })
 })

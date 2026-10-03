@@ -116,5 +116,3 @@ These limits define the settings transport's persistence scope; they are current
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. A presentation shell projecting the settings.section ledger into navigation — it emits no cordis events and owns no cross-plugin mutable relation; slot declaration/registration conflicts already fail loud in the slot core at load time.

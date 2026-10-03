@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/ssh/subprocess-ssh-exec/README.md
+/:
+  en: 8ae0cd836bd23c15
+  zh: 559e5e2a304e7430
+/deepseek-ai-dsh-subprocess-ssh-exec:
+  en: 867b3a83b1dec38c
+  zh: 80761ce6a0242787
+/deepseek-ai-dsh-subprocess-ssh-exec/summary:
+  en: 35713d6979f36474
+  zh: a6ee4f4468ec2a0d
+/deepseek-ai-dsh-subprocess-ssh-exec/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-subprocess-ssh-exec/use-this-package:
+  en: 2fdb87e9e3a68dcb
+  zh: 2740971b5884f7c3
+/deepseek-ai-dsh-subprocess-ssh-exec/understand-the-implementation:
+  en: d70cc365c1ec64b0
+  zh: a7a933d4ec7a4f5c
+/deepseek-ai-dsh-subprocess-ssh-exec/further-exploration:
+  en: b73038726b3cb922
+  zh: 6bea592ae90d114b
+/deepseek-ai-dsh-subprocess-ssh-exec/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-subprocess-ssh-exec/model-experience/remote-execution:
+  en: ead97a7cbd5d1ef7
+  zh: ae31571c0e60eea4
+/deepseek-ai-dsh-subprocess-ssh-exec/model-experience/remote-execution/what-the-model-sees:
+  en: f2e8bbc1fdd441e1
+  zh: 3940dd99a2fd7e2c
+/deepseek-ai-dsh-subprocess-ssh-exec/model-experience/remote-execution/token-effect:
+  en: a6e0a4261463a15a
+  zh: ec9a5f001aea2c79
+/deepseek-ai-dsh-subprocess-ssh-exec/model-experience/remote-execution/kv-cache-effect:
+  en: 9613a8121b84ac1d
+  zh: 9b509c5fb6e19564
+/deepseek-ai-dsh-subprocess-ssh-exec/known-limitations-and-deferred-work:
+  en: 0b1dc942dcf3463a
+  zh: 39451a200afd22c8
+/deepseek-ai-dsh-subprocess-ssh-exec/known-limitations-and-deferred-work/dev-note:
+  en: 6f9ce10c81b3a029
+  zh: ce7e8060eac3d1c4

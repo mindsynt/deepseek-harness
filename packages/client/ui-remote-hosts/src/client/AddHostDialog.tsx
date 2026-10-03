@@ -1,4 +1,4 @@
-/** Add-host dialog: entered login material, remote paths, and the local artifact manifest. */
+/** Add-host dialog: the entered SSH login material. */
 import { useId, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { RemoteHostAddRequest } from '@deepseek-ai/dsh-api-remotes/client'
@@ -15,11 +15,6 @@ interface HostDraft {
   port: string
   user: string
   privateKey: string
-  password: string
-  authMode: 'key' | 'password'
-  root: string
-  workspace: string
-  manifest: string
 }
 
 /** A draft with every field empty. */
@@ -30,11 +25,6 @@ const EMPTY_DRAFT: HostDraft = {
   port: '',
   user: '',
   privateKey: '',
-  password: '',
-  authMode: 'key' as const,
-  root: '~/work',
-  workspace: '~/work',
-  manifest: '~/dist/ssh-helper/manifest.json',
 }
 
 /** Props of the add dialog. */
@@ -57,8 +47,8 @@ export function AddHostDialog({ t, onClose, onSubmit }: AddHostDialogProps) {
   const [draft, setDraft] = useState<HostDraft>(EMPTY_DRAFT)
   const [submitting, setSubmitting] = useState(false)
   const [failure, setFailure] = useState<string>()
+  const [requiredMissing, setRequiredMissing] = useState(false)
   const [portInvalid, setPortInvalid] = useState(false)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
   const idPrefix = useId()
 
   const change = (field: keyof HostDraft) =>
@@ -82,23 +72,25 @@ export function AddHostDialog({ t, onClose, onSubmit }: AddHostDialogProps) {
     }
 
   const submit = async (): Promise<void> => {
+    // A missing field and a port the wire cannot carry are separate failures:
+    // an empty port is a field not entered, a bad port is one that was.
+    const requiredMissing = [draft.label, draft.host, draft.port, draft.user]
+      .some(value => value.trim().length === 0)
     const port = Number(draft.port)
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      setPortInvalid(true)
-      return
-    }
-    setPortInvalid(false)
+    const portInvalid = draft.port.trim().length > 0 && (!Number.isInteger(port) || port < 1 || port > 65535)
+    setRequiredMissing(requiredMissing)
+    setPortInvalid(portInvalid)
+    if (requiredMissing || portInvalid) return
 
     setSubmitting(true)
     const outcome = await onSubmit({
       id: draft.id,
-      label: draft.label,
+      label: draft.label.trim(),
       login: {
-        host: draft.host,
+        host: draft.host.trim(),
         port,
-        user: draft.user,
-        ...(draft.authMode === 'password' && draft.password ? { privateKey: draft.password } : {}),
-        ...(draft.authMode === 'key' && draft.privateKey ? { privateKey: draft.privateKey } : {}),
+        user: draft.user.trim(),
+        ...(draft.privateKey.trim().length > 0 ? { privateKey: draft.privateKey.trim() } : {}),
       },
     })
     setSubmitting(false)
@@ -125,12 +117,22 @@ export function AddHostDialog({ t, onClose, onSubmit }: AddHostDialogProps) {
       <form className={css.form}>
         <label className={css.field} htmlFor={`${idPrefix}-label`}>
           <span className={css.label}>{t('fieldLabel')}</span>
-          <Input id={`${idPrefix}-label`} value={draft.label} onChange={change('label')} />
+          <Input
+            id={`${idPrefix}-label`}
+            aria-invalid={requiredMissing ? 'true' : undefined}
+            value={draft.label}
+            onChange={change('label')}
+          />
         </label>
 
         <label className={css.field} htmlFor={`${idPrefix}-host`}>
           <span className={css.label}>{t('fieldHost')}</span>
-          <Input id={`${idPrefix}-host`} value={draft.host} onChange={change('host')} />
+          <Input
+            id={`${idPrefix}-host`}
+            aria-invalid={requiredMissing ? 'true' : undefined}
+            value={draft.host}
+            onChange={change('host')}
+          />
         </label>
 
         <label className={css.field} htmlFor={`${idPrefix}-port`}>
@@ -138,7 +140,7 @@ export function AddHostDialog({ t, onClose, onSubmit }: AddHostDialogProps) {
           <Input
             id={`${idPrefix}-port`}
             inputMode="numeric"
-            aria-invalid={portInvalid ? 'true' : undefined}
+            aria-invalid={requiredMissing || portInvalid ? 'true' : undefined}
             value={draft.port}
             onChange={change('port')}
           />
@@ -146,66 +148,27 @@ export function AddHostDialog({ t, onClose, onSubmit }: AddHostDialogProps) {
 
         <label className={css.field} htmlFor={`${idPrefix}-user`}>
           <span className={css.label}>{t('fieldUser')}</span>
-          <Input id={`${idPrefix}-user`} value={draft.user} onChange={change('user')} />
+          <Input
+            id={`${idPrefix}-user`}
+            aria-invalid={requiredMissing ? 'true' : undefined}
+            value={draft.user}
+            onChange={change('user')}
+          />
         </label>
 
-        <div className={css.field} style={{ flexDirection: 'row', gap: 8 }}>
-          <Button
-            variant={draft.authMode === 'key' ? 'primary' : 'outline'}
-            size="sm"
-            onClick={() => setDraft(p => ({ ...p, authMode: 'key' }))}
-          >{t('authKey')}</Button>
-          <Button
-            variant={draft.authMode === 'password' ? 'primary' : 'outline'}
-            size="sm"
-            onClick={() => setDraft(p => ({ ...p, authMode: 'password', privateKey: '' }))}
-          >{t('authPassword')}</Button>
-        </div>
-
-        {draft.authMode === 'key' ? (
-          <div className={css.field}>
-            <label className={css.label} htmlFor={`${idPrefix}-key`}>{t('fieldPrivateKey')}</label>
-            <textarea
-              id={`${idPrefix}-key`}
-              className={css.textarea}
-              spellCheck={false}
-              value={draft.privateKey}
-              onChange={change('privateKey')}
-            />
-            <span className={css.hint}>{t('privateKeyHint')}</span>
-          </div>
-        ) : (
-          <label className={css.field} htmlFor={`${idPrefix}-password`}>
-            <span className={css.label}>{t('fieldPassword')}</span>
-            <Input id={`${idPrefix}-password`} type="password" value={draft.password} onChange={change('password')} />
-          </label>
-        )}
-
         <div className={css.field}>
-          <Button variant="outline" size="sm" onClick={() => setAdvancedOpen(!advancedOpen)}>
-            {advancedOpen ? t('closeAdvanced') : t('showAdvanced')}
-          </Button>
+          <label className={css.label} htmlFor={`${idPrefix}-key`}>{t('fieldPrivateKey')}</label>
+          <textarea
+            id={`${idPrefix}-key`}
+            className={css.textarea}
+            spellCheck={false}
+            value={draft.privateKey}
+            onChange={change('privateKey')}
+          />
+          <span className={css.hint}>{t('privateKeyHint')}</span>
         </div>
-
-        {advancedOpen ? (
-          <div className={css.advanced}>
-            <label className={css.field} htmlFor={`${idPrefix}-root`}>
-              <span className={css.label}>{t('fieldRoot')}</span>
-              <Input id={`${idPrefix}-root`} value={draft.root} onChange={change('root')} />
-            </label>
-
-            <label className={css.field} htmlFor={`${idPrefix}-workspace`}>
-              <span className={css.label}>{t('fieldWorkspace')}</span>
-              <Input id={`${idPrefix}-workspace`} value={draft.workspace} onChange={change('workspace')} />
-            </label>
-
-            <label className={css.field} htmlFor={`${idPrefix}-manifest`}>
-              <span className={css.label}>{t('fieldManifest')}</span>
-              <Input id={`${idPrefix}-manifest`} value={draft.manifest} onChange={change('manifest')} />
-            </label>
-          </div>
-        ) : null}
       </form>
+      {requiredMissing ? <p className={css.invalid} role="alert">{t('requiredMissing')}</p> : null}
       {portInvalid ? <p className={css.invalid} role="alert">{t('portInvalid')}</p> : null}
       {failure === undefined ? null : <p className={css.failure} role="alert">{failure}</p>}
     </Modal>
@@ -213,13 +176,23 @@ export function AddHostDialog({ t, onClose, onSubmit }: AddHostDialogProps) {
 }
 
 /** Parse ssh://user@host:port into its components. */
-function parseSshUrl(url: string): { host: string; port: string; user: string } | null {
+function parseSshUrl(url: string): { user: string; host: string; port: string } | null {
   const [, user, host, port] = url.match(/^ssh:\/\/([^:@/]+)@([^:]+):(\d+)$/) ?? []
   if (user === undefined || host === undefined || port === undefined) return null
   return { user, host, port }
 }
 
+/**
+ * The host token the Workspace domain reserves for the Harness's own execution
+ * world, so a remote host claiming it would read as this machine in every
+ * host-token lookup. Mirrored here, client-only: the suggestion must never
+ * hand the user the reserved token.
+ * @see packages/workspace/workspace/src/paths.ts
+ */
+const RESERVED_LOCAL_HOST_ID = 'local'
+
 /** Registry identity from free text: ASCII letters, digits, dots, and dashes. */
 function slug(text: string): string {
-  return text.replace(/[^a-zA-Z0-9.-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 40)
+  const token = text.replace(/[^a-zA-Z0-9.-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 40)
+  return token === RESERVED_LOCAL_HOST_ID ? `${token}-remote` : token
 }

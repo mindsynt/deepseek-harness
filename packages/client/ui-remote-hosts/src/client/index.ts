@@ -30,7 +30,8 @@ export type { RemoveHostDialogProps } from './RemoveHostDialog.tsx'
 export type { RemoteHostsLocaleKey } from './locales.ts'
 export type { RemoteHostSelection, RemoteHostSelectionState } from './selection.ts'
 export type {
-  RemoteHostActionOutcome, RemoteHostRow, RemoteHostTestOutcome, RemoteHostsListState,
+  RemoteHostActionOutcome, RemoteHostRow, RemoteHostTestOutcome, RemoteHostsListFailure,
+  RemoteHostsListState,
 } from './hosts-source.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

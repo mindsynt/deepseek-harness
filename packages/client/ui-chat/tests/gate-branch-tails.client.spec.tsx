@@ -3,11 +3,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
-import { StatsPills } from '../src/client/chat/StatsPills.tsx'
+import { ActivityPill, UsagePill, type StatPillProps } from '../src/client/chat/StatsPills.tsx'
+import type { ModelPricingSnapshot } from '../src/client/model-pricing.ts'
 import { zh } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
@@ -35,7 +37,7 @@ describe('render branch tails', () => {
     expect(view.container.querySelector('[data-state="ok"]')).not.toBeNull()
   })
 
-  it('StatsPills falls back to window-node counts and drops the usage pill without projections', () => {
+  it('composer stats fall back to window-node counts and drop the usage pill without projections', () => {
     // No sessionStats key → the window fold supplies the counts (the
     // assembly-without-the-unit fallback). Node `usage` is deliberately
     // ignored: billing rides the durable tokenUsage projection, so an absent
@@ -47,15 +49,19 @@ describe('render branch tails', () => {
     ] as const
     const snap = chatSnapshotFixture({ nodes })
     const source = { getSnapshot: () => snap, subscribe: () => () => {} }
+    const pillProps: StatPillProps = {
+      usePerformanceUsage: selector => selector('detailed'),
+      t,
+      useChat: bindSnapshotSelector(source),
+      useModelPricing: bindSnapshotSelector(createSnapshotStore<ModelPricingSnapshot>({ status: 'idle', byRoute: new Map() })),
+      ensureModelPricing: vi.fn(),
+      useProjection: () => undefined,
+    }
     const view = render(
-      <StatsPills
-        usePerformanceUsage={selector => selector('detailed')}
-        t={t}
-        useChat={bindSnapshotSelector(source)}
-        useProjection={() => undefined}
-        useModelPricing={selector => selector({ status: 'idle', byRoute: new Map() })}
-        ensureModelPricing={() => {}}
-      />,
+      <>
+        <ActivityPill {...pillProps} />
+        <UsagePill {...pillProps} />
+      </>,
     )
     expect(view.container.textContent).toBe('2 轮 3 步')
     // Window-fold counts carry no timed figure, so the pill is a static reading.

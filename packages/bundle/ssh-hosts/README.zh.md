@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-`dsh-ssh-hosts` 是可选的组合包，让一个基于 base 的 `dsh --profile` 表层把 SSH 主机当作执行世界来使用。它挂载[主机注册表](../../ssh/host-registry/README.zh.md)、[助手安装器](../../ssh/helper-installer/README.zh.md)、[主机凭证存储](../../ssh/host-credentials/README.zh.md)，以及位于这三者之上的[主机控制器](../../api/hosts-controller/README.zh.md)；本机保持内置世界，每台已注册主机则获得自己隔离的 `ssh`、`fs`、`subprocess` 与 `sandbox` 服务领域。随发行版交付的任何 profile 都不包含本层：请在 `@deepseek-ai/dsh-base` 之后把它加入 `dsh.profile.bundles`，再在后续 profile patch 层声明主机。未声明任何主机时，它不改变任何行为。
+`dsh-ssh-hosts` 是 base 系 `dsh --profile` 表层的远程执行层：让它把 SSH 主机当作执行世界来使用。它挂载[主机注册表](../../ssh/host-registry/README.zh.md)、[主机凭证存储](../../ssh/host-credentials/README.zh.md)与[主机控制器](../../api/hosts-controller/README.zh.md)；本机保持内置世界，每台已注册主机则获得自己隔离的 `sshNative`、`fs`、`subprocess` 领域，从该主机已存的登录材料挂载。随发行版交付的 `web` profile 已把本层放在 `dsh-base` 与 `dsh-web-app` 之间，因此"设置 → 远程主机"有它的 Host 承载方；`headless`、`acp`、`sdk` profile 不包含本层，需在 `dsh-base` 之后加入。未注册任何主机时，它不改变任何行为。
 
 ## 目录
 
@@ -25,9 +25,9 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-### 把本层加入 profile
+### 把本层加入其他 profile
 
-随发行版交付的 `web`、`headless`、`acp` 与 `sdk` profile 不包含本组合包；需要远程主机的 profile 应在 `dsh-base` 之后列出它：
+随发行版交付的 `headless`、`acp` 与 `sdk` profile 不包含本组合包；需要远程主机的 profile 应在 `dsh-base` 之后列出它：
 
 ```json
 {
@@ -41,34 +41,17 @@ kind: "package-bundle"
 }
 ```
 
-树外（out-of-tree）组合包通过 `dsh plugin --profile <name> add @deepseek-ai/dsh-ssh-hosts` 安装进 profile；内置组合包从 dsh 安装目录解析。该层随后恰好贡献四条行：`ssh-host-registry`、它用于执行安装的 `ssh-helper-installer`、它用于物化登录材料的 `ssh-host-credentials`，以及位于前两者之上的 `ssh-hosts-controller` Remote owner。注册表行把安装器与凭证存储声明为注入依赖，控制器则声明注册表与凭证存储，因此每条行都只在所需服务挂载后激活；凭证行不需要任何配置，因为其状态目录默认是 `<DSH home>/ssh-hosts`。profile 约定见 [app-boot 的 profile 章节](../../boot/app-boot/README.zh.md)。
+树外（out-of-tree）组合包通过 `dsh plugin --profile <name> add @deepseek-ai/dsh-ssh-hosts` 安装进 profile；内置组合包从 dsh 安装目录解析。该层随后恰好贡献三条行：`ssh-host-registry` 领域 owner、它用于物化登录材料的 `ssh-host-credentials` 存储，以及位于两者之上的 `ssh-hosts-controller` Remote owner。注册表行把 `sshHostCredentials` 与 `storageDomain` 声明为注入依赖，控制器则声明注册表与凭证存储，因此每条行都只在所需服务挂载后激活；凭证行不需要任何配置，因为其状态目录默认是 `<DSH home>/ssh-hosts`。profile 约定见 [app-boot 的 profile 章节](../../boot/app-boot/README.zh.md)。
 
-### 声明主机
+### 注册主机
 
-该层自身不声明任何主机：其 `ssh-host-registry` 行携带 `hosts: []`，因此添加本组合包的 profile 在后续 patch 层声明主机之前，一直保持本机执行世界。请先用 `pnpm run build:ssh-helper-artifact` 构建助手包，再让该行指向它的 manifest：
+本组合包不声明任何主机：其 `ssh-host-registry` 行携带 `hosts: []`，因此添加本组合包的 profile 在注册主机之前一直保持本机执行世界。注册是交互式的，通过 Host 的"设置 → 远程主机"一节完成：它把主机登录材料写入凭证存储、持久化其记录，并打开其领域。不支持在 profile patch 中存放登录材料：注册表的 `config.hosts` 条目在加载时会被拒绝，因为 native SSH 组合不安装任何 helper 制品可供其安装。
 
-```yaml
-- id: ssh-host-registry
-  config:
-    manifest: /opt/dsh/ssh-helper/manifest.json
-    hosts:
-      - id: build-01
-        host: build-01
-        root: /opt/dsh
-        workspace: /srv/work
-      - id: gpu-02
-        label: GPU box
-        host: gpu-02
-        manifest: /opt/dsh/gpu-02/manifest.json
-        root: /opt/dsh
-        workspace: /home/ci/work
-```
-
-`manifest` 是 `pnpm run build:ssh-helper-artifact` 产出的 `manifest.json` 的本机绝对路径；每个条目可以自带一个，未自带的条目使用插件级路径。随发行版交付的行使用环境变量 `DSH_SSH_HELPER_MANIFEST` 作为回退。随后激活会读取每个 manifest、装载其指向的归档、经 OpenSSH 安装该制品，并打开该主机的隔离领域。配置、manifest 或安装出错都会让 profile 加载失败，并在错误信息中带上主机 id 与文件路径；不会静默跳过任何条目。
+每台已注册主机都会在 profile 再次启动时被恢复，因此注册结果能跨重启存活。
 
 ### 你得到什么
 
-声明主机后，`ctx.remoteHosts` 为每台主机列出一个已打开的 handle，每个 handle 暴露该主机的 `ssh`、`fs`、`subprocess` 与 `sandbox` 服务。`ctx.hostsController` 与生成的 `ctx.remote.hosts` namespace 让浏览器可以列出、新增与移除这些主机。[注册表包](../../ssh/host-registry/README.zh.md)负责领域生命周期、地址寻址与安装；[连接包](../../ssh/ssh/README.zh.md)负责每个领域背后那条不重连的 OpenSSH 会话。
+注册主机后，`ctx.remoteHosts` 为每台主机列出一个已打开的 handle，每个 handle 暴露该主机的 `sshNative`、`fs`、`subprocess` 服务。`ctx.hostsController` 与生成的 `ctx.remote.hosts` namespace 让浏览器可以列出、新增、移除并测试这些主机。[注册表包](../../ssh/host-registry/README.zh.md)负责领域生命周期与 native SSH 组合；[ssh-native 包](../../../docs/subsystems/ssh.zh.md)负责每个领域背后那条不重连的 OpenSSH 连接。
 
 -----
 
@@ -82,7 +65,7 @@ kind: "package-bundle"
 
 ### 组合机制
 
-该 insert 只携带注册表、安装器、凭证存储与主机控制器，刻意不携带本机的 `fs`、`subprocess` 与 `sandbox` 提供方：本机保持 base 组合出的内置世界，每台远端主机的执行世界则由注册表挂载在自己的隔离领域中。patch 会替换目标行的整个 `config`，因此声明主机的部署必须同时重述 `manifest` 与 `hosts`。注册表行把 `sshHelperInstaller` 与 `sshHostCredentials` 声明为注入依赖，因此无论行序如何，激活都会等待这两条行，安装过程绝不会与它需要的服务抢跑。
+该 insert 只携带注册表、凭证存储与主机控制器，刻意不携带本机的 `fs`、`subprocess` 与 `sandbox` 提供方：本机保持 base 组合出的内置世界，每台远端主机的执行世界则由注册表挂载在自己的隔离领域中。patch 会替换目标行的整个 `config`，因此改动某个配置字段的部署必须重述该行。注册表行把 `sshHostCredentials` 与 `storageDomain` 声明为注入依赖，因此无论行序如何，激活都会等待这两者；凭证存储与注册表用来持久化记录的领域都随 `dsh-base` 交付。
 
 ### 激活
 
@@ -109,13 +92,12 @@ kind: "package-bundle"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-- [SSH 子系统](../../../docs/subsystems/ssh.zh.md)——连接、助手与提供方组合。
-- [主机注册表](../../ssh/host-registry/README.zh.md)——领域生命周期、地址寻址与安装语义。
-- [助手安装器](../../ssh/helper-installer/README.zh.md)——制品如何到达主机。
+- [SSH 子系统](../../../docs/subsystems/ssh.zh.md)——连接与提供方组合。
+- [主机注册表](../../ssh/host-registry/README.zh.md)——领域生命周期与 native SSH 组合语义。
 - [主机凭证](../../ssh/host-credentials/README.zh.md)——注册表用于物化登录材料的已存登录记录。
 - [主机控制器](../../api/hosts-controller/README.zh.md)——浏览器主机管理页面调用的 Remote namespace。
 - [组合包索引](../README.zh.md)——可以叠加的 profile 层。
-- [GUI 管理 SSH 远程主机设计笔记](../../../.agents/notes/proposed/architecture/2026-09-21-gui-managed-ssh-remote-hosts.zh.md)——本层所属的阶段规划。
+- [GUI 管理 SSH 远程主机设计笔记](../../../.agents/notes/proposed/architecture/2026-09-21-gui-managed-ssh-remote-hosts.zh.md)——本层所属的提案；其 helper 驱动的组合已被 native SSH 运行时取代。
 
 -----
 
@@ -132,11 +114,9 @@ kind: "package-bundle"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **尚无浏览器页面渲染主机管理**——控制器已暴露该 namespace，但还没有客户端装配挂载本贡献，也没有设置页面可以列出、新增或移除主机。
-- **主机不会被持久化**——已声明的主机列表保存在 profile patch 中，而不是持久存储；新增或编辑主机意味着修改配置并重新加载 profile。
-- **没有真实远端的端到端验证**——组合测试以测试专用凭证提供方为依赖、经真实 Loader 装载这三条行，但此处的任何内容都不会连接真实 SSH 主机。
-- **必须构建制品 manifest 并指向它**——未配置 manifest 时激活会立即失败，其旁的归档必须是 `pnpm run build:ssh-helper-artifact` 的产物。
-- **`sandboxPolicy` 未按主机隔离**——每个领域都从父作用域解析它，因此两台主机目前还不能使用不同的约束策略。
+- **尚无 agent 运行在主机领域中**——主机领域只提供 `sshNative`、`fs`、`subprocess`，且没有机制把 agent 的 context 绑定到主机领域，因此工具、终端、搜索、spill 与语言服务器工作仍然解析本机的提供方。
+- **`sandboxPolicy` 未按主机隔离**——主机领域不提供 `sandbox`，因此任何从父作用域解析进程约束的调用方都会按本机策略约束。
+- **没有真实远端的端到端验证**——组合测试以测试专用凭证提供方为依赖、经真实 Loader 装载这三条行；控制器测试以桩化的执行组合驱动真实的注册表与凭证存储。但此处的任何内容都不会连接真实 SSH 主机。
 
 <a id="dev-note"></a>
 ### 开发备注

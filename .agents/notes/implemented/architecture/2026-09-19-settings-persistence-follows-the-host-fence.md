@@ -20,7 +20,7 @@ The trust decision stays where it can honor `trustedHosts`: the Host `/api` fenc
 - `dsh-client-ui-settings-models` always records the welcome acknowledgement through `ui-onboarding.welcomeNoticeVersion`; the process-local acknowledgement fallback is gone, and an unanswered mirror is reported as `the settings document has not answered yet` instead of blaming the browser.
 - `dsh-client-ui-permission-presets` drops its terminal mirror-status branch.
 
-The reversed rule was recorded by the [Host-backed Web preferences note](../bug-fix/2026-08-06-host-backed-web-preferences.md), which keeps its remaining decision and links here.
+The reversed rule was recorded by the [Host-backed Web preferences note](../../archived/bug-fix/2026-08-06-host-backed-web-preferences.md), which keeps its remaining decision and links here.
 
 ## Alternatives considered
 

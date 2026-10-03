@@ -5,15 +5,18 @@
 /ssh:
   en: 847a37e7a77c8a3f
   zh: 33f4de7837ec2faa
+/ssh/architecture:
+  en: e4d75273c42c993b
+  zh: 13bd1524fe012ae8
 /ssh/execution-coordinates:
-  en: 77968e8be38ab9be
-  zh: f5bf0f62b32e45c7
+  en: ba92f25151482257
+  zh: 5e129a50f5844e77
 /ssh/transport-and-trust:
-  en: e807ecd0222acb80
-  zh: b2077393b549a7fe
+  en: d79be566b6466825
+  zh: 2eb580140616144e
 /ssh/process-lifetime-and-cancellation:
-  en: 3e29eb0f47ca4d21
-  zh: 9d880e082d39577e
+  en: 62015fde8ec9fa74
+  zh: c4a07efb2458b2af
 /ssh/composition-scope:
   en: 13a012fde5c31dae
   zh: 52ee73d3be07cec8

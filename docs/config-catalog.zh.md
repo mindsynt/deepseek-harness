@@ -231,6 +231,8 @@ export interface Config {
 export interface Config {
   /** Override platform desktop-opener detection. */
   readonly nativeOpen?: boolean
+  /** Positive integral milliseconds of list work before yielding between complete rows. */
+  readonly listWorkSliceMs?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-api-session-controller -->
@@ -943,6 +945,32 @@ export interface StagehandModelConfig {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-browser-use-stagehand-native -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-claude-code-mods -->
+<a id="deepseek-aidsh-experimental-claude-code-mods"></a>
+
+## `@deepseek-ai/dsh-experimental-claude-code-mods`
+
+- `source`: [`packages/experimental/claude-code-mods/src/index.ts:52`](../packages/experimental/claude-code-mods/src/index.ts)
+
+```ts config-catalog
+/** Plugin config: the limits mod hooks run under. */
+export interface Config {
+  /** A hook's own running-time limit in milliseconds (Claude Code: 10 seconds). */
+  hookTimeoutMs?: number
+  /** A `.catch` handler's running-time limit in milliseconds (Claude Code: 1 second). */
+  catchTimeoutMs?: number
+  /** Default `$.process.run` and `$.http.fetch` timeout in milliseconds (Claude Code: 30 seconds). */
+  processTimeoutMs?: number
+  /** Claude Code tool name → harness tool name entries added to the built-in alias table. */
+  toolAliases?: Record<string, string>
+  /** Columns the band above the prompt reports to `ui.render` as `bodyColumns` and `viewport.columns`. */
+  bandColumns?: number
+  /** Rows the band reports as `maxRows`. */
+  bandRows?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-claude-code-mods -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp -->
 <a id="deepseek-aidsh-experimental-computer-use-cua-driver-mcp"></a>
 
@@ -972,7 +1000,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-inspector`
 
-- `inject`: `webServer`
+- `inject`: `webServer` · `connection`
 - `source`: [`packages/experimental/inspector/src/index.ts:66`](../packages/experimental/inspector/src/index.ts)
 
 ```ts config-catalog
@@ -1301,31 +1329,13 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-headless -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-helper-installer -->
-<a id="deepseek-aidsh-helper-installer"></a>
-
-## `@deepseek-ai/dsh-helper-installer`
-
-- `source`: [`packages/ssh/helper-installer/src/index.ts:46`](../packages/ssh/helper-installer/src/index.ts)
-
-```ts config-catalog
-/** Plugin config for the remote command deadline and the local OpenSSH client. */
-export interface Config {
-  /** Deadline for one remote command, in milliseconds; defaults to 30,000. */
-  installTimeoutMs?: number
-  /** Local OpenSSH client configuration file passed to `ssh -F` when an install request names none. */
-  sshConfigFile?: string
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-helper-installer -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-hmr -->
 <a id="deepseek-aidsh-hmr"></a>
 
 ## `@deepseek-ai/dsh-hmr`
 
 - `refs`: `ChokidarOptions` (`chokidar`)
-- `source`: [`packages/boot/hmr/src/index.ts:51`](../packages/boot/hmr/src/index.ts)
+- `source`: [`packages/boot/hmr/src/index.ts:53`](../packages/boot/hmr/src/index.ts)
 
 ```ts config-catalog
 /** Module roots and watcher timing, with Chokidar deployment options. */
@@ -1557,26 +1567,6 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-invariants -->
-<a id="deepseek-aidsh-invariants"></a>
-
-## `@deepseek-ai/dsh-invariants`
-
-- `source`: [`packages/runtime-diagnostics/invariants/src/index.ts:15`](../packages/runtime-diagnostics/invariants/src/index.ts)
-
-```ts config-catalog
-/** Runtime invariant selection configured on the service plugin. */
-export interface Config {
-  /** Global switch; defaults to `true`. */
-  readonly enabled?: boolean
-  /** Case-sensitive JavaScript regex sources that admit package names; empty admits all. */
-  readonly package_allowlist?: string[]
-  /** Case-sensitive JavaScript regex sources that exclude package names after allowlist matching. */
-  readonly package_blocklist?: string[]
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-invariants -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-jobs-local -->
 <a id="deepseek-aidsh-jobs-local"></a>
@@ -2285,7 +2275,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-plan-mode`
 
 - `inject`: `tools` · `systemPrompt` · `sessionProjections`
-- `source`: [`packages/plan/plan-mode/src/index.ts:70`](../packages/plan/plan-mode/src/index.ts)
+- `source`: [`packages/plan/plan-mode/src/index.ts:69`](../packages/plan/plan-mode/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-owned plan guidance. */
@@ -2546,8 +2536,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-schedule`
 
-- `inject`: `agents` · `sessions` · `tools` · `storageDomain` · `sessionController` · `sessionPersistence`
-- `source`: [`packages/schedule/schedule/src/index.ts:73`](../packages/schedule/schedule/src/index.ts)
+- `inject`: `agents` · `sessions` · `storageDomain` · `sessionController` · `sessionPersistence`
+- `source`: [`packages/schedule/schedule/src/index.ts:72`](../packages/schedule/schedule/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the Host Schedule domain. */
@@ -3010,82 +3000,114 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-spill-policy -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-ssh -->
-<a id="deepseek-aidsh-ssh"></a>
-
-## `@deepseek-ai/dsh-ssh`
-
-- `source`: [`packages/ssh/ssh/src/index.ts:17`](../packages/ssh/ssh/src/index.ts)
-
-```ts config-catalog
-/** Deployment-owned SSH identity and installed helper; no model argument selects these values. */
-export interface Config {
-  /** OpenSSH host alias, including its existing user, key and known-host configuration. */
-  host: string
-  /** Absolute remote Node executable. */
-  node: string
-  /** Absolute path to the installed, bundled helper entry. */
-  helper: string
-  /** SHA-256 of that bundled helper; mismatches refuse the connection. */
-  helperHash: string
-  /** Absolute remote default workspace. */
-  workspace: string
-  /**
-   * Absolute local OpenSSH client configuration file passed to `ssh -F`; when
-   * omitted, the client falls back to its own default configuration, so an
-   * alias defined only in a DSH-generated file is unreachable.
-   */
-  sshConfigFile?: string
-  /** Optional preinstalled built PTC entry, paired with its expected digest. */
-  bootstrapPath?: string
-  /** SHA-256 of bootstrapPath; both fields must be supplied together. */
-  bootstrapHash?: string
-  /** Connection and administrative-request deadline, at most 2,147,483,647 milliseconds. */
-  requestTimeoutMs?: number
-  /** Maximum JSON payload bytes per helper request or response. */
-  maxFrameBytes?: number
-  /** Maximum ordinary requests; heartbeat and bounded resource cleanup have reserved capacity. */
-  maxPending?: number
-  /** Remote helper lease; loss of heartbeats starts remote managed cleanup. */
-  leaseMs?: number
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-ssh -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-ssh-host-registry -->
 <a id="deepseek-aidsh-ssh-host-registry"></a>
 
 ## `@deepseek-ai/dsh-ssh-host-registry`
 
-- `inject`: `sshHelperInstaller` · `sshHostCredentials` · `storageDomain`
-- `source`: [`packages/ssh/host-registry/src/index.ts:74`](../packages/ssh/host-registry/src/index.ts)
+- `inject`: `sshHostCredentials` · `storageDomain`
+- `source`: [`packages/ssh/host-registry/src/index.ts:77`](../packages/ssh/host-registry/src/index.ts)
 
 ```ts config-catalog
-/** Plugin config: the SSH hosts this deployment opens while the plugin activates. */
+/**
+ * Plugin config. `hosts` is refused at activation: the native SSH composition
+ * installs no helper artifact, so no configured entry can be opened.
+ */
 export interface Config {
-  /** Hosts provisioned and opened while the plugin activates; omission opens none. */
+  /** Host entries, every one of them refused at activation; omission opens none. */
   readonly hosts?: readonly RemoteHostEntryConfig[]
-  /** Absolute local path of an artifact manifest every entry without its own `manifest` uses. */
+  /** Absolute local path of an artifact manifest, from the helper-provisioned layout. */
   readonly manifest?: string
 }
 
-/** One host a profile opens at startup. */
+/** One `config.hosts` entry; every entry is refused, so only its `id` is read. */
 export interface RemoteHostEntryConfig {
   /** Registry identity; a non-empty token, never a path. */
   readonly id: string
-  /** Caller-facing label; omission uses the id. */
+  /** Caller-facing label. */
   readonly label?: string
   /** OpenSSH host alias. */
   readonly host: string
-  /** Absolute remote directory receiving the digest-named install directory. */
+  /** Absolute remote directory, from the helper-provisioned layout. */
   readonly root: string
-  /** Absolute remote default workspace. */
+  /** Absolute remote default workspace, from the helper-provisioned layout. */
   readonly workspace: string
-  /** Absolute local path of this host's artifact manifest; omission uses the plugin-level one. */
+  /** Absolute local path of an artifact manifest, from the helper-provisioned layout. */
   readonly manifest?: string
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-ssh-host-registry -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-ssh-native -->
+<a id="deepseek-aidsh-ssh-native"></a>
+
+## `@deepseek-ai/dsh-ssh-native`
+
+- `source`: [`packages/ssh/ssh-native/src/index.ts:51`](../packages/ssh/ssh-native/src/index.ts)
+
+```ts config-catalog
+/** Interface configuration for the native SSH connection service. */
+export interface SshNativeConfig {
+  /** Remote host address (hostname or IP). */
+  host: string
+  /** Remote port (default: 22). */
+  port?: number
+  /** Username. */
+  username: string
+  /** Private key content (PEM format). */
+  privateKey?: string
+  /** Password (mutually exclusive with privateKey). */
+  password?: string
+  /** Local identity file path. */
+  identityFile?: string
+  /** Path to known_hosts file. */
+  knownHostsFile?: string
+  /** Connection timeout in milliseconds (default: 30000). */
+  connectTimeout?: number
+  /** Keepalive interval in milliseconds (default: 30000). */
+  keepaliveInterval?: number
+  /** Keepalive count max (default: 3). */
+  keepaliveCountMax?: number
+  /** Strict host key checking mode. */
+  strictHostKeyChecking?: 'yes' | 'no' | 'accept-new'
+  /** Maximum SFTP read size (default: 64MB). */
+  maxSftpReadBytes?: number
+  /** Maximum exec output size (default: 64MB). */
+  maxExecOutputBytes?: number
+  /** Auto-reconnect configuration. */
+  reconnect?: {
+    /** Enable automatic reconnection (default: false). */
+    enabled?: boolean
+    /** Maximum number of reconnection attempts (default: 3). */
+    maxAttempts?: number
+    /** Delay between reconnection attempts in milliseconds (default: 1000). */
+    delayMs?: number
+    /** Exponential backoff multiplier for reconnection delay (default: 2). */
+    backoffMultiplier?: number
+  }
+  /** Enable SSH compression (default: false). */
+  compression?: {
+    /** Enable compression. */
+    enabled: boolean
+    /** Compression algorithm (default: 'zlib'). */
+    algorithm?: 'zlib'
+  }
+  /** SSH proxy/jump host configuration. */
+  proxy?: {
+    /** Proxy host address. */
+    host: string
+    /** Proxy port (default: 22). */
+    port?: number
+    /** Proxy username. */
+    username: string
+    /** Proxy private key. */
+    privateKey?: string
+    /** Proxy password. */
+    password?: string
+  }
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-ssh-native -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-storage-domain -->
 <a id="deepseek-aidsh-storage-domain"></a>
@@ -3180,7 +3202,7 @@ export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 ## `@deepseek-ai/dsh-subagent`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/subagent/subagent/src/index.ts:192`](../packages/subagent/subagent/src/index.ts)
+- `source`: [`packages/subagent/subagent/src/index.ts:190`](../packages/subagent/subagent/src/index.ts)
 
 ```ts config-catalog
 /** Host configuration for continuable subagent capacity. */
@@ -4214,7 +4236,7 @@ export interface WebRuntimeConfig {
 ## `@deepseek-ai/dsh-web-app`
 
 - `inject`: `webServer`
-- `source`: [`packages/bundle/web-app/src/index.ts:44`](../packages/bundle/web-app/src/index.ts)
+- `source`: [`packages/bundle/web-app/src/index.ts:46`](../packages/bundle/web-app/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: composed deployment settings plus per-invocation command-line values. */
@@ -4230,6 +4252,14 @@ export interface Config {
    * orientation text would be false.
    */
   surfaceContext: boolean
+  /**
+   * Canonical HTTP(S) root to advertise in the printed and opened URL,
+   * `DSH_WEB_URL`, and the web-surface orientation, e.g.
+   * `https://app.example/ui/`, normalized to end in `/`. Advertisement only;
+   * see [public deployments](../README.md#public-deployments). Absent or YAML
+   * `null` advertises the loopback URL.
+   */
+  publicUrl?: string
   /** Explicit `--trusted-host` authorities from this invocation. */
   trustedHosts: string[]
 }
@@ -4492,10 +4522,12 @@ export interface Config {
 | `@deepseek-ai/dsh-deepseek-llm-api-extensions` | — | [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-auto-review` | `approval` · `llm` · `permissionPresets` · `sessions` · `tools` | [`packages/experimental/auto-review/src/index.ts`](../packages/experimental/auto-review/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-agent-team` | — | [`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts) |
+| `@deepseek-ai/dsh-experimental-client-ui-claude-code-mods` | — | [`packages/experimental/client-ui-claude-code-mods/src/index.ts`](../packages/experimental/client-ui-claude-code-mods/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-voice-input` | — | [`packages/experimental/client-ui-voice-input/src/index.ts`](../packages/experimental/client-ui-voice-input/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-computer-use-cua-driver-native` | `computerUse` · `tools` · `systemPrompt` | [`packages/experimental/computer-use-cua-driver-native/src/index.ts`](../packages/experimental/computer-use-cua-driver-native/src/index.ts) |
+| `@deepseek-ai/dsh-experimental-session-inspector` | — | [`packages/experimental/session-inspector/src/index.ts`](../packages/experimental/session-inspector/src/index.ts) |
 | `@deepseek-ai/dsh-fs-observation-policy` | — | [`packages/fs/fs-observation-policy/src/index.ts`](../packages/fs/fs-observation-policy/src/index.ts) |
-| `@deepseek-ai/dsh-fs-ssh` | `ssh` · `sandboxPolicy` | [`packages/ssh/fs-ssh/src/index.ts`](../packages/ssh/fs-ssh/src/index.ts) |
+| `@deepseek-ai/dsh-fs-sftp` | `sshNative` · `sandboxPolicy` | [`packages/ssh/fs-sftp/src/index.ts`](../packages/ssh/fs-sftp/src/index.ts) |
 | `@deepseek-ai/dsh-goal-round-driver` | `agents` · `goals` · `sessions` | [`packages/goal/goal-round-driver/src/index.ts`](../packages/goal/goal-round-driver/src/index.ts) |
 | `@deepseek-ai/dsh-host-directory-picker-auto` | `webServer` · `loader` | [`packages/host/directory-picker-auto/src/index.ts`](../packages/host/directory-picker-auto/src/index.ts) |
 | `@deepseek-ai/dsh-host-directory-picker-native` | — | [`packages/host/directory-picker-native/src/index.ts`](../packages/host/directory-picker-native/src/index.ts) |
@@ -4505,7 +4537,6 @@ export interface Config {
 | `@deepseek-ai/dsh-lsp` | — | [`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts) |
 | `@deepseek-ai/dsh-mcp-resources` | `tools` | [`packages/mcp/mcp-resources/src/index.ts`](../packages/mcp/mcp-resources/src/index.ts) |
 | `@deepseek-ai/dsh-otel` | — | [`packages/telemetry/otel/src/index.ts`](../packages/telemetry/otel/src/index.ts) |
-| `@deepseek-ai/dsh-sandbox-ssh` | `ssh` | [`packages/ssh/sandbox-ssh/src/index.ts`](../packages/ssh/sandbox-ssh/src/index.ts) |
 | `@deepseek-ai/dsh-session` | — | [`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts) |
 | `@deepseek-ai/dsh-session-checkpoint-policy` | `llm` · `sessionPersistence` · `sessions` · `tools` | [`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts) |
 | `@deepseek-ai/dsh-session-projection` | — | [`packages/session/session-projection/src/index.ts`](../packages/session/session-projection/src/index.ts) |
@@ -4515,10 +4546,11 @@ export interface Config {
 | `@deepseek-ai/dsh-skill-badge` | `skills` | [`packages/skill/skill-badge/src/index.ts`](../packages/skill/skill-badge/src/index.ts) |
 | `@deepseek-ai/dsh-storage` | — | [`packages/storage/storage/src/index.ts`](../packages/storage/storage/src/index.ts) |
 | `@deepseek-ai/dsh-subprocess-local` | — | [`packages/subprocess/subprocess-local/src/index.ts`](../packages/subprocess/subprocess-local/src/index.ts) |
-| `@deepseek-ai/dsh-subprocess-ssh` | `ssh` | [`packages/ssh/subprocess-ssh/src/index.ts`](../packages/ssh/subprocess-ssh/src/index.ts) |
+| `@deepseek-ai/dsh-subprocess-ssh-exec` | `sshNative` | [`packages/ssh/subprocess-ssh-exec/src/index.ts`](../packages/ssh/subprocess-ssh-exec/src/index.ts) |
 | `@deepseek-ai/dsh-terminal` | — | [`packages/terminal/terminal/src/index.ts`](../packages/terminal/terminal/src/index.ts) |
 | `@deepseek-ai/dsh-tool-call-timeout-policy` | `tools` | [`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts) |
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
+| `@deepseek-ai/dsh-tool-schedule` | `tools` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-tool-subagent-control` | `tools` · `subagents` | [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts) |
 | `@deepseek-ai/dsh-user-questions` | — | [`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-webhook` | `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` | [`packages/webhook/webhook/src/index.ts`](../packages/webhook/webhook/src/index.ts) |
@@ -4574,11 +4606,10 @@ export interface Config {
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-agent-team-profile` | — | [`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |
-| `@deepseek-ai/dsh-experimental-schedule-bundle` | — | [`packages/experimental/schedule-bundle/src/index.ts`](../packages/experimental/schedule-bundle/src/index.ts) |
+| `@deepseek-ai/dsh-experimental-inspector-profile` | — | [`packages/experimental/inspector-profile/src/index.ts`](../packages/experimental/inspector-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-voice-input-bundle` | — | [`packages/experimental/voice-input-bundle/src/index.ts`](../packages/experimental/voice-input-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-webworker-packer` | — | [`packages/experimental/webworker-packer/src/index.ts`](../packages/experimental/webworker-packer/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-webworker-runtime` | — | [`packages/experimental/webworker-runtime/src/index.ts`](../packages/experimental/webworker-runtime/src/index.ts) |
-| `@deepseek-ai/dsh-helper-artifact` | — | [`packages/ssh/helper-artifact/src/index.ts`](../packages/ssh/helper-artifact/src/index.ts) |
 | `@deepseek-ai/dsh-home-paths` | — | [`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts) |
 | `@deepseek-ai/dsh-hook-protocol` | — | [`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts) |
 | `@deepseek-ai/dsh-http-proxy` | — | [`packages/util/http-proxy/src/index.ts`](../packages/util/http-proxy/src/index.ts) |

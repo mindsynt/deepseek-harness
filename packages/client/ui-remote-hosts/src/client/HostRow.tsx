@@ -40,8 +40,6 @@ export function HostRow({ row, t, selected, testing, outcome, onSelect, onTest, 
       <dl className={css.facts}>
         <dt className={css.term}>{t('hostField')}</dt>
         <dd className={css.value}>{row.host}</dd>
-        <dt className={css.term}>{t('workspaceField')}</dt>
-        <dd className={css.value}>{row.workspace}</dd>
         <dt className={css.term}>{t('worldField')}</dt>
         <dd className={css.value} data-open={row.open ? 'true' : undefined}>
           {row.open ? t('worldOpen') : t('worldClosed')}

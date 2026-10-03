@@ -9,50 +9,50 @@
   en: 807ee8122a7c07cd
   zh: d08220cc8de69e15
 /deepseek-ai-dsh-ssh-hosts/summary:
-  en: 2c526533a331e29d
-  zh: 45dd28dd64d59270
+  en: 642cdb6f616c2a51
+  zh: e799f53b14dce8dd
 /deepseek-ai-dsh-ssh-hosts/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-ssh-hosts/use-this-package:
   en: bbff250eba0f1b89
   zh: 0a618f05cc88ee2b
-/deepseek-ai-dsh-ssh-hosts/use-this-package/add-the-layer-to-a-profile:
-  en: aa6a9091a069cb04
-  zh: a34d14d39d21eca6
-/deepseek-ai-dsh-ssh-hosts/use-this-package/declare-hosts:
-  en: 862a0c4c5e0686cc
-  zh: e5f553148b61ce9d
+/deepseek-ai-dsh-ssh-hosts/use-this-package/add-the-layer-to-another-profile:
+  en: dedac6d46b79defe
+  zh: d4d182ba04ce8a74
+/deepseek-ai-dsh-ssh-hosts/use-this-package/register-hosts:
+  en: f4792586b7ac7a04
+  zh: e3d7f3bf86a31359
 /deepseek-ai-dsh-ssh-hosts/use-this-package/what-you-get:
-  en: 62efc46d3b162ef9
-  zh: bca8f6886183d2da
+  en: cf64608fac62781a
+  zh: 0d205ac697f117a2
 /deepseek-ai-dsh-ssh-hosts/understand-the-implementation:
   en: 307b0239dbf48dd4
   zh: b9ac90c449c6e778
 /deepseek-ai-dsh-ssh-hosts/understand-the-implementation/composition-mechanics:
-  en: 1b4d707c6c9b0c07
-  zh: 39fa2a4e44a9b6ea
+  en: 7e6e192896703195
+  zh: 96b14b6597b984db
 /deepseek-ai-dsh-ssh-hosts/understand-the-implementation/activation:
-  en: 1aeaca424a3df137
+  en: 4548237c8533e7b2
   zh: 91f3431673d5a8cc
 /deepseek-ai-dsh-ssh-hosts/understand-the-implementation/source-map:
-  en: d2f1788f453ee14b
+  en: e09a810177682ecc
   zh: aaf283cd4461514e
 /deepseek-ai-dsh-ssh-hosts/understand-the-implementation/invariant-ownership:
-  en: db0df53017877982
+  en: 9a2ebc8a4c86976e
   zh: 328f1fa2a3089991
 /deepseek-ai-dsh-ssh-hosts/further-exploration:
-  en: 42559567eade15c5
-  zh: 345b17805bb2c2bf
+  en: aee68c45fcde610d
+  zh: db558a698a2a3e98
 /deepseek-ai-dsh-ssh-hosts/model-experience:
   en: 67a4cf6cedeb4d37
   zh: 66c6f2109fda51b1
 /deepseek-ai-dsh-ssh-hosts/model-experience/kv-cache-effect:
-  en: be55d2a1581b197d
+  en: e86bdd6ef9d32f6e
   zh: 56e2216af00970c7
 /deepseek-ai-dsh-ssh-hosts/known-limitations-and-deferred-work:
-  en: ab1949dc24913f62
-  zh: 729b7abb4399bf5c
+  en: 9e22161ee13607a2
+  zh: 925a444c4211e440
 /deepseek-ai-dsh-ssh-hosts/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

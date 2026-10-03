@@ -42,7 +42,7 @@ Sidebar 的 Document Preview 和 Files 面板都需要反映磁盘上的最新�
 | `FsTarget` | [fs/src/types.ts](../../../../packages/fs/fs/src/types.ts) | 沿用现有目标类型，不单独增加 FS 监听事件体系，也不让上层解析 `targetKey` |
 | `LocalFileSystem` | [fs-local/src/index.ts](../../../../packages/fs/fs-local/src/index.ts) | 文件监听其父目录并过滤到目标，目录监听自身；等待 Chokidar 就绪和关闭；依赖声明在 `fs-local` |
 | `SandboxedFileSystem` | [fs-sandbox/src/index.ts](../../../../packages/fs/fs-sandbox/src/index.ts) | 继承本地只读监听能力，不复制 watcher 实现；保留自身对写入、编辑的策略检查 |
-| `SshFileSystem` | [fs-ssh/src/index.ts](../../../../packages/ssh/fs-ssh/src/index.ts) | 继承基类的 `FS_IO_ERROR` 拒绝；Host 将其转换为 `workspace-file/watch-unsupported` 的 `RemoteError`，不跨包导入或判断 `FsError` 实体，也不把远端 `processPath()` 传给本机 Chokidar |
+| `SftpFileSystem` | [fs-sftp/src/index.ts](../../../../packages/ssh/fs-sftp/src/index.ts) | 继承基类的 `FS_IO_ERROR` 拒绝；Host 将其转换为 `workspace-file/watch-unsupported` 的 `RemoteError`，不跨包导入或判断 `FsError` 实体，也不把远端 `processPath()` 传给本机 Chokidar |
 | `WorkspaceFiles` | [workspace-files/src/index.ts](../../../../packages/api/workspace-files/src/index.ts) | 使用仅携带目标路径的 `changes(scope, path, signal)`；Host stat 决定是否执行目录包含检查，目标类型变化后也检查，普通文件沿用文件读取权限 |
 | `WorkspaceChangeFeed` | [workspace-files/src/changes.ts](../../../../packages/api/workspace-files/src/changes.ts) | 在现有 follow 中建立目标 watch，发送就绪和变化；保留原队列与操作观察入口，出流前过滤目标，不重写整套分发逻辑 |
 | `ChangeFollower` | [workspace-files/src/changes.ts](../../../../packages/api/workspace-files/src/changes.ts) | 接收操作观察与 OS 通知，处理监听错误；关闭独立于生成器拉取进度，并等待 watcher 关闭完成 |
@@ -342,4 +342,4 @@ FS、Workspace API、预览和 Files 各自的测试覆盖监听生命周期、�
 - [Workspace 文件服务](../../implemented/architecture/2026-09-05-workspace-files-service.zh.md)：读取与列表接口职责不变；目标级系统监听替代仅转发操作观察的 Session 流。
 - [文档预览操作](../../implemented/architecture/2026-09-08-document-preview-operations.zh.md)：正文加载所有权和三种加载方式不变；自动刷新使用其现有 reload 路径。
 - [Workspace 文件读取授权](../../implemented/architecture/2026-09-09-workspace-file-read-authority.zh.md)：保留文件读取与目录浏览的不同访问范围；目标 watch 分别遵循对应规则。
-- [Sidebar 文本预览与文件树](../../implemented/feature/2026-09-05-sidebar-text-preview-and-file-tree.zh.md)：按 Tab 的展开、导航和滚动状态不变；已打开节点负责目录自动失效与监听。
+- [Sidebar 文本预览与文件树](../../../../packages/client/ui-sidebar-files/README.zh.md)：按 Tab 的展开、导航和滚动状态不变；已打开节点负责目录自动失效与监听。

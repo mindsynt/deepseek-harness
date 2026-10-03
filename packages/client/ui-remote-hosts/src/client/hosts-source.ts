@@ -48,7 +48,7 @@ export interface HostsStreamOptions<Item> {
 
 /** The `hosts` Remote namespace methods this section calls, as the generated Remote declares them. */
 export interface RemoteHostsNamespace {
-  /** Store entered login material, install the helper, and open the host. */
+  /** Store entered login material, persist the host record, and open its execution world. */
   add(request: RemoteHostAddRequest): Promise<RemoteResult<RemoteHostAddValue>>
   /** Remove one host's world, record, and stored login material. */
   delete(request: RemoteHostRemoveRequest): Promise<RemoteResult<RemoteHostRemoveValue>>
@@ -78,13 +78,19 @@ export interface RemoteHostRow {
   id: string
   /** Caller-facing label. */
   label: string
-  /** OpenSSH alias the stored login addresses. */
+  /** The host's SSH address. */
   host: string
-  /** Absolute remote default workspace. */
-  workspace?: string
   /** Whether this process currently holds an open execution world for that host. */
   open: boolean
 }
+
+/** The two ends this service classifies itself. */
+type ClassifiedFailureReason = 'ended' | 'unrecognized-frame'
+
+/** Why the followed generation stopped delivering; the section renders the copy for one. */
+export type RemoteHostsListFailure =
+  | { readonly reason: ClassifiedFailureReason }
+  | { readonly reason: 'carrier'; readonly detail: string }
 
 /** List state the section observes. */
 export interface RemoteHostsListState {
@@ -92,8 +98,8 @@ export interface RemoteHostsListState {
   rows: RemoteHostRow[]
   /** Whether a baseline has arrived for the current generation. */
   ready: boolean
-  /** Diagnostic from the generation the Host closed, or from a refused stream. */
-  failure?: string
+  /** Why the followed generation stopped delivering, or absent while it delivers. */
+  failure?: RemoteHostsListFailure
 }
 
 /** What one add or remove answered. */
@@ -155,7 +161,7 @@ export class RemoteHostsSource {
 
   /**
    * Add one host and open its execution world.
-   * @param request - identity, remote paths, artifact manifest, and entered login.
+   * @param request - identity, label and entered login.
    * @returns success, or the Host's refusal diagnostic.
    */
   async addHost(request: RemoteHostAddRequest): Promise<RemoteHostActionOutcome> {
@@ -211,7 +217,7 @@ export class RemoteHostsSource {
       open: signal => this.face.hosts.follow(signal),
       // A generation the Host closes cleanly is gone, not interrupted: carrier
       // losses reconnect inside the supervisor, so this end is terminal.
-      ended: () => new Error('remote host list ended'),
+      ended: () => new HostsStreamFailure('ended'),
     })
     this.stream = stream
     void this.pump(stream, generation)
@@ -235,9 +241,15 @@ export class RemoteHostsSource {
         if (item.value.type === 'baseline') item.accept()
       }
     } catch (error) {
-      if (generation === this.generation) {
-        this.store.set({ ...this.store.getSnapshot(), failure: reasonOf(error) })
-      }
+      if (generation !== this.generation) return
+      // This service classifies two ends itself; anything else reached the
+      // consumer through the carrier, and its message stays a diagnostic.
+      this.store.set({
+        ...this.store.getSnapshot(),
+        failure: error instanceof HostsStreamFailure
+          ? { reason: error.reason }
+          : { reason: 'carrier', detail: reasonOf(error) },
+      })
     }
   }
 
@@ -272,7 +284,7 @@ export class RemoteHostsSource {
 /**
  * Project one wire view into the fields the section renders.
  * @param view - one host as the Remote reported it.
- * @returns the row identity, endpoint alias, workspace, and world state.
+ * @returns the row identity, endpoint, and world state.
  */
 function toRow(view: RemoteHostView): RemoteHostRow {
   return {
@@ -308,10 +320,24 @@ function reasonOf(error: unknown): string {
 }
 
 /**
+ * A host-list generation that stopped delivering. `reason` is the published
+ * code, so the section renders its own copy and the wire frame stays a cause
+ * for diagnostics instead of reaching the user as prose.
+ */
+class HostsStreamFailure extends Error {
+  constructor(
+    readonly reason: ClassifiedFailureReason,
+    cause?: unknown,
+  ) {
+    super(reason, cause === undefined ? undefined : { cause })
+  }
+}
+
+/**
  * Refuse a frame outside the generated union.
  * @param frame - the frame no branch accepted.
- * @throws {Error} always; the wire carries a frame this build does not know.
+ * @throws {HostsStreamFailure} always; the wire carries a frame this build does not know.
  */
 function assertNever(frame: never): never {
-  throw new Error(`unexpected remote host frame: ${JSON.stringify(frame)}`)
+  throw new HostsStreamFailure('unrecognized-frame', frame)
 }

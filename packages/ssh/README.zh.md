@@ -1,5 +1,5 @@
 ---
-description: "POSIX SSH 提供方家族：共享连接、远端文件系统、托管子进程及文件效果沙箱。"
+description: "原生 SSH 提供方家族：一条 OpenSSH 连接及其承载的 SFTP 文件系统与 SSH exec 子进程提供方。"
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-本家族将文件、普通进程、终端及沙箱执行放在同一台 POSIX SSH 主机上，Harness 保留在本地。共享 OpenSSH 连接与已安装辅助程序支持现有文件系统、子进程及沙箱接口。适用于消费方遵守提供方路径语义的 headless 或自定义配置组合。
+本家族将文件与进程放在同一台 POSIX SSH 主机上运行，Harness 保留在本地。基于 ssh2 的原生 OpenSSH 连接承载 SFTP 文件操作与 SSH exec 通道，因此远端主机只需一个 OpenSSH 服务端——无需辅助程序守护进程，也无需 Node 运行时。适用于消费方遵守提供方路径语义的 headless 或自定义配置组合。
 
 ## 目录
 
@@ -22,14 +22,11 @@ kind: "package-group"
 
 | 包 | 职责 | 服务 |
 |---|---|---|
-| [`ssh`](ssh/README.zh.md) | 连接、辅助程序身份及传输生命周期 | `ctx.ssh` |
-| [`fs-ssh`](fs-ssh/README.zh.md) | 远端文件身份、读取及带保护的原子修改 | `ctx.fs` |
-| [`subprocess-ssh`](subprocess-ssh/README.zh.md) | 可执行文件查找、进程、控制流及终端 | `ctx.subprocess` |
-| [`sandbox-ssh`](sandbox-ssh/README.zh.md) | 远端文件效果限制及执行信息 | `ctx.sandbox` |
+| `ssh-native` | 原生 OpenSSH 连接：SFTP 文件操作、SSH exec 进程通道与 PTY 会话 | `ctx.sshNative` |
+| `fs-sftp` | 基于 SFTP 子系统的远端文件系统提供方 | `ctx.fs` |
+| `subprocess-ssh-exec` | 基于 SSH exec 通道的远端子进程提供方 | `ctx.subprocess` |
 | [`host-registry`](host-registry/README.zh.md) | 每台已注册 SSH 主机一个隔离执行 realm | `ctx.remoteHosts` |
-| [`host-credentials`](host-credentials/README.zh.md) | 受控 OpenSSH 配置与身份物化，以及凭证存取 | `ctx.sshHostCredentials` |
-| [`helper-installer`](helper-installer/README.zh.md) | 远端辅助程序探测、上传与摘要确认 | `ctx.sshHelperInstaller` |
-| [`helper-artifact`](helper-artifact/README.zh.md) | 构建期组装远端辅助程序的依赖闭包并打包 | `-` |
+| [`host-credentials`](host-credentials/README.zh.md) | 已注册远程主机的已存 SSH 登录材料 | `ctx.sshHostCredentials` |
 
 <a id="related-documentation"></a>
 ## 相关文档

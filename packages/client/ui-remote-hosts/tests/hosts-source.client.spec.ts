@@ -210,7 +210,7 @@ describe('RemoteHostsSource', () => {
     const source = new RemoteHostsSource(b.face)
 
     b.generations[0]!.end()
-    await ready(() => { expect(source.store.getSnapshot().failure).toBe('remote host list ended') })
+    await ready(() => { expect(source.store.getSnapshot().failure).toEqual({ reason: 'ended' }) })
     // The last list stays visible; only the stream state is reported.
     expect(source.store.getSnapshot().rows).toEqual([])
     source.dispose()
@@ -260,13 +260,13 @@ describe('RemoteHostsSource', () => {
     const failing = bench()
     const source = new RemoteHostsSource(failing.face)
     failing.generations[0]!.fail(new Error('socket closed'))
-    await ready(() => { expect(source.store.getSnapshot().failure).toBe('socket closed') })
+    await ready(() => { expect(source.store.getSnapshot().failure).toEqual({ reason: 'carrier', detail: 'socket closed' }) })
     source.dispose()
 
     const thrown = bench()
     const other = new RemoteHostsSource(thrown.face)
     thrown.generations[0]!.fail('offline')
-    await ready(() => { expect(other.store.getSnapshot().failure).toBe('offline') })
+    await ready(() => { expect(other.store.getSnapshot().failure).toEqual({ reason: 'carrier', detail: 'offline' }) })
     other.dispose()
   })
 
@@ -285,7 +285,7 @@ describe('RemoteHostsSource', () => {
     const source = new RemoteHostsSource(b.face)
     b.generations[0]!.push({ type: 'bogus' } as unknown as RemoteHostsFollowFrame)
     await ready(() => {
-      expect(source.store.getSnapshot().failure).toContain('unexpected remote host frame')
+      expect(source.store.getSnapshot().failure).toEqual({ reason: 'unrecognized-frame' })
     })
     source.dispose()
   })

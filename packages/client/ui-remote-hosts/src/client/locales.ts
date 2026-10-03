@@ -4,14 +4,12 @@
 export type RemoteHostsLocaleKey =
   | 'nav' | 'title' | 'intro' | 'refresh'
   | 'addHost' | 'addTitle' | 'addDescription' | 'submit' | 'submitting'
-  | 'fieldId' | 'fieldLabel' | 'fieldHost' | 'fieldPort' | 'fieldUser'
-  | 'authKey' | 'authPassword' | 'fieldPrivateKey' | 'fieldPassword'
-  | 'privateKeyHint' | 'fieldRoot' | 'fieldWorkspace' | 'fieldManifest'
-  | 'showAdvanced' | 'closeAdvanced'
-  | 'cancel' | 'close' | 'portInvalid'
-  | 'empty' | 'loading' | 'listFailed'
+  | 'fieldLabel' | 'fieldHost' | 'fieldPort' | 'fieldUser' | 'fieldPrivateKey'
+  | 'privateKeyHint' | 'requiredMissing' | 'portInvalid'
+  | 'cancel' | 'close'
+  | 'empty' | 'loading' | 'listEnded' | 'listUnrecognizedFrame' | 'listCarrierFailed'
   | 'workspaceHost' | 'localLabel' | 'useLocal' | 'select' | 'selected' | 'selectAria'
-  | 'hostField' | 'workspaceField' | 'worldField' | 'worldOpen' | 'worldClosed' | 'worldClosedHint'
+  | 'hostField' | 'worldField' | 'worldOpen' | 'worldClosed' | 'worldClosedHint'
   | 'selectedWorldClosed'
   | 'testConnection' | 'testing' | 'testSucceeded' | 'testFailed' | 'fingerprints' | 'fingerprintsEmpty'
   | 'remove' | 'removeTitle' | 'removeDescription' | 'removing'
@@ -20,34 +18,28 @@ export type RemoteHostsLocaleKey =
 export const zh: Record<RemoteHostsLocaleKey, string> = {
   nav: '远程主机',
   title: '远程主机',
-  intro: '管理本机可通过 SSH 访问的远程主机。添加时会保存登录材料、在远端安装 helper，并打开隔离的执行世界。',
+  intro: '管理本机可通过 SSH 访问的远程主机。添加时会保存登录材料并打开隔离的执行世界。',
   refresh: '刷新',
   addHost: '添加主机',
   addTitle: '添加远程主机',
-  addDescription: '填写 SSH 登录信息与远端路径。私钥只写入凭证存储，不会显示或回传。',
+  addDescription: '填写 SSH 登录信息。私钥只写入凭证存储，不会显示或回传。',
   submit: '添加',
   submitting: '正在添加…',
-  fieldId: '主机 ID',
   fieldLabel: '名称',
   fieldHost: '主机地址',
   fieldPort: '端口',
   fieldUser: '登录用户',
-  authKey: '私钥',
-  authPassword: '密码',
   fieldPrivateKey: '私钥',
-  fieldPassword: '密码',
   privateKeyHint: '留空则使用环境中的 SSH agent 与默认密钥。',
-  fieldRoot: '远端根目录',
-  fieldWorkspace: '远端工作区',
-  fieldManifest: '本地制品 manifest',
-  showAdvanced: '高级选项',
-  closeAdvanced: '收起高级选项',
+  requiredMissing: '请填写名称、主机地址、端口与登录用户。',
+  portInvalid: '端口必须是 1 到 65535 之间的整数。',
   cancel: '取消',
   close: '关闭',
-  portInvalid: '端口必须是 1 到 65535 之间的整数。',
   empty: '当前没有已注册的远程主机。',
   loading: '正在读取主机列表…',
-  listFailed: '主机列表已断开，显示的是最后一次收到的内容。',
+  listEnded: '主机列表已断开，显示的是最后一次收到的内容。',
+  listUnrecognizedFrame: '主机列表返回了本客户端无法识别的帧，显示的是最后一次收到的内容。',
+  listCarrierFailed: '主机列表连接已断开，显示的是最后一次收到的内容。',
   workspaceHost: '新建工作区的主机',
   localLabel: '本机',
   useLocal: '改用本机',
@@ -55,7 +47,6 @@ export const zh: Record<RemoteHostsLocaleKey, string> = {
   selected: '已选中',
   selectAria: '将“{name}”设为新建工作区的主机',
   hostField: '地址',
-  workspaceField: '工作区',
   worldField: '执行世界',
   worldOpen: '执行世界已打开',
   worldClosed: '执行世界已断开',
@@ -77,34 +68,28 @@ export const zh: Record<RemoteHostsLocaleKey, string> = {
 export const en: Record<RemoteHostsLocaleKey, string> = {
   nav: 'Remote hosts',
   title: 'Remote hosts',
-  intro: 'Manage remote hosts this machine reaches over SSH. Adding one stores its login material, installs the helper remotely, and opens an isolated execution world.',
+  intro: 'Manage remote hosts this machine reaches over SSH. Adding one stores its login material and opens an isolated execution world.',
   refresh: 'Refresh',
   addHost: 'Add host',
   addTitle: 'Add a remote host',
-  addDescription: 'Enter the SSH login and the remote paths. The private key is written to the credential store only; it is never shown or returned.',
+  addDescription: 'Enter the SSH login. The private key is written to the credential store only; it is never shown or returned.',
   submit: 'Add',
   submitting: 'Adding…',
-  fieldId: 'Host ID',
   fieldLabel: 'Name',
   fieldHost: 'Address',
   fieldPort: 'Port',
   fieldUser: 'Login user',
-  authKey: 'Private key',
-  authPassword: 'Password',
   fieldPrivateKey: 'Private key',
-  fieldPassword: 'Password',
   privateKeyHint: 'Leave blank to use the environment SSH agent and default keys.',
-  fieldRoot: 'Remote root directory',
-  fieldWorkspace: 'Remote workspace',
-  fieldManifest: 'Local artifact manifest',
-  showAdvanced: 'Advanced options',
-  closeAdvanced: 'Collapse advanced options',
+  requiredMissing: 'Enter the name, the address, the port and the login user.',
+  portInvalid: 'The port must be an integer between 1 and 65535.',
   cancel: 'Cancel',
   close: 'Close',
-  portInvalid: 'The port must be an integer between 1 and 65535.',
   empty: 'No remote host is registered.',
   loading: 'Reading the host list…',
-  listFailed: 'The host list stream ended; this is the last list received.',
+  listEnded: 'The host list stream ended; this is the last list received.',
+  listUnrecognizedFrame: 'The host list stream sent a frame this client does not recognize; this is the last list received.',
+  listCarrierFailed: 'The host list connection was lost; this is the last list received.',
   workspaceHost: 'Host for new workspaces',
   localLabel: 'This machine',
   useLocal: 'Use this machine',
@@ -112,7 +97,6 @@ export const en: Record<RemoteHostsLocaleKey, string> = {
   selected: 'Selected',
   selectAria: 'Use “{name}” for new workspaces',
   hostField: 'Address',
-  workspaceField: 'Workspace',
   worldField: 'Execution world',
   worldOpen: 'Execution world open',
   worldClosed: 'Execution world disconnected',

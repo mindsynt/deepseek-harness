@@ -16,7 +16,7 @@ import type { SshHostCredentials } from '@deepseek-ai/dsh-host-credentials'
 import type { Domain, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { nativeSshComposition } from './composition-native.ts'
 import type { NativeRemoteHostSpec, NativeRemoteHostWorld } from './composition-native.ts'
-import { declaredHosts, provisionDeclaredHosts, restorePersistedHosts } from './config.ts'
+import { declaredHosts, restorePersistedHosts } from './config.ts'
 import { remoteHostDomainSpec } from './spec.ts'
 import type { RemoteHostRecord } from './spec.ts'
 import type {
@@ -54,27 +54,30 @@ export const name = 'ssh-host-registry'
  */
 export const inject = ['sshHostCredentials', 'storageDomain']
 
-/** One host a profile opens at startup. */
+/** One `config.hosts` entry; every entry is refused, so only its `id` is read. */
 export interface RemoteHostEntryConfig {
   /** Registry identity; a non-empty token, never a path. */
   readonly id: string
-  /** Caller-facing label; omission uses the id. */
+  /** Caller-facing label. */
   readonly label?: string
   /** OpenSSH host alias. */
   readonly host: string
-  /** Absolute remote directory receiving the digest-named install directory. */
+  /** Absolute remote directory, from the helper-provisioned layout. */
   readonly root: string
-  /** Absolute remote default workspace. */
+  /** Absolute remote default workspace, from the helper-provisioned layout. */
   readonly workspace: string
-  /** Absolute local path of this host's artifact manifest; omission uses the plugin-level one. */
+  /** Absolute local path of an artifact manifest, from the helper-provisioned layout. */
   readonly manifest?: string
 }
 
-/** Plugin config: the SSH hosts this deployment opens while the plugin activates. */
+/**
+ * Plugin config. `hosts` is refused at activation: the native SSH composition
+ * installs no helper artifact, so no configured entry can be opened.
+ */
 export interface Config {
-  /** Hosts provisioned and opened while the plugin activates; omission opens none. */
+  /** Host entries, every one of them refused at activation; omission opens none. */
   readonly hosts?: readonly RemoteHostEntryConfig[]
-  /** Absolute local path of an artifact manifest every entry without its own `manifest` uses. */
+  /** Absolute local path of an artifact manifest, from the helper-provisioned layout. */
   readonly manifest?: string
 }
 
@@ -95,7 +98,7 @@ export const Config: z<Config> = z.object({
  * Composition point mounting one host's execution services into its isolated realm.
  * Deployments and tests both supply one; {@link sshComposition} is the default.
  * @param realm - the isolated context of exactly one host.
- * @param spec - resolved connection and helper coordinates of that host.
+ * @param spec - resolved connection coordinates of that host.
  * @returns the execution services resolved inside `realm`.
  */
 export type RemoteHostComposition = (realm: Context, spec: NativeRemoteHostSpec) => Promise<NativeRemoteHostWorld>
@@ -117,7 +120,7 @@ export type RemoteHostComposition = (realm: Context, spec: NativeRemoteHostSpec)
  * login material, or when a restored host cannot be opened.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const hosts = declaredHosts(config)
+  declaredHosts(config)
   await ctx.plugin(RemoteHostRegistryService)
   // The registry is provided by the child fiber just mounted, not injected into
   // this one, so a Loader-mounted entry must read it through `ctx.get`.
@@ -125,8 +128,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   if (registry === undefined) throw new Error('ssh host registry: the mounted service is unavailable')
   const credentials = ctx.get('sshHostCredentials')
   if (credentials === undefined) throw new Error('ssh host registry: sshHostCredentials is unavailable for startup recovery')
-  await provisionDeclaredHosts(registry, hosts)
-  await restorePersistedHosts(registry, credentials, hosts)
+  await restorePersistedHosts(registry, credentials)
 }
 
 /** No-op plugin body; the fiber it starts owns exactly one host realm. */
@@ -140,12 +142,12 @@ const PROVISIONING_UNSUPPORTED =
   'helper-based provisioning is no longer supported: the native SSH composition mounts its providers directly, so hosts are registered with their login material through the hosts controller instead of a helper install'
 
 /** Execution service names one host realm rebinds. */
-const REALM_SERVICES = ['ssh', 'fs', 'subprocess', 'sandbox'] as const
+const REALM_SERVICES = ['sshNative', 'fs', 'subprocess'] as const
 
 /**
  * Isolate every execution service name for one host, each name under its own label.
  *
- * Cordis keys a service implementation by isolation label alone, so the four
+ * Cordis keys a service implementation by isolation label alone, so the three
  * names cannot share one label: the second `provide` would collide, and a read
  * of the second name would return the first implementation. The loader's named
  * realms key their symbols by label AND service name for the same reason.
@@ -203,7 +205,7 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
 
   /**
    * Open one host realm; a duplicate id fails loud.
-   * @param spec - resolved connection and helper coordinates of the host.
+   * @param spec - resolved connection coordinates of the host.
    * @returns the open handle.
    * @throws when the id is already open, or when the composition fails to provide a world.
    */
@@ -213,7 +215,7 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
 
   /**
    * Open one host realm, optionally owning a resource until the handle closes.
-   * @param spec - resolved connection and helper coordinates of the host.
+   * @param spec - resolved connection coordinates of the host.
    * @param release - releases the resource the handle owns; runs after the realm is gone.
    * @returns the open handle.
    * @throws when the id is already open, or when the composition fails to provide a world.
@@ -259,6 +261,7 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
    * declared entry has nothing to install. Hosts open from their stored login
    * through {@link open}.
    * @param _request - host, remote root, workspace and artifact.
+   * @returns Never; the call always rejects.
    * @throws always, naming the unsupported path and the one that replaces it.
    */
   async provision(_request: RemoteHostProvisionRequest): Promise<RemoteHostHandle> {
@@ -270,6 +273,7 @@ export class RemoteHostRegistryService extends Service implements RemoteHostRegi
    * realm with {@link open} after storing the login, and persist its record with
    * {@link save} so it survives a restart.
    * @param _request - identity, login material, remote root, workspace and artifact.
+   * @returns Never; the call always rejects.
    * @throws always, naming the unsupported path and the one that replaces it.
    */
   async provisionFromLogin(_request: RemoteHostLoginProvisionRequest): Promise<RemoteHostHandle> {

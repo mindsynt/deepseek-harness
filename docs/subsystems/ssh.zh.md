@@ -4,23 +4,27 @@
 
 [SSH 提供方家族](../../packages/ssh/README.zh.md) 通过部署方持有的 OpenSSH 连接提供一个远端文件系统／进程环境。Harness、模型传输及 Session 存储留在主机。该家族实现既有文件系统、子进程及沙箱 API，不引入 SSH 专用模型工具。
 
+## 架构
+
+SSH 提供方家族使用**原生 SSH**——不需要远端辅助进程。文件系统操作使用 SFTP 子系统，进程执行使用 SSH exec 通道。远端主机只需要一个 OpenSSH 服务器；远端机器无需 Node.js 运行时、tar 或 GNU coreutils。
+
 ## 执行坐标
 
 文件系统身份、可执行文件查找、进程 cwd、沙箱工作区根目录及语言服务器文件 URL 都指向 SSH 主机。提供方在文件实际存在的位置规范化路径，保留文件系统对 `symlink/..` 的解释。策略解析器保留执行环境中的绝对路径写法，不尝试在 Harness 主机上解析远端路径。
 
-`processPath()` 提供配套子进程提供方可用的路径。SSH 的 `processPathFromHostPath()` 仍不可用；安装远端产物不意味着任意主机路径可移植。因此 [`NodePtcRuntime`](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md) 使用显式安装并经过摘要验证的远端引导程序。
+`processPath()` 提供配套子进程提供方可用的路径。SSH 的 `processPathFromHostPath()` 仍不可用，因此 [`NodePtcRuntime`](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md) 需要一个显式安装并经过摘要验证的远端引导程序。
 
 ## 传输与信任
 
-管理 RPC 使用辅助进程的 SSH exec 流。普通 stdin、stdout、stderr、终端输出及可选 fd 7 控制流使用分别认证的转发 Unix 套接字。每条转发流拥有独立 SSH 通道窗口；暂停的程序输出不与控制或管理消息共用窗口。所有通道仍共享连接带宽及传输失败。
+文件系统操作通过独立 SSH 通道使用 SFTP 子系统。进程执行使用 SSH exec 通道，每条通道拥有自己的通道窗口。交互式终端通过 SSH exec 通道的 PTY 请求工作。
 
-部署认证、已安装产物验证及逐流 TLS 认证属于 [`dsh-ssh`](../../packages/ssh/ssh/README.zh.md)。辅助进程使用远端机器上的可信本地提供方执行文件系统与进程请求。SSH 是传输方式；文件效果限制由所选远端沙箱提供方执行。
+SSH 认证由主机上的 `ssh2` 库处理。host key 校验通过凭证服务使用 OpenSSH 标准的 `known_hosts` 机制。每条连接相互独立；一条连接失效会使该连接上的全部活动操作失效。
 
 ## 进程生命周期与取消
 
-进程先预留，再连接流，且启动最多接受一次。`done` 报告直接结果，`waitForExit` 观察远端托管进程范围。终端操作保留共享异步 API。准备阶段取消、已启动进程终止及提供方释放都通过辅助进程释放各自资源。
+进程通过 SSH exec 通道启动。`done` 报告退出码、stdout 与 stderr。`wait()` 观察进程直到其退出。`write()` 向进程 stdin 发送数据。`resize()` 调整终端会话的 PTY 尺寸。
 
-管理截止时限约束单次 RPC 观察，不替代 Bash 或 PTC 运行时消费方选择的执行截止时限。远端等待可以持续挂起，同时其他请求继续推进。SSH 丢失会使待处理操作失效；辅助进程 EOF、信号及租期到期会启动远端清理。客户端如实报告未确认结果，绝不通过重连重放可能已执行的操作。
+SSH 失效会使待处理操作失效。客户端如实报告未确认的结果，绝不通过重连重放可能已执行的操作。
 
 ## 组合范围
 
@@ -31,71 +35,255 @@ headless 通过已挂载的文件系统提供方记录和检查 Session cwd。�
 ## 连接 API
 
 ```ts type-equiv
-/** Deployment-owned SSH identity and installed helper; no model argument selects these values. */
+/** Configuration for the native SSH connection service. */
 interface Config {
-  /** OpenSSH host alias, including its existing user, key and known-host configuration. */
+  /** Remote host address (hostname or IP). */
   host: string
-  /** Absolute remote Node executable. */
-  node: string
-  /** Absolute path to the installed, bundled helper entry. */
-  helper: string
-  /** SHA-256 of that bundled helper; mismatches refuse the connection. */
-  helperHash: string
-  /** Absolute remote default workspace. */
-  workspace: string
-  /**
-   * Absolute local OpenSSH client configuration file passed to `ssh -F`; when
-   * omitted, the client falls back to its own default configuration, so an
-   * alias defined only in a DSH-generated file is unreachable.
-   */
-  sshConfigFile?: string
-  /** Optional preinstalled built PTC entry, paired with its expected digest. */
-  bootstrapPath?: string
-  /** SHA-256 of bootstrapPath; both fields must be supplied together. */
-  bootstrapHash?: string
-  /** Connection and administrative-request deadline, at most 2,147,483,647 milliseconds. */
-  requestTimeoutMs?: number
-  /** Maximum JSON payload bytes per helper request or response. */
-  maxFrameBytes?: number
-  /** Maximum ordinary requests; heartbeat and bounded resource cleanup have reserved capacity. */
-  maxPending?: number
-  /** Remote helper lease; loss of heartbeats starts remote managed cleanup. */
-  leaseMs?: number
+  /** Remote port (default: 22). */
+  port?: number
+  /** Username. */
+  username: string
+  /** Private key content (PEM format). */
+  privateKey?: string
+  /** Password (mutually exclusive with privateKey). */
+  password?: string
+  /** Local OpenSSH client configuration file to read identity from. */
+  identityFile?: string
+  /** Path to known_hosts file. */
+  knownHostsFile?: string
+  /** Connection timeout in milliseconds (default: 30000). */
+  connectTimeout?: number
+  /** Keepalive interval in milliseconds (default: 30000). */
+  keepaliveInterval?: number
+  /** Keepalive count max (default: 3). */
+  keepaliveCountMax?: number
+  /** Strict host key checking mode. */
+  strictHostKeyChecking?: 'yes' | 'no' | 'accept-new'
+  /** Maximum SFTP read size (default: 64MB). */
+  maxSftpReadBytes?: number
+  /** Maximum exec output size (default: 64MB). */
+  maxExecOutputBytes?: number
+  /** Auto-reconnect configuration. */
+  reconnect?: {
+    /** Enable automatic reconnection (default: false). */
+    enabled?: boolean
+    /** Maximum number of reconnection attempts (default: 3). */
+    maxAttempts?: number
+    /** Delay between reconnection attempts in milliseconds (default: 1000). */
+    delayMs?: number
+    /** Exponential backoff multiplier for reconnection delay (default: 2). */
+    backoffMultiplier?: number
+  }
+  /** Enable SSH compression (default: false). */
+  compression?: {
+    /** Enable compression. */
+    enabled: boolean
+    /** Compression algorithm (default: 'zlib'). */
+    algorithm?: 'zlib'
+  }
+  /** SSH proxy/jump host configuration. */
+  proxy?: {
+    /** Proxy host address. */
+    host: string
+    /** Proxy port (default: 22). */
+    port?: number
+    /** Proxy username. */
+    username: string
+    /** Proxy private key. */
+    privateKey?: string
+    /** Proxy password. */
+    password?: string
+  }
 }
 ```
 
 ```ts public-api
-/** One non-reconnecting SSH session; loss invalidates all active operations. */
-declare class SshConnection extends Service {
-  static Config: schema<Config>;
-  /** Verified remote helper coordinates; callers must await this before launch. */
-  readonly ready: Promise<Hello>;
-  constructor(ctx: Context, config: Config);
-  /** Hold plugin readiness until the remote identity and helper digest are verified. */
+/** Native SSH connection owner; one connection per service instance. */
+declare class SshNativeConnection extends Service {
+  static Config: typeof SshNativeConfigSchema;
+  /** Resolves when the connection and SFTP subsystem are ready. */
+  readonly ready: Promise<void>;
+  constructor(ctx: Context, config: SshNativeConfig);
+  /** Hold plugin readiness until the connection is established. */
   async [Service.init](): Promise<void>;
-  /** Verified remote Node executable for the paired PTC runtime. */
-  get nodeExecutable(): string;
-  /** Verified preinstalled PTC entry; unconfigured runtimes fail before program execution. */
-  get bootstrapPath(): string;
+  /** The underlying ssh2 Client, available after readiness. */
+  get clientConnection(): Client;
+  /** The SFTP client, available after readiness. */
+  get sftpClient(): SFTPWrapper;
+  /** Whether the connection is currently established. */
+  get isConnected(): boolean;
+  /** Connection health status. */
+  get healthStatus(): 'healthy' | 'degraded' | 'disconnected';
   /**
-     * Send a helper operation; cancellation never replays an ambiguous mutation.
-     * @param method - the private helper operation.
-     * @param params - JSON request fields validated by the helper.
-     * @param result - response validation before returning provider-visible data.
-     * @param signal - cancellation, which does not undo completed remote effects.
-     * @param wait - allow a process observation to outlast the administrative deadline.
-     * @returns the validated remote result.
+     * Dispose the connection and all running operations.
      */
-  async request<T>(method: string, params: unknown, result: z.ZodType<T>, signal?: AbortSignal, wait: boolean = false): Promise<T>;
+  async dispose(): Promise<void>;
   /**
-     * Forward one authenticated stream through an independent SSH channel.
-     * @param endpoint - private coordinates issued by this connection's helper.
-     * @param signal - cancellation of allocation and the resulting socket.
-     * @returns a paused socket; attach a consumer before resuming it.
+     * Get file stat information.
+     * @param path - absolute remote path.
+     * @returns stat information or undefined if not found.
      */
-  async connectStream(endpoint: SshStreamEndpoint, signal?: AbortSignal): Promise<Socket>;
-  /** Tear down the helper's remote managed ranges before releasing the SSH master when reachable. */
-  dispose(): Promise<void>;
+  async sftpStat(path: string): Promise<NativeSftpStat | undefined>;
+  /**
+     * Get file stat information without following symlinks.
+     * @param path - absolute remote path.
+     * @returns stat information or undefined if not found.
+     */
+  async sftpLstat(path: string): Promise<NativeSftpStat | undefined>;
+  /**
+     * Read an entire file.
+     * @param path - absolute remote path.
+     * @returns the file contents.
+     */
+  async sftpRead(path: string): Promise<Buffer>;
+  /**
+     * Read a byte range from a file.
+     * @param path - absolute remote path.
+     * @param offset - byte offset to start reading.
+     * @param length - number of bytes to read.
+     * @returns the file contents at the specified range.
+     */
+  async sftpReadRange(path: string, offset: number, length: number): Promise<Buffer>;
+  /**
+     * Write a file.
+     * @param path - absolute remote path.
+     * @param data - file contents.
+     */
+  async sftpWrite(path: string, data: Buffer): Promise<void>;
+  /**
+     * Create a directory.
+     * @param path - absolute remote path.
+     * @param recursive - create parent directories.
+     */
+  async sftpMkdir(path: string, recursive: boolean = false): Promise<void>;
+  /**
+     * List directory entries.
+     * @param path - absolute remote path.
+     * @returns directory entries.
+     */
+  async sftpReaddir(path: string): Promise<NativeSftpEntry[]>;
+  /**
+     * Resolve a path to its canonical form.
+     * @param path - remote path to resolve.
+     * @returns the canonical absolute path.
+     */
+  async sftpRealpath(path: string): Promise<string>;
+  /**
+     * Remove a file.
+     * @param path - absolute remote path.
+     */
+  async sftpUnlink(path: string): Promise<void>;
+  /**
+     * Change file permissions.
+     * @param path - absolute remote path.
+     * @param mode - permission mode (e.g., 'u+rw', 'g+r').
+     */
+  async sftpChmod(path: string, mode: string): Promise<void>;
+  /**
+     * Change file ownership.
+     * @param path - absolute remote path.
+     * @param uid - user id.
+     * @param gid - group id.
+     */
+  async sftpChown(path: string, uid: number, gid: number): Promise<void>;
+  /**
+     * Create a symbolic link.
+     * @param target - target path.
+     * @param linkpath - link path.
+     */
+  async sftpSymlink(target: string, linkpath: string): Promise<void>;
+  /**
+     * Rename or move a file.
+     * @param oldPath - original path.
+     * @param newPath - new path.
+     */
+  async sftpRename(oldPath: string, newPath: string): Promise<void>;
+  /**
+     * Read a symbolic link.
+     * @param path - link path.
+     * @returns the target path.
+     */
+  async sftpReadlink(path: string): Promise<string>;
+  /**
+     * Copy a file.
+     * @param source - source path.
+     * @param destination - destination path.
+     */
+  async sftpCopy(source: string, destination: string): Promise<void>;
+  /**
+     * Find files matching a pattern.
+     * @param path - base path.
+     * @param pattern - glob pattern.
+     * @returns matching paths.
+     */
+  async sftpFind(path: string, pattern: string): Promise<string[]>;
+  /**
+     * Spawn a command on the remote host.
+     * @param command - the command to execute.
+     * @param options - execution options.
+     * @returns a handle to the running process.
+     */
+  async exec(command: string, options: NativeExecOptions = {}): Promise<NativeExecHandle>;
+  /**
+     * Resolve an executable on the remote host.
+     * @param command - command name to resolve.
+     * @returns the absolute path, or undefined if not found.
+     */
+  async resolveExecutable(command: string): Promise<string | undefined>;
+  /**
+     * Execute multiple SFTP operations in a batch.
+     * @param operations - array of SFTP operations to execute.
+     * @returns results for each operation.
+     */
+  async sftpBatch(operations: NativeSftpBatchOperation[]): Promise<NativeSftpBatchResult[]>;
+  /**
+     * Create a streaming reader for a file.
+     * @param path - absolute remote path.
+     * @param options - read options (start offset, chunk size).
+     * @returns a streaming reader.
+     */
+  async sftpReadStream(
+      path: string,
+      options: { start?: number; chunkSize?: number } = {},
+    ): Promise<NativeSftpReadStream>;
+  /**
+     * Get the terminal environment on the remote host.
+     * @returns shell path and arguments.
+     */
+  async terminalEnvironment(): Promise<{ shellPath: string; shellArgs: string[] }>;
+  /**
+     * Validate the configuration without connecting.
+     * @returns validation result with errors and warnings.
+     */
+  async validateConfig(): Promise<ConfigValidationResult>;
+  /**
+     * List processes running on the remote host.
+     * @param options - optional filter options.
+     * @returns array of process information.
+     */
+  async listProcesses(options: { user?: string; name?: string } = {}): Promise<NativeProcessInfo[]>;
+  /**
+     * Kill a process on the remote host.
+     * @param pid - process ID to kill.
+     * @param signal - signal to send (default: SIGTERM).
+     */
+  async killProcess(pid: number, signal: NativeExecSignal = 'SIGTERM'): Promise<void>;
+  /**
+     * Get system information from the remote host.
+     * @returns system information including hostname, OS, memory, disk, etc.
+     */
+  async getSystemInfo(): Promise<NativeSystemInfo>;
+  /**
+     * Get connection metrics.
+     * @returns connection statistics.
+     */
+  get metrics(): ConnectionMetrics;
+  /**
+     * Create a persistent session for executing multiple commands with shared state.
+     * @param options - session options (cwd, env, pty).
+     * @returns a session handle.
+     */
+  async createSession(options: NativeSessionOptions = {}): Promise<NativeSessionHandle>;
 }
 ```
 
@@ -113,7 +301,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 Host service backing the generated `ctx.remote.hosts` namespace.
 
-Reads and writes report through `RemoteError` codes: `hosts/unknown-host` when no stored login exists, `hosts/already-exists` when an id is taken, `hosts/add-failed` when adding failed and the message must say what happened to the partial state, and `hosts/no-login-identity` when an open host cannot be checked.
+Reads and writes report through `RemoteError` codes: `hosts/unknown-host` when no stored login exists, `hosts/already-exists` when an id is taken, `hosts/add-failed` when adding failed and the message must say what happened to the partial state.
 
 ```ts cordis-catalog
 /**
@@ -124,7 +312,8 @@ Reads and writes report through `RemoteError` codes: `hosts/unknown-host` when n
 @Remote('list') list(): RemoteHostsListValue
 
 /**
- * Store entered login material and open the host's execution world.
+ * Store entered login material, persist the host record, and open the
+ * host's execution world.
  *
  * These steps are one transaction: a failure removes the stored login, the
  * persisted record and any realm the registry opened, and reports that
@@ -155,15 +344,14 @@ Reads and writes report through `RemoteError` codes: `hosts/unknown-host` when n
  * Check that one host's stored login still reaches its endpoint by trusting
  * the host keys that endpoint currently publishes.
  *
- * A host with no open world is checked through a freshly materialized
- * identity, which is removed again afterwards; an open world's own identity is
- * borrowed instead, because the open handle owns those files and closing it is
- * the one removal. The check never writes a stored login and never returns
- * one.
+ * The check always runs through a freshly materialized identity, which is
+ * removed again when it finishes. A native execution world opens straight
+ * from the stored login and keeps no generated configuration of its own, so
+ * there is no identity to borrow: the check never closes the world it
+ * checks, never writes a stored login, and never returns one.
  * @param request - identity of the host to check.
  * @returns the checked endpoint and the host keys its `known_hosts` records.
- * @throws RemoteError when no stored login exists, or when the open world was
- * opened from a configured artifact rather than stored login material.
+ * @throws RemoteError when no stored login exists.
  */
 @Remote('testConnection') async testConnection(request: RemoteHostTestRequest): Promise<RemoteHostTestValue>
 
@@ -190,40 +378,29 @@ Registry owning one isolated execution realm per open remote host.
 ```ts cordis-catalog
 /**
  * Open one host realm; a duplicate id fails loud.
- * @param spec - resolved connection and helper coordinates of the host.
+ * @param spec - resolved connection coordinates of the host.
  * @returns the open handle.
  * @throws when the id is already open, or when the composition fails to provide a world.
  */
 async open(spec: NativeRemoteHostSpec): Promise<RemoteHostHandle>
 
 /**
- * Install the helper on a host, then open its realm from the returned coordinates.
+ * Refused in the native SSH composition: it installs no helper artifact, so a
+ * declared entry has nothing to install. Hosts open from their stored login
+ * through {@link open}.
  * @param _request - host, remote root, workspace and artifact.
- * @returns the opened handle.
- * @throws when the id is already open, when no installer is mounted, or when the install fails.
+ * @returns Never; the call always rejects.
+ * @throws always, naming the unsupported path and the one that replaces it.
  */
 async provision(_request: RemoteHostProvisionRequest): Promise<RemoteHostHandle>
 
 /**
- * Materialize entered login material, trust its host key, install the helper
- * through that identity, then open the realm it addresses.
- *
- * The returned handle owns the materialized identity: closing it releases the
- * realm and then removes the identity's generated directory, once. A failure
- * from host-key trust through composition removes the identity before the
- * failure is rethrown; when that removal also fails, the failure is reported
- * with the original provisioning error as its `cause`.
- *
- * A request carrying `manifest` persists one host record after the realm
- * opens, with `host` taken from the materialized alias and `helperHash` from
- * the installation. A record write that fails closes the opened realm and
- * its identity before rethrowing, so a failed call leaves no open host.
- * Without `manifest` the realm still opens and no record is written — the
- * host then survives no restart.
+ * Refused in the native SSH composition: helper installation is gone. Open the
+ * realm with {@link open} after storing the login, and persist its record with
+ * {@link save} so it survives a restart.
  * @param _request - identity, login material, remote root, workspace and artifact.
- * @returns the opened handle.
- * @throws when the id is already open, when no credentials service is
- * reachable, or when trust, install, composition or record persistence fails.
+ * @returns Never; the call always rejects.
+ * @throws always, naming the unsupported path and the one that replaces it.
  */
 async provisionFromLogin(_request: RemoteHostLoginProvisionRequest): Promise<RemoteHostHandle>
 
@@ -416,6 +593,57 @@ async sftpRealpath(path: string): Promise<string>
 async sftpUnlink(path: string): Promise<void>
 
 /**
+ * Change file permissions.
+ * @param path - absolute remote path.
+ * @param mode - permission mode (e.g., 'u+rw', 'g+r').
+ */
+async sftpChmod(path: string, mode: string): Promise<void>
+
+/**
+ * Change file ownership.
+ * @param path - absolute remote path.
+ * @param uid - user id.
+ * @param gid - group id.
+ */
+async sftpChown(path: string, uid: number, gid: number): Promise<void>
+
+/**
+ * Create a symbolic link.
+ * @param target - target path.
+ * @param linkpath - link path.
+ */
+async sftpSymlink(target: string, linkpath: string): Promise<void>
+
+/**
+ * Rename or move a file.
+ * @param oldPath - original path.
+ * @param newPath - new path.
+ */
+async sftpRename(oldPath: string, newPath: string): Promise<void>
+
+/**
+ * Read a symbolic link.
+ * @param path - link path.
+ * @returns the target path.
+ */
+async sftpReadlink(path: string): Promise<string>
+
+/**
+ * Copy a file.
+ * @param source - source path.
+ * @param destination - destination path.
+ */
+async sftpCopy(source: string, destination: string): Promise<void>
+
+/**
+ * Find files matching a pattern.
+ * @param path - base path.
+ * @param pattern - glob pattern.
+ * @returns matching paths.
+ */
+async sftpFind(path: string, pattern: string): Promise<string[]>
+
+/**
  * Spawn a command on the remote host.
  * @param command - the command to execute.
  * @param options - execution options.
@@ -476,6 +704,13 @@ async killProcess(pid: number, signal: NativeExecSignal = 'SIGTERM'): Promise<vo
  * @returns system information including hostname, OS, memory, disk, etc.
  */
 async getSystemInfo(): Promise<NativeSystemInfo>
+
+/**
+ * Create a persistent session for executing multiple commands with shared state.
+ * @param options - session options (cwd, env, pty).
+ * @returns a session handle.
+ */
+async createSession(options: NativeSessionOptions = {}): Promise<NativeSessionHandle>
 ```
 
 Source: [`packages/ssh/ssh-native/src/index.ts`](../../packages/ssh/ssh-native/src/index.ts)

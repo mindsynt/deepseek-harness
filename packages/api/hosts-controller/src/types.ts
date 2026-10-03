@@ -117,7 +117,5 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'hosts/already-exists': { readonly id: string }
     /** Adding the host failed; the message reports what happened to the partial state. */
     'hosts/add-failed': { readonly id: string }
-    /** The open host has no DSH-generated login identity a connection check could address. */
-    'hosts/no-login-identity': { readonly id: string }
   }
 }

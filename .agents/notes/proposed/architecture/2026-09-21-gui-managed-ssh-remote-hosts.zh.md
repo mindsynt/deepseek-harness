@@ -6,7 +6,7 @@ Status: proposed
 
 ## 问题
 
-[POSIX SSH 运行时](../../implemented/architecture/2026-09-11-posix-ssh-runtime.zh.md)已经交付了一套可用的远程执行世界：[`dsh-ssh`](../../../../packages/ssh/ssh/README.zh.md) 持有一条 OpenSSH 连接和经过摘要校验的辅助程序，[`fs-ssh`](../../../../packages/ssh/fs-ssh/README.zh.md)、[`subprocess-ssh`](../../../../packages/ssh/subprocess-ssh/README.zh.md) 与 [`sandbox-ssh`](../../../../packages/ssh/sandbox-ssh/README.zh.md) 基于该辅助程序实现既有的文件系统、进程与沙箱服务。但没有任何 profile 或 bundle 组装它们，没有 CLI 开关选择它们，Web 客户端里 SSH 零命中。
+[POSIX SSH 运行时](../../implemented/architecture/2026-09-11-posix-ssh-runtime.zh.md)已经交付了一套可用的远程执行世界：`dsh-ssh` 持有一条 OpenSSH 连接和经过摘要校验的辅助程序，`fs-ssh`、`subprocess-ssh` 与 `sandbox-ssh` 基于该辅助程序实现既有的文件系统、进程与沙箱服务。但没有任何 profile 或 bundle 组装它们，没有 CLI 开关选择它们，Web 客户端里 SSH 零命中。
 
 产品想要的能力与该运行时的假设并不相同。用户想在一个浏览器 GUI 里添加若干台服务器，自己填写 host、port、user 与密钥，让 Harness 把辅助程序装到远端机器上，然后创建在指定服务器上开发的会话。而运行时只接受部署方持有的唯一 OpenSSH 别名——其 user、key 与 known-host 条目必须已存在于 `~/.ssh/config`——并且连接服务明确声明没有任何模型参数能选择这些值。
 
@@ -36,7 +36,7 @@ Status: proposed
 
 ### 主机注册表与按会话划分的 realm
 
-`ctx.remoteHosts` 成为远程执行世界的 Service Definition。它持有主机记录、为每台主机创建与回收一个 Cordis isolate realm，并解析某个会话或工作区所寻址的执行服务。每个 realm 以该主机的坐标挂载 [`dsh-ssh`](../../../../packages/ssh/ssh/README.zh.md) 与三个配套提供方，于是 `ctx.fs`、`ctx.subprocess` 与 `ctx.sandbox` 按 realm 而非按进程解析。隔离是必需项而不是可选项：同一个服务 key 第二次 provide 会抛错，而隔离后的 realm 持有不同的 store key。
+`ctx.remoteHosts` 成为远程执行世界的 Service Definition。它持有主机记录、为每台主机创建与回收一个 Cordis isolate realm，并解析某个会话或工作区所寻址的执行服务。每个 realm 以该主机的坐标挂载 `dsh-ssh` 与三个配套提供方，于是 `ctx.fs`、`ctx.subprocess` 与 `ctx.sandbox` 按 realm 而非按进程解析。隔离是必需项而不是可选项：同一个服务 key 第二次 provide 会抛错，而隔离后的 realm 持有不同的 store key。
 
 寻址按消费方分流。Agent 作用域内的消费方本就运行在 per-agent ctx 下，直接到达自己的 realm。运行在任何 Agent 之外的 Host RPC 消费方，则通过注册表按会话或工作区身份解析实例，沿用 `serviceFor(agent, name)` 这一只读寻址先例。本机保留为内置 realm，因此未注册任何主机的组合行为与今天完全一致。该能力本身默认开启：只要组装了注册表，GUI 就暴露远程主机管理，无需功能开关。
 

@@ -1,5 +1,5 @@
 ---
-description: "The POSIX SSH provider family: shared connection, remote filesystem, managed subprocesses and file-effect sandbox."
+description: "The native SSH provider family: one OpenSSH connection plus the SFTP filesystem and SSH-exec subprocess providers it serves."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This family runs files, ordinary processes, terminals and sandbox enforcement on one POSIX SSH host while the Harness stays local. A shared OpenSSH connection and installed helper support the existing filesystem, subprocess and sandbox interfaces. Use it in headless or custom profiles whose consumers honor provider-owned paths.
+This family runs files and processes on one POSIX SSH host while the Harness stays local. A native OpenSSH connection over ssh2 owns the SFTP file operations and the SSH exec channels, so the remote host needs only an OpenSSH server — no helper daemon and no Node runtime there. Use it in headless or custom profiles whose consumers honor provider-owned paths.
 
 ## Table of Contents
 
@@ -22,14 +22,11 @@ This family runs files, ordinary processes, terminals and sandbox enforcement on
 
 | Package | Responsibility | Service |
 |---|---|---|
-| [`ssh`](ssh/README.md) | Connection, helper identity and transport lifecycle | `ctx.ssh` |
-| [`fs-ssh`](fs-ssh/README.md) | Remote file identity, reads and guarded atomic mutations | `ctx.fs` |
-| [`subprocess-ssh`](subprocess-ssh/README.md) | Executable lookup, processes, control streams and terminals | `ctx.subprocess` |
-| [`sandbox-ssh`](sandbox-ssh/README.md) | Remote file-effect confinement and enforcement facts | `ctx.sandbox` |
+| `ssh-native` | Native OpenSSH connection: SFTP file operations, SSH-exec process channels and PTY sessions | `ctx.sshNative` |
+| `fs-sftp` | Remote filesystem provider over the SFTP subsystem | `ctx.fs` |
+| `subprocess-ssh-exec` | Remote subprocess provider over SSH exec channels | `ctx.subprocess` |
 | [`host-registry`](host-registry/README.md) | One isolated execution realm per registered SSH host | `ctx.remoteHosts` |
-| [`host-credentials`](host-credentials/README.md) | Controlled OpenSSH configuration and identity materialization, plus login storage | `ctx.sshHostCredentials` |
-| [`helper-installer`](helper-installer/README.md) | Remote helper probing, upload and digest confirmation | `ctx.sshHelperInstaller` |
-| [`helper-artifact`](helper-artifact/README.md) | Build-time dependency-closure assembly and archive for the remote helper | `-` |
+| [`host-credentials`](host-credentials/README.md) | Stored SSH login material for registered remote hosts | `ctx.sshHostCredentials` |
 
 <a id="related-documentation"></a>
 ## Related documentation

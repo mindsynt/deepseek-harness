@@ -63,7 +63,7 @@ Each materialization replaces `<stateDir>/<alias>`, creating a 0700 directory an
 
 - [SSH subsystem](../../../docs/subsystems/ssh.md) — shared execution coordinates and transport ownership.
 - [Host registry](../host-registry/README.md) — the per-host execution realm a connection runs in.
-- [SSH connection](../ssh/README.md) — how the returned alias and configuration reach a host.
+- [SSH subsystem](../../../docs/subsystems/ssh.md) — how the returned alias and configuration reach a host.
 
 -----
 

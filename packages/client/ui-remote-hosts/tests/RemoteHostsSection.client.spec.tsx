@@ -36,7 +36,6 @@ function row(id: string, overrides: Partial<RemoteHostRow> = {}): RemoteHostRow 
     id,
     label: overrides.label ?? id,
     host: overrides.host ?? `${id}.example`,
-    workspace: overrides.workspace ?? '/srv/work',
     open: overrides.open ?? false,
   }
 }
@@ -80,18 +79,13 @@ function bench(
   }
 }
 
-/** Fill every add-dialog field except the private key. */
+/** Fill the add-dialog fields; a key is entered only when a secret is given. */
 function fillDraft(secret?: string): void {
-  // The registry identity is derived from the name, so the name is entered
-  // first and the three remote paths are opened through advanced options.
+  // The registry identity is derived from the name, so the name is entered first.
   fireEvent.change(screen.getByLabelText(en.fieldLabel), { target: { value: 'Alpha' } })
   fireEvent.change(screen.getByLabelText(en.fieldHost), { target: { value: 'alpha.example' } })
   fireEvent.change(screen.getByLabelText(en.fieldPort), { target: { value: '22' } })
   fireEvent.change(screen.getByLabelText(en.fieldUser), { target: { value: 'deploy' } })
-  fireEvent.click(screen.getByRole('button', { name: en.showAdvanced }))
-  fireEvent.change(screen.getByLabelText(en.fieldRoot), { target: { value: '/srv/dsh' } })
-  fireEvent.change(screen.getByLabelText(en.fieldWorkspace), { target: { value: '/srv/work' } })
-  fireEvent.change(screen.getByLabelText(en.fieldManifest), { target: { value: '/tmp/helper.json' } })
   if (secret !== undefined) {
     fireEvent.change(screen.getByLabelText(en.fieldPrivateKey), { target: { value: secret } })
   }
@@ -118,14 +112,12 @@ describe('RemoteHostsSection', () => {
     expect(screen.getByText('alpha')).toBeTruthy()
     expect(screen.getByText('alpha.example')).toBeTruthy()
     expect(screen.getByText('bravo.example')).toBeTruthy()
-    expect(screen.getAllByText('/srv/work')).toHaveLength(2)
     expect(screen.getByText(en.worldOpen)).toBeTruthy()
     expect(screen.getByText(en.worldClosed)).toBeTruthy()
     // The closed world states what it costs instead of reading as "not opened
     // yet": only the row without a world carries it.
     expect(screen.getAllByText(en.worldClosedHint)).toHaveLength(1)
     expect(screen.getAllByText(en.hostField)).toHaveLength(2)
-    expect(screen.getAllByText(en.workspaceField)).toHaveLength(2)
     expect(screen.getAllByText(en.worldField)).toHaveLength(2)
     expect(screen.getAllByRole('button', { name: en.remove })).toHaveLength(2)
   })
@@ -199,11 +191,10 @@ describe('RemoteHostsSection', () => {
   })
 
   it('reports the ended stream and re-reads the list on refresh', () => {
-    const b = bench({ rows: [row('alpha')], ready: true, failure: 'remote host list ended' })
+    const b = bench({ rows: [row('alpha')], ready: true, failure: { reason: 'ended' } })
     render(<RemoteHostsSection {...b.props} />)
 
-    expect(screen.getByText(en.listFailed)).toBeTruthy()
-    expect(screen.getByText('remote host list ended')).toBeTruthy()
+    expect(screen.getByText(en.listEnded)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: en.refresh }))
     expect(b.refresh).toHaveBeenCalledTimes(1)
   })
@@ -253,16 +244,40 @@ describe('RemoteHostsSection', () => {
     expect(port.getAttribute('aria-invalid')).toBeNull()
 
     for (const value of ['abc', '0', '70000']) {
+      fillDraft()
       fireEvent.change(port, { target: { value } })
       fireEvent.click(confirm)
       expect(screen.getByText(en.portInvalid)).toBeTruthy()
       expect(port.getAttribute('aria-invalid')).toBe('true')
+      expect(b.addHost).not.toHaveBeenCalled()
+    }
+
+    fillDraft()
+    fireEvent.click(confirm)
+    await vi.waitFor(() => { expect(b.addHost).toHaveBeenCalledTimes(1) })
+  })
+
+  it('refuses an entered draft with a missing field before calling the Host', async () => {
+    const b = bench({ rows: [], ready: true })
+    render(<RemoteHostsSection {...b.props} />)
+    fireEvent.click(screen.getByRole('button', { name: en.addHost }))
+    const dialog = screen.getByRole('dialog', { name: en.addTitle })
+    const confirm = within(dialog).getByRole('button', { name: en.submit })
+
+    // Nothing entered: every required field reads as missing, and the port
+    // keeps its field rather than a range error for being empty.
+    fireEvent.click(confirm)
+    expect(screen.getByText(en.requiredMissing)).toBeTruthy()
+    expect(screen.queryByText(en.portInvalid)).toBeNull()
+    for (const field of [en.fieldLabel, en.fieldHost, en.fieldPort, en.fieldUser]) {
+      expect(screen.getByLabelText(field).getAttribute('aria-invalid')).toBe('true')
     }
     expect(b.addHost).not.toHaveBeenCalled()
 
-    fireEvent.change(port, { target: { value: '22' } })
+    fillDraft()
     fireEvent.click(confirm)
     await vi.waitFor(() => { expect(b.addHost).toHaveBeenCalledTimes(1) })
+    expect(screen.queryByText(en.requiredMissing)).toBeNull()
   })
 
   it('adds a host without a private key and closes the dialog on success', async () => {
@@ -279,25 +294,8 @@ describe('RemoteHostsSection', () => {
     expect(b.addHost).toHaveBeenCalledWith({
       id: 'alpha',
       label: 'Alpha',
-      root: '/srv/dsh',
-      workspace: '/srv/work',
-      manifest: '/tmp/helper.json',
       login: { host: 'alpha.example', port: 22, user: 'deploy' },
     })
-  })
-
-  it('reveals the remote paths through advanced options, and hides them again', () => {
-    const b = bench({ rows: [], ready: true })
-    render(<RemoteHostsSection {...b.props} />)
-    fireEvent.click(screen.getByRole('button', { name: en.addHost }))
-
-    expect(screen.queryByLabelText(en.fieldRoot)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: en.showAdvanced }))
-    expect(screen.getByLabelText(en.fieldRoot)).toBeTruthy()
-    expect(screen.getByLabelText(en.fieldManifest)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: en.closeAdvanced }))
-    expect(screen.queryByLabelText(en.fieldRoot)).toBeNull()
-    expect(screen.queryByLabelText(en.fieldManifest)).toBeNull()
   })
 
   it('expands a pasted ssh url into the host, port, and user fields', () => {
@@ -314,31 +312,6 @@ describe('RemoteHostsSection', () => {
     // A url without a user or a port stays in the field for the human to finish.
     fireEvent.change(screen.getByLabelText(en.fieldHost), { target: { value: 'ssh://alpha.example' } })
     expect(screen.getByLabelText(en.fieldHost)).toHaveProperty('value', 'ssh://alpha.example')
-  })
-
-  it('sends the entered password instead of a private key when password login is chosen', async () => {
-    const b = bench({ rows: [], ready: true })
-    render(<RemoteHostsSection {...b.props} />)
-    fireEvent.click(screen.getByRole('button', { name: en.addHost }))
-    fireEvent.change(screen.getByLabelText(en.fieldLabel), { target: { value: 'Alpha' } })
-    fireEvent.change(screen.getByLabelText(en.fieldHost), { target: { value: 'alpha.example' } })
-    fireEvent.change(screen.getByLabelText(en.fieldPort), { target: { value: '22' } })
-    fireEvent.change(screen.getByLabelText(en.fieldUser), { target: { value: 'deploy' } })
-
-    expect(screen.getByLabelText(en.fieldPrivateKey)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: en.authPassword }))
-    expect(screen.queryByLabelText(en.fieldPrivateKey)).toBeNull()
-    fireEvent.change(screen.getByLabelText(en.fieldPassword), { target: { value: 's3cret' } })
-    fireEvent.click(screen.getByRole('button', { name: en.submit }))
-
-    await vi.waitFor(() => { expect(b.addHost).toHaveBeenCalledTimes(1) })
-    expect(b.addHost).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'alpha',
-      root: '~/work',
-      workspace: '~/work',
-      manifest: '~/dist/ssh-helper/manifest.json',
-      login: { host: 'alpha.example', port: 22, user: 'deploy', privateKey: 's3cret' },
-    }))
   })
 
   it('keeps the entered draft on a refusal and never renders the private key', async () => {

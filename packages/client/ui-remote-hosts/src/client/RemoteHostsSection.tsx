@@ -107,11 +107,17 @@ export function RemoteHostsSection({
       {selectedWorldClosed
         ? <p className={css.alarm} role="status">{t('selectedWorldClosed')}</p>
         : null}
-      {list.failure === undefined ? null : (
-        <p className={css.error} role="status">
-          {t('listFailed')} <span className={css.detail}>{list.failure}</span>
-        </p>
-      )}
+      {list.failure === undefined
+        ? null
+        : (
+          <p className={css.error} role="status">
+            {list.failure.reason === 'ended'
+              ? t('listEnded')
+              : list.failure.reason === 'unrecognized-frame'
+                ? t('listUnrecognizedFrame')
+                : t('listCarrierFailed')}
+          </p>
+        )}
       {!list.ready
         ? <p className={css.empty}>{t('loading')}</p>
         : list.rows.length === 0

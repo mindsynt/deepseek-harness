@@ -6,7 +6,9 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import { SftpFileSystem } from '@deepseek-ai/dsh-fs-sftp'
+import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { SshExecSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-ssh-exec'
 import { SshNativeConnection, type SshNativeConfig } from '@deepseek-ai/dsh-ssh-native'
 import type { RemoteHostId } from './types.ts'
@@ -29,10 +31,10 @@ export interface NativeRemoteHostSpec {
 export interface NativeRemoteHostWorld {
   /** The native SSH connection. */
   readonly sshNative: SshNativeConnection
-  /** The SFTP-backed filesystem. */
-  readonly fs: SftpFileSystem
-  /** The SSH-exec-backed subprocess runtime. */
-  readonly subprocess: SshExecSubprocessRuntime
+  /** The filesystem provider mounted in the realm. */
+  readonly fs: FileSystem
+  /** The subprocess runtime mounted in the realm. */
+  readonly subprocess: SubprocessRuntime
 }
 
 /**
@@ -72,9 +74,9 @@ export function nativeConnectionConfig(spec: NativeRemoteHostSpec): SshNativeCon
  * @throws when the composition left any execution service unavailable in the realm.
  */
 export function resolveNativeWorld(realm: Context): NativeRemoteHostWorld {
-  const sshNative = realm.get('sshNative') as SshNativeConnection | undefined
-  const fs = realm.get('fs') as SftpFileSystem | undefined
-  const subprocess = realm.get('subprocess') as SshExecSubprocessRuntime | undefined
+  const sshNative = realm.get('sshNative')
+  const fs = realm.get('fs')
+  const subprocess = realm.get('subprocess')
   if (sshNative === undefined || fs === undefined || subprocess === undefined) {
     throw new Error('native remote host realm did not provide sshNative, fs, and subprocess')
   }

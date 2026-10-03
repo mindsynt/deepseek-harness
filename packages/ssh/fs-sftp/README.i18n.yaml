@@ -1,0 +1,58 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/ssh/fs-sftp/README.md
+/:
+  en: 89a7287fa63f0525
+  zh: df9ae46a8673f6fc
+/deepseek-ai-dsh-fs-sftp:
+  en: 374a23c56c1d2c9f
+  zh: ed88be617c1fde93
+/deepseek-ai-dsh-fs-sftp/summary:
+  en: 569c7e7c233e1c92
+  zh: fee7f67c65d2e2ba
+/deepseek-ai-dsh-fs-sftp/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-fs-sftp/use-this-package:
+  en: 421751634979a5d5
+  zh: 4b2b87b2b636b66e
+/deepseek-ai-dsh-fs-sftp/use-this-package/path-identity-and-containment:
+  en: f1ca390839621f37
+  zh: 6680b42d5578351e
+/deepseek-ai-dsh-fs-sftp/use-this-package/mutations-and-guards:
+  en: 6c1e3846dca8d2e9
+  zh: 207b2bccbd64595f
+/deepseek-ai-dsh-fs-sftp/use-this-package/sandbox-reporting:
+  en: 57ac5ba15c9a0b71
+  zh: 262e090882e465ab
+/deepseek-ai-dsh-fs-sftp/understand-the-implementation:
+  en: fa9e4f5b19959e1e
+  zh: 8b6cf1a4a36ce288
+/deepseek-ai-dsh-fs-sftp/understand-the-implementation/source-map:
+  en: e416d527bd1cb598
+  zh: 137971190bd19984
+/deepseek-ai-dsh-fs-sftp/further-exploration:
+  en: cb0dc1ce49bc9913
+  zh: 3225350517385b41
+/deepseek-ai-dsh-fs-sftp/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-fs-sftp/model-experience/filesystem-consumers:
+  en: f0dcda5a481f1b33
+  zh: b78a871ecfff63f0
+/deepseek-ai-dsh-fs-sftp/model-experience/filesystem-consumers/what-the-model-sees:
+  en: 279fc9fe90250621
+  zh: e5f849f6c1925971
+/deepseek-ai-dsh-fs-sftp/model-experience/filesystem-consumers/token-effect:
+  en: 170251142dd19ef1
+  zh: dd0a068f1ed9a14b
+/deepseek-ai-dsh-fs-sftp/model-experience/filesystem-consumers/kv-cache-effect:
+  en: 290c9c2b62758204
+  zh: 6bbbed2a215f18bc
+/deepseek-ai-dsh-fs-sftp/known-limitations-and-deferred-work:
+  en: 5eefb44c154e54f0
+  zh: f4cd34fbf38dd28a
+/deepseek-ai-dsh-fs-sftp/known-limitations-and-deferred-work/dev-note:
+  en: 7a79bdedd5952c2a
+  zh: be391fc44abc5f17

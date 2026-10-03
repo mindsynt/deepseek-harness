@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/ssh/ssh-native/README.md
+/:
+  en: 013f2430a43574af
+  zh: c2ee52e7e2f3bb1a
+/deepseek-ai-dsh-ssh-native:
+  en: 4e4f1e22d79c0d38
+  zh: 095804673ac4e118
+/deepseek-ai-dsh-ssh-native/summary:
+  en: 81808997aad235e3
+  zh: 84f116d6b86e6004
+/deepseek-ai-dsh-ssh-native/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-ssh-native/use-this-package:
+  en: e0f701828325fc75
+  zh: c173d79aa799921f
+/deepseek-ai-dsh-ssh-native/understand-the-implementation:
+  en: 146ba184771f0d30
+  zh: 5d968b4c1bfcf337
+/deepseek-ai-dsh-ssh-native/further-exploration:
+  en: cfed0c221892daf6
+  zh: 485f05d109d5f3ed
+/deepseek-ai-dsh-ssh-native/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-ssh-native/model-experience/native-ssh-connection:
+  en: d51ede65ae83142f
+  zh: c3e887dfc5ab0dbb
+/deepseek-ai-dsh-ssh-native/model-experience/native-ssh-connection/what-the-model-sees:
+  en: 7205b473df1ed32a
+  zh: 7f803b87d6989294
+/deepseek-ai-dsh-ssh-native/model-experience/native-ssh-connection/token-effect:
+  en: 87cd191b502ec491
+  zh: 7f40dab1c6a1d1f8
+/deepseek-ai-dsh-ssh-native/model-experience/native-ssh-connection/kv-cache-effect:
+  en: c5bdaf2dd31212fa
+  zh: 3bc32f09ebac3155
+/deepseek-ai-dsh-ssh-native/known-limitations-and-deferred-work:
+  en: 073a84de23a755ec
+  zh: 1cd769cc045071ee
+/deepseek-ai-dsh-ssh-native/known-limitations-and-deferred-work/dev-note:
+  en: 30215d9cab972096
+  zh: e0e0f88e84f6dc39

@@ -6,7 +6,7 @@ English | [中文](2026-09-21-gui-managed-ssh-remote-hosts.zh.md)
 
 ## Problem
 
-The [POSIX SSH runtime](../../implemented/architecture/2026-09-11-posix-ssh-runtime.md) already ships a working remote execution world: [`dsh-ssh`](../../../../packages/ssh/ssh/README.md) owns one OpenSSH connection and a digest-verified helper, and [`fs-ssh`](../../../../packages/ssh/fs-ssh/README.md), [`subprocess-ssh`](../../../../packages/ssh/subprocess-ssh/README.md) and [`sandbox-ssh`](../../../../packages/ssh/sandbox-ssh/README.md) implement the existing filesystem, process and sandbox services against that helper. No profile or bundle composes them, no CLI flag selects them, and the Web client contains no SSH reference at all.
+The [POSIX SSH runtime](../../implemented/architecture/2026-09-11-posix-ssh-runtime.md) already ships a working remote execution world: `dsh-ssh` owns one OpenSSH connection and a digest-verified helper, and `fs-ssh`, `subprocess-ssh` and `sandbox-ssh` implement the existing filesystem, process and sandbox services against that helper. No profile or bundle composes them, no CLI flag selects them, and the Web client contains no SSH reference at all.
 
 The capability the product wants is different from what the runtime assumes. A user wants to add several servers in the browser GUI, type host, port, user and key themselves, let the Harness install its helper on the remote machine, and then create sessions that develop on a chosen server. The runtime instead takes exactly one deployment-owned OpenSSH alias whose user, key and known-host entry must already exist in `~/.ssh/config`, and the connection service states that no model argument selects these values.
 
@@ -36,7 +36,7 @@ Build a GUI-managed remote-host capability on top of the shipped SSH runtime: a 
 
 ### Host registry and per-session realms
 
-`ctx.remoteHosts` becomes the Service Definition for remote execution worlds. It owns host records, creates and retires one Cordis isolate realm per host, and resolves the execution services a session or workspace addresses. Each realm mounts [`dsh-ssh`](../../../../packages/ssh/ssh/README.md) with that host's coordinates plus the three paired providers, so `ctx.fs`, `ctx.subprocess` and `ctx.sandbox` resolve per realm instead of per process. Isolation is required rather than optional: a second `provide` of the same service key throws, while an isolated realm keeps a distinct store key.
+`ctx.remoteHosts` becomes the Service Definition for remote execution worlds. It owns host records, creates and retires one Cordis isolate realm per host, and resolves the execution services a session or workspace addresses. Each realm mounts `dsh-ssh` with that host's coordinates plus the three paired providers, so `ctx.fs`, `ctx.subprocess` and `ctx.sandbox` resolve per realm instead of per process. Isolation is required rather than optional: a second `provide` of the same service key throws, while an isolated realm keeps a distinct store key.
 
 Addressing splits by consumer. Agent-scoped consumers already run under a per-agent ctx and reach their realm directly. Host RPC consumers, which run outside any agent, resolve an instance through the registry by session or workspace identity, following the read-only addressing precedent of `serviceFor(agent, name)`. The local machine remains a built-in realm, so a composition with no registered host behaves exactly as today. The capability itself is enabled by default: installing the registry exposes remote-host management in the GUI without a feature flag.
 

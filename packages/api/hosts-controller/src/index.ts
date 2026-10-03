@@ -16,8 +16,7 @@
 import { readFile } from 'node:fs/promises'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ControlledSshIdentity } from '@deepseek-ai/dsh-host-credentials'
-import type { NativeRemoteHostSpec, RemoteHostHandle, RemoteHostId } from '@deepseek-ai/dsh-ssh-host-registry'
+import type { RemoteHostHandle, RemoteHostId } from '@deepseek-ai/dsh-ssh-host-registry'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { followRemoteHosts, remoteHostView } from './feed.ts'
 import type {
@@ -45,9 +44,8 @@ declare module '@deepseek-ai/cordis' {
  *
  * Reads and writes report through `RemoteError` codes: `hosts/unknown-host`
  * when no stored login exists, `hosts/already-exists` when an id is taken,
- * `hosts/add-failed` when adding failed and the message must say what happened
- * to the partial state, and `hosts/no-login-identity` when an open host cannot
- * be checked.
+ * `hosts/add-failed` when adding failed and the message must say what
+ * happened to the partial state.
  */
 export class HostsController extends TypertRemoteService {
   /** Activation waits for the registry that owns records and the store that owns logins. */
@@ -69,7 +67,8 @@ export class HostsController extends TypertRemoteService {
   }
 
   /**
-   * Store entered login material and open the host's execution world.
+   * Store entered login material, persist the host record, and open the
+   * host's execution world.
    *
    * These steps are one transaction: a failure removes the stored login, the
    * persisted record and any realm the registry opened, and reports that
@@ -94,6 +93,16 @@ export class HostsController extends TypertRemoteService {
         port: request.login.port,
         user: request.login.user,
         ...(request.login.privateKey !== undefined ? { privateKey: request.login.privateKey } : {}),
+      })
+      // The realm is open but not yet durable: list(), the follow stream and
+      // startup recovery all read the record table, so it goes in before this
+      // call answers.
+      await this.ctx.remoteHosts.save({
+        id: request.id,
+        label: request.label,
+        host: handle.spec.host,
+        port: handle.spec.port ?? 22,
+        user: handle.spec.user,
       })
     } catch (error) {
       throw await this.rollback(request.id, error)
@@ -134,15 +143,14 @@ export class HostsController extends TypertRemoteService {
    * Check that one host's stored login still reaches its endpoint by trusting
    * the host keys that endpoint currently publishes.
    *
-   * A host with no open world is checked through a freshly materialized
-   * identity, which is removed again afterwards; an open world's own identity is
-   * borrowed instead, because the open handle owns those files and closing it is
-   * the one removal. The check never writes a stored login and never returns
-   * one.
+   * The check always runs through a freshly materialized identity, which is
+   * removed again when it finishes. A native execution world opens straight
+   * from the stored login and keeps no generated configuration of its own, so
+   * there is no identity to borrow: the check never closes the world it
+   * checks, never writes a stored login, and never returns one.
    * @param request - identity of the host to check.
    * @returns the checked endpoint and the host keys its `known_hosts` records.
-   * @throws RemoteError when no stored login exists, or when the open world was
-   * opened from a configured artifact rather than stored login material.
+   * @throws RemoteError when no stored login exists.
    */
   @Remote('testConnection')
   async testConnection(request: RemoteHostTestRequest): Promise<RemoteHostTestValue> {
@@ -154,10 +162,7 @@ export class HostsController extends TypertRemoteService {
         { id: request.id },
       )
     }
-    const open = this.ctx.remoteHosts.get(brandString<RemoteHostId>(request.id))
-    const identity = open === undefined
-      ? await this.ctx.sshHostCredentials.materialize(login)
-      : liveIdentity(open.spec)
+    const identity = await this.ctx.sshHostCredentials.materialize(login)
     try {
       await this.ctx.sshHostCredentials.trustFirstUse(identity, { host: login.host, port: login.port })
       return {
@@ -226,28 +231,6 @@ export class HostsController extends TypertRemoteService {
       { cause: failure },
     )
   }
-}
-
-/**
- * Address the controlled identity an open host handle already owns.
- *
- * The handle owns every generated file and removes them when it closes, so the
- * borrowed identity's `dispose` is deliberately neutral: a connection check
- * must never delete the configuration the open world still addresses. The
- * handle carries `sshConfigFile` exactly when the registry opened it from login
- * material and the credentials store wrote that configuration.
- * @param spec - the open host's resolved coordinates.
- * @returns the identity the credentials store wrote for that host.
- * @throws RemoteError when the world was opened from a configured artifact instead.
- */
-function liveIdentity(spec: NativeRemoteHostSpec): ControlledSshIdentity {
-  // NativeRemoteHostSpec doesn't have sshConfigFile; the identity is managed by the credentials store
-  // For now, we can't borrow an identity from an open native host
-  throw new RemoteError(
-    'hosts/no-login-identity',
-    `remote host '${String(spec.id)}' is open from native SSH, so it has no stored-login identity to check`,
-    { id: String(spec.id) },
-  )
 }
 
 /**

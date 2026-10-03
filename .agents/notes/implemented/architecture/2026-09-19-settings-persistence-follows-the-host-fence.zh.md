@@ -20,7 +20,7 @@ Status: implemented
 - `dsh-client-ui-settings-models` 始终通过 `ui-onboarding.welcomeNoticeVersion` 记录欢迎提示的确认；进程内确认回退被移除，而 mirror 无答复时报告为 `the settings document has not answered yet`，不再归咎于浏览器。
 - `dsh-client-ui-permission-presets` 去掉其 mirror 终态分支。
 
-被反转的规则记录在 [Host 支撑的 Web 偏好笔记](../bug-fix/2026-08-06-host-backed-web-preferences.zh.md)中，该笔记保留其余决定并链接到本文。
+被反转的规则记录在 [Host 支撑的 Web 偏好笔记](../../archived/bug-fix/2026-08-06-host-backed-web-preferences.md)中，该笔记保留其余决定并链接到本文。
 
 ## 考虑过的替代方案
 
