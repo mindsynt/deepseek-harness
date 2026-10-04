@@ -54,7 +54,10 @@ allowBuilds:
   electron-winstaller: false
   # Store-index rewriting only needs msgpackr's portable JavaScript codec.
   msgpackr-extract: false
-  cpu-features: set this to true or false
+  # Optional CPU feature probe behind ssh2's hardware crypto acceleration. ssh2
+  # falls back to pure-JS crypto without it and nothing here imports it, so
+  # skipping the node-gyp build costs us nothing.
+  cpu-features: false
   ssh2: true
 
 minimumReleaseAgeExclude:
