@@ -293,6 +293,28 @@ describe('BrowserAuth', () => {
     expect(store).toMatchObject({ reads: 0, modifies: 2 })
   })
 
+  it('rejects the previous process token and cookie when the durable secret is reused', async () => {
+    const store = new RecordCredentials()
+    const first = await createAuth(store, 30, {})
+    const login = exchange(first)
+    expect(first.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(true)
+
+    // Two activations of one durable secret under fresh owners is a process
+    // restart: the secret is reused and the launch token is not.
+    const secret = storedSecret(store)
+    const restarted = await createAuth(store, 30, {})
+    expect(storedSecret(store)).toEqual(secret)
+    expect(restarted.authenticatedUrl('http://127.0.0.1:3080')).not.toBe(login.launchUrl)
+
+    expect(restarted.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(false)
+
+    const stale = response()
+    const staleToken = new URL(login.launchUrl).searchParams.get('token')!
+    expect(restarted.authorizeIndex(request(`/?token=${staleToken}`, '127.0.0.1:3080'), stale.value)).toBe(false)
+    expect(stale.state.status).toBe(401)
+    expect(stale.state.headers?.['set-cookie']).toBeUndefined()
+  })
+
   it('fails loud on an invalid owner record instead of replacing it', async () => {
     const unsupported = new RecordCredentials()
     unsupported.record = { kind: 'api-key', key: 'not-a-cookie-secret' }
