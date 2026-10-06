@@ -25,7 +25,6 @@
  */
 
 import { posix, win32 } from 'node:path'
-import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -33,7 +32,6 @@ import type { FileSystem, FsDirEntry, FsInfo, FsPathInfo, FsTarget } from '@deep
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
-import type { RemoteHostId } from '@deepseek-ai/dsh-ssh-host-registry'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { Remote, RemoteError, TypertRemoteService, type TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
 import { WorkspaceChangeFeed } from './changes.ts'
@@ -64,13 +62,6 @@ export interface WorkspaceFileScope {
   readonly sessionId: SessionId
   /** Session workspace root, or the deployment fallback when its header has no cwd. */
   readonly workspaceRoot: string
-  /**
-   * Identity of the host whose execution world interprets {@link workspaceRoot};
-   * omitted and the built-in local id both address the Harness host's own
-   * filesystem. Today the Session header carries no host identity, so the
-   * lookup leaves this unset and every read stays local.
-   */
-  readonly hostId?: string
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -109,13 +100,6 @@ interface Page {
 /** The byte text never carries: its presence marks a page as binary. */
 const NUL = String.fromCharCode(0)
 
-/**
- * Identity of the Harness host's own execution world, matching `LOCAL_HOST_ID`
- * in `@deepseek-ai/dsh-workspace`, which owns the value. That package's runtime
- * export is not classified for import here, so `tests/host-addressing.spec.ts`
- * pins the two spellings together.
- */
-const LOCAL_HOST_ID = 'local'
 
 /** Refuse anything the wire schema admits as a number but a window cannot use: only safe integers index a file. */
 function integerAtLeast(value: number, min: number, name: string): number {
@@ -258,7 +242,7 @@ export class WorkspaceFiles extends TypertRemoteService {
     range: WorkspaceFileRange,
     signal: AbortSignal,
   ): Promise<WorkspaceFileText> {
-    const fs = this.fileSystemFor(workspaceFileScope.hostId)
+    const fs = this.ctx.fs
     const { offset, limit } = this.resolvePage(range)
     const { target, info } = await this.locateFile(fs, workspaceFileScope, path, signal)
     const page = await this.cutPage(fs, target, offset, limit, signal, path)
@@ -283,7 +267,7 @@ export class WorkspaceFiles extends TypertRemoteService {
     options: WorkspaceByteReadOptions,
     signal: AbortSignal,
   ): Promise<WorkspaceFileBytes> {
-    const fs = this.fileSystemFor(workspaceFileScope.hostId)
+    const fs = this.ctx.fs
     const window = options.range === undefined ? undefined : this.resolveWindow(options.range, path)
     const resolved = options.baseFile === undefined
       ? path
@@ -314,7 +298,7 @@ export class WorkspaceFiles extends TypertRemoteService {
    */
   @Remote
   async stat(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceFileStat> {
-    const fs = this.fileSystemFor(workspaceFileScope.hostId)
+    const fs = this.ctx.fs
     const { target, info } = await this.locateFile(fs, workspaceFileScope, path, signal)
     return this.statOf(fs, target, info)
   }
@@ -328,7 +312,7 @@ export class WorkspaceFiles extends TypertRemoteService {
    */
   @Remote
   async list(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceDirectoryListing> {
-    const fs = this.fileSystemFor(workspaceFileScope.hostId)
+    const fs = this.ctx.fs
     const { root, workspaceRoot, entry } = await this.inspect(fs, workspaceFileScope, path, signal)
     // A final link — a Windows junction or a symlink — is listed through the
     // directory it resolves to, matching the child type `listDir` reports for
@@ -366,7 +350,7 @@ export class WorkspaceFiles extends TypertRemoteService {
    */
   @Remote({ mode: 'stream' })
   changes(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame> {
-    const fs = this.fileSystemFor(workspaceFileScope.hostId)
+    const fs = this.ctx.fs
     return this.feed.follow(workspaceFileScope.workspaceRoot, path, fs, signal)
   }
 
@@ -412,28 +396,6 @@ export class WorkspaceFiles extends TypertRemoteService {
       )
     }
     return { offset, length }
-  }
-  /**
-   * The filesystem one request addresses: the Harness host's own backend for an
-   * omitted or built-in local identity, otherwise the open execution world of
-   * that remote host. Every read gate and the change feed run against it, so a
-   * remote workspace is read in the world that owns it rather than the Host's.
-   * @param hostId - host identity carried by the request scope.
-   * @returns the filesystem backend the request runs against.
-   * @throws RemoteError when the named host has no open execution world.
-   */
-  private fileSystemFor(hostId: string | undefined): FileSystem {
-    if (hostId === undefined || hostId === LOCAL_HOST_ID) return this.ctx.fs
-    const registry = this.ctx.get('remoteHosts')
-    const handle = registry === undefined ? undefined : registry.get(brandString<RemoteHostId>(hostId))
-    if (handle === undefined) {
-      throw new RemoteError(
-        'workspace-file/host-unavailable',
-        `host "${hostId}" has no open execution world on this Host; open the host before reading its workspace files`,
-        { hostId },
-      )
-    }
-    return handle.world.fs
   }
 
   /**

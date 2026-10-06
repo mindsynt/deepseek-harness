@@ -12,19 +12,11 @@ const props = () => ({
   file: { path: 'out/report.pdf', description: 'Final report', seq: 4, index: 1 },
   host: { name: 'remote-desktop', available: true, fileManager: 'finder' as const },
   phase: undefined,
-  remoteHost: undefined,
   onPreview: vi.fn(),
   actions: <button type="button">Native file action</button>,
   t: makeTranslate(en),
 })
 
-it('names the remote host whose desktop could open a refused file', () => {
-  const p = props()
-  const view = render(<PresentedFileCard {...p} phase="remoteUnavailable" remoteHost={{ hostId: 'remote-1' }} />)
-  const status = view.getByRole('status')
-  expect(status.textContent).toContain("lives in remote host remote-1's execution world")
-  expect(status.getAttribute('data-error')).toBe('true')
-})
 it('localizes reveal failures and accurately reports a directory-only action', () => {
   const p = props()
   const view = render(<PresentedFileCard {...p} phase="revealError" t={makeTranslate(zh)} />)

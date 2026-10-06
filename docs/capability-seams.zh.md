@@ -85,8 +85,6 @@ flowchart LR
   svc_terminalController["ctx.terminalController<br/>Session interactive terminal Remote controller"]
   pkg_api_workspace_controller["api-workspace-controller"]
   svc_workspaceController["ctx.workspaceController<br/>Host Workspace Remote controller"]
-  pkg_hosts_controller["hosts-controller"]
-  svc_hostsController["ctx.hostsController<br/>Host SSH host-management Remote controller"]
   svc_directoryPickerController["ctx.directoryPickerController<br/>Host directory-picking Remote controller"]
   pkg_typert_registry["typert-registry"]
   svc_typert["ctx.typert<br/>Runtime type registry"]
@@ -187,10 +185,6 @@ flowchart LR
   svc_sshNative["ctx.sshNative<br/>Native OpenSSH connection owner"]
   pkg_fs_sftp["fs-sftp"]
   pkg_subprocess_ssh_exec["subprocess-ssh-exec"]
-  pkg_ssh_host_registry["ssh-host-registry"]
-  svc_remoteHosts["ctx.remoteHosts<br/>Per-host execution realm registry"]
-  pkg_host_credentials["host-credentials"]
-  svc_sshHostCredentials["ctx.sshHostCredentials<br/>Stored SSH login material and controlled identities"]
   pkg_subprocess["subprocess"]
   svc_subprocess["ctx.subprocess<br/>Subprocess seam"]
   pkg_subprocess_local["subprocess-local"]
@@ -342,13 +336,11 @@ flowchart LR
   pkg_fs_sftp --> svc_fs
   pkg_goal --> svc_goals
   pkg_hmr --> svc_hmr
-  pkg_host_credentials --> svc_sshHostCredentials
   pkg_host_directory_picker --> svc_directoryPicker
   pkg_host_directory_picker_browse --> svc_directoryPicker
   pkg_host_directory_picker_native --> svc_directoryPicker
   pkg_host_product_telemetry_otel --> svc_productTelemetry
   pkg_host_webserver --> svc_webServer
-  pkg_hosts_controller --> svc_hostsController
   pkg_inspector --> svc_inspector
   pkg_jobs --> svc_jobs
   pkg_jobs_local --> svc_jobs
@@ -398,7 +390,6 @@ flowchart LR
   pkg_skill_office --> svc_skills
   pkg_spill --> svc_spillStore
   pkg_spill_local --> svc_spillStore
-  pkg_ssh_host_registry --> svc_remoteHosts
   pkg_ssh_native --> svc_sshNative
   pkg_storage --> svc_storage
   pkg_storage_domain --> svc_storageDomain
@@ -530,7 +521,6 @@ flowchart LR
   svc_speechToText --> pkg_experimental_api_speech_to_text
   svc_spillStore --> pkg_spill_policy
   svc_sshNative --> pkg_fs_sftp
-  svc_sshNative --> pkg_ssh_host_registry
   svc_sshNative --> pkg_subprocess_ssh_exec
   svc_storage --> pkg_storage_domain
   svc_storageDomain --> pkg_workspace
@@ -607,7 +597,6 @@ flowchart LR
 | `ctx.workspaceChanges` | `core` | [`workspace-changes`](../packages/deliverables/workspace-changes) | - | - | - | Serves the summary each workspace/changes event announced and each listed file's turn-start and turn-end comparison, by Session and event sequence, until that Session is disposed; the log carries only the turn. |
 | `ctx.terminalController` | `core` | [`api-terminal-controller`](../packages/api/terminal-controller) | - | - | - | 通过子进程提供方与类型化 Remote 传输管理用户终端进程、解析默认 shell，并恢复有界终端屏幕。 |
 | `ctx.workspaceController` | `core` | [`api-workspace-controller`](../packages/api/workspace-controller) | - | - | - | 通过生成的 Remote namespace 负责 Workspace 命令和可在重连后收敛的 Workspace 状态投递。 |
-| `ctx.hostsController` | `core` | [`hosts-controller`](../packages/api/hosts-controller) | - | - | - | 通过生成的 Remote namespace 暴露远端主机注册表与它组合的凭证存储：列出、新增与移除主机，检查已存登录，并跟随持久主机记录的变化。 |
 | `ctx.directoryPickerController` | `core` | [`api-workspace-controller`](../packages/api/workspace-controller) | - | - | - | 把选目录 seam 送上线：能力门禁、取消传播，以及浏览器目录流程用于分支判断的 seam 错误码。 |
 | `ctx.typert` | `core` | [`typert-registry`](../packages/typert/registry) | - | [`typert-loader`](../packages/typert/loader), [`api-gateway`](../packages/api/gateway) | - | 插件直接或通过 dsh-typert-loader 注册实时 zod 贡献；API 网关消费调用描述符和提供方，其他运行时消费方则在各自边界查询 schema 与反射元数据。 |
 | `ctx.typertGateway` | `core` | [`api-gateway`](../packages/api/gateway) | - | - | - | 将生成的 Remote 描述符与实时 Cordis 服务关联，解析已注册的身份，并通过共享的 Connection RPC 载体提供一元调用。 |
@@ -645,9 +634,7 @@ flowchart LR
 | `ctx.agentLoop` | `bundle` | [`agent-loop`](../packages/core/agent-loop) | - | [`base`](../packages/bundle/base), [`sdk-minimal`](../packages/bundle/sdk-minimal) | - | 唯一的具体循环插件；扩展包依赖 dsh-agent 的事件和服务，而不依赖此包。 |
 | `ctx.schedule` | `core` | [`schedule`](../packages/schedule/schedule) | - | - | - | 独立于 Session 的加载状态存储任务，并将到期消息排入原 Session。 |
 | `ctx.goals` | `core` | [`goal`](../packages/goal/goal) | - | - | - | 从会话日志折叠带修订版本的目标状态，并将实时延续激活保留在进程本地。 |
-| `ctx.sshNative` | `core` | [`ssh-native`](../packages/ssh/ssh-native) | - | [`fs-sftp`](../packages/ssh/fs-sftp), [`subprocess-ssh-exec`](../packages/ssh/subprocess-ssh-exec), [`ssh-host-registry`](../packages/ssh/host-registry) | - | 负责一条经过认证的 OpenSSH 连接及其 SFTP 文件操作与 SSH exec 程序通道；主机关闭时由所属 realm 处置该连接。 |
-| `ctx.remoteHosts` | `core` | [`ssh-host-registry`](../packages/ssh/host-registry) | - | - | - | 为每台已注册的 SSH 主机持有独立的 Cordis 服务作用域，使文件系统与子进程服务按主机而非按进程解析。 |
-| `ctx.sshHostCredentials` | `core` | [`host-credentials`](../packages/ssh/host-credentials) | - | - | - | 将一台主机的登录材料存入凭证 seam，并物化由 DSH 控制的 OpenSSH 配置、身份与 known_hosts，使连接寻址生成的别名，而不是部署方的 OpenSSH 配置。 |
+| `ctx.sshNative` | `core` | [`ssh-native`](../packages/ssh/ssh-native) | - | [`fs-sftp`](../packages/ssh/fs-sftp), [`subprocess-ssh-exec`](../packages/ssh/subprocess-ssh-exec) | - | 负责一条经过认证的 OpenSSH 连接及其 SFTP 文件操作与 SSH exec 程序通道；主机关闭时由所属 realm 处置该连接。 |
 | `ctx.subprocess` | `seam` | [`subprocess`](../packages/subprocess/subprocess) | [`subprocess-local`](../packages/subprocess/subprocess-local), [`subprocess-ssh-exec`](../packages/ssh/subprocess-ssh-exec) | [`bash-local`](../packages/shell/bash-local), [`bash-sandbox`](../packages/shell/bash-sandbox), [`terminal-bash`](../packages/terminal/terminal-bash), [`lsp-stdio`](../packages/lsp/lsp-stdio), [`subagent-acp`](../packages/subagent/subagent-acp), [`subagent-codex`](../packages/subagent/subagent-codex), [`subagent-claude-code`](../packages/subagent/subagent-claude-code) | - | Bash 执行器、PTY shell 后端、LSP Host，以及进程外 ACP、Codex 和 Claude Code subagent 后端都通过 ctx.subprocess 执行 spawn；该服务负责进程坐标、进程树／会话生命周期、stdio 处置、终端机制和 kill 升级。 |
 | `ctx.shell` | `seam` | [`shell`](../packages/shell/shell) | [`bash-local`](../packages/shell/bash-local), [`bash-sandbox`](../packages/shell/bash-sandbox), [`pwsh-local`](../packages/shell/pwsh-local) | [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex) | - | 面向模型的 shell 工具和钩子桥接消费此 seam；沙箱、远程或 PowerShell 执行器可以替换 bash-local，而无需改动这些消费方。 |
 | `ctx.shellEnv` | `core` | [`shell-env`](../packages/shell/shell-env) | - | [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh) | - | 插件声明限定于 effect 作用域的 DSH_* 事实；每个 shell 工具在每次执行时收集一份可信快照，其执行器据此重建命名空间。 |

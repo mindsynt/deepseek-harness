@@ -853,12 +853,10 @@ export function WorkspaceBrowser({
   insertWorkspaceBefore,
   unarchiveSession,
   createWorkspace,
-  checkSelectedHostWorld,
   searchSessions,
   searchResultLimit,
   useDirectoryFlow,
   useHostInfo,
-  useSelectedHost,
   useShortcuts,
   useWorkspaceShortcuts,
   requestSearch,
@@ -870,9 +868,6 @@ export function WorkspaceBrowser({
   t,
 }: WorkspaceBrowserProps) {
   const home = useHostInfo(info => info.home)
-  // The selected workspace-creation host names the world this region's add
-  // flow addresses; absent means the Harness host.
-  const remoteHostLabel = useSelectedHost(value => value.hostLabel)
   const shortcuts = useShortcuts(rows => rows)
   const searchShortcut = shortcuts.find(row => row.id === 'session.search')
   const addShortcut = shortcuts.find(row => row.id === 'workspace.add')
@@ -1320,9 +1315,7 @@ export function WorkspaceBrowser({
           anchorRef={wsPlusRef}
           useWorkspaces={useWorkspaces}
           createWorkspace={createWorkspace}
-          checkSelectedHostWorld={checkSelectedHostWorld}
           useDirectoryFlow={useDirectoryFlow}
-          remoteHostLabel={remoteHostLabel}
           renderDirectoryFlow={owner => renderSlot('sidebar.workspaces.directoryFlow', owner)}
           addOnly
           onBusyChange={setDirectoryBusy}

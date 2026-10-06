@@ -55,7 +55,6 @@ function workspace(
 ): WorkspaceView {
   return {
     workspaceId: wid(id),
-    hostId: 'local',
     path: `/w/${id}`,
     title: id,
     sessionIds,
@@ -263,9 +262,9 @@ class FakeDirectoryPicker {
 
   readonly remote: ClientRemote['directoryPicker'] = {
     pick: () => this.record('pick', {}, this.onPick()),
-    list: (path?: string, hostId?: string) => this.record('list', { path, hostId }, this.onList()),
-    createDirectory: (path: string, name: string, hostId?: string) =>
-      this.record('createDirectory', { path, name, hostId }, this.onCreateDirectory()),
+    list: (path?: string) => this.record('list', { path }, this.onList()),
+    createDirectory: (path: string, name: string) =>
+      this.record('createDirectory', { path, name }, this.onCreateDirectory()),
   }
 
   callsOf(method: string): unknown[] {
@@ -284,8 +283,6 @@ interface BenchOptions {
   readonly workspaces?: WorkspaceSnapshot
   readonly sessions?: SessionListState
   readonly configureSessions?: (sessions: FakeSessions) => void
-  /** Remote host the workspace-creation selection starts on; absent means the Harness host. */
-  readonly hostId?: string
 }
 
 function bench(options: BenchOptions = {}) {
@@ -310,8 +307,6 @@ function bench(options: BenchOptions = {}) {
   const sessions = new FakeSessions(options.sessions ?? sessionState([], 'pending'))
   options.configureWorkspaces?.(workspaces)
   options.configureSessions?.(sessions)
-  const hostSelection = createSnapshotStore<{ hostId?: string }>(
-    options.hostId === undefined ? {} : { hostId: options.hostId })
   const view = createWorkspaceViewStore().create()
   const notify = vi.fn<(toast: RowToast) => void>()
   const uiWorkspace = new UiWorkspaceService(
@@ -319,13 +314,12 @@ function bench(options: BenchOptions = {}) {
     directoryPicker.remote,
     workspaces,
     sessions,
-    () => hostSelection.getSnapshot().hostId,
     view.actions,
     notify,
   )
   return {
     ctx, directoryPicker, sessions, uiWorkspace, workspaces, layout, selectPanel, view, notify,
-    hostSelection, requestDraftInitialization,
+    requestDraftInitialization,
   }
 }
 
@@ -1316,23 +1310,13 @@ describe('UiWorkspaceService', () => {
     await expect(b.uiWorkspace.listDirectory()).resolves.toEqual(listing)
     await expect(b.uiWorkspace.listDirectory('/home/u')).resolves.toEqual(listing)
     expect(b.directoryPicker.callsOf('list')).toEqual([
-      { path: undefined, hostId: undefined },
-      { path: '/home/u', hostId: undefined },
+      { path: undefined },
+      { path: '/home/u' },
     ])
-    // A creation with no selected host keeps addressing the Harness host.
     await expect(b.uiWorkspace.createDirectory('/home/u', 'first')).resolves.toBe('/home/u/new')
     expect(b.directoryPicker.callsOf('createDirectory')).toEqual([
-      { path: '/home/u', name: 'first', hostId: undefined },
+      { path: '/home/u', name: 'first' },
     ])
-    // Once the settings section selects a remote host, every listing addresses
-    // that world — including the anchor leg, which is the realm root then — and
-    // a directory created from the browser lands in that same world.
-    b.hostSelection.set({ hostId: 'alpha' })
-    await expect(b.uiWorkspace.listDirectory()).resolves.toEqual(listing)
-    expect(b.directoryPicker.callsOf('list').at(-1)).toEqual({ path: undefined, hostId: 'alpha' })
-    await expect(b.uiWorkspace.createDirectory('/home/u', 'new')).resolves.toBe('/home/u/new')
-    expect(b.directoryPicker.callsOf('createDirectory').at(-1))
-      .toEqual({ path: '/home/u', name: 'new', hostId: 'alpha' })
     b.directoryPicker.onPick = () => Promise.resolve({
       ok: false, error: new RemoteError('gateway/internal', 'no chooser', {}),
     })

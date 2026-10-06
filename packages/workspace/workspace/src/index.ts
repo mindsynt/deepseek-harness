@@ -7,7 +7,6 @@
 
 import { randomUUID } from 'node:crypto'
 import { mkdir, stat } from 'node:fs/promises'
-import { posix } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
@@ -16,7 +15,7 @@ import { WorkspaceEntity } from './entity.ts'
 import type { WorkspaceEntityHost } from './entity.ts'
 
 export { WorkspaceMoveInvalidError } from './entity.ts'
-import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath, LOCAL_HOST_ID, realpathNormalize, remotePathNormalize, resolveWorkspaceHostId } from './paths.ts'
+import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath, realpathNormalize } from './paths.ts'
 import { workspaceDomainSpec } from './spec.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
 import type { SessionActivity, Workspace, WorkspaceId as WorkspaceIdBrand } from './types.ts'
@@ -26,7 +25,7 @@ export type {
 } from './types.ts'
 export { workspaceDomainState, workspaceRecord, workspaceDomainSpec } from './spec.ts'
 export type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
-export { LOCAL_HOST_ID, realpathNormalize } from './paths.ts'
+export { realpathNormalize } from './paths.ts'
 
 /** Identifies one workspace record (see `src/types.ts` for the brand rationale). */
 export type WorkspaceId = WorkspaceIdBrand
@@ -161,26 +160,21 @@ interface BootstrapGroup {
  * path may exist on the Harness host and also name a directory on a remote one.
  */
 interface SessionPathFacts {
-  /** `fs.realpath` canon when the cwd names an existing Harness-host directory. */
+  /** `fs.realpath` canon when the cwd names an existing directory. */
   local?: string
-  /** String canon a non-local host interprets; present for an absolutely rooted cwd. */
-  remote?: string
-  /** Why the cwd produced no local canon; reported by the filtered-candidate warning. */
+  /** Why the cwd produced no canon; reported by the filtered-candidate warning. */
   invalidReason?: string
 }
 
 const sameIds = (left: readonly WorkspaceId[], right: readonly WorkspaceId[]): boolean =>
   left.length === right.length && left.every((id, index) => id === right[index])
 
-/** Uniqueness key of one workspace: the host identity plus that host's canonical path. */
-const hostPathKey = (hostId: string, path: string): string => JSON.stringify([hostId, path])
-
 const compareHeaders = (left: SessionHeader, right: SessionHeader): number =>
   right.createdAt - left.createdAt || String(left.id).localeCompare(String(right.id))
 
 /**
  * Durable workspace registry. Startup waits for `sessionPersistence`, builds
- * one header index carrying each session's local and non-local path canons,
+ * one header index carrying each session's canonical path,
  * and completes the one-time history bootstrap before the service becomes
  * active. The persistence dependency is mandatory so an unavailable peer can
  * never be mistaken for an empty history and commit the initialized marker.
@@ -198,16 +192,12 @@ export class WorkspaceRegistry extends Service {
 
   private readonly host: WorkspaceEntityHost = {
     table: () => this.requireTable(),
-    sessionPath: (id, hostId) => this.sessionPath(id, hostId),
+    sessionPath: id => this.sessionPath(id),
     readSessionHeader: id => this.readSessionHeader(id),
-    rememberSessionPath: (id, hostId, path) => {
+    rememberSessionPath: (id, path) => {
       const facts = this.sessionPathFacts.get(id) ?? {}
-      if (hostId === LOCAL_HOST_ID) {
-        facts.local = path
-        delete facts.invalidReason
-      } else {
-        facts.remote = path
-      }
+      facts.local = path
+      delete facts.invalidReason
       this.sessionPathFacts.set(id, facts)
     },
   }
@@ -241,22 +231,14 @@ export class WorkspaceRegistry extends Service {
   }
 
   /**
-   * Create or reuse a workspace for a directory on one host. On the built-in
-   * local host the fully qualified path is canonicalized through `fs.realpath`
-   * and must name an existing directory, so a relative, nonexistent, or
-   * non-directory path rejects. On any other host the path is canonicalized by
-   * string alone (absolutely rooted POSIX spelling, trailing slashes removed)
-   * and no Harness-host filesystem access happens, because that host's
-   * execution world owns the directory. Repeated calls for the same
-   * `(hostId, canonical path)` pair return the existing entity without
-   * changing its title; the same canonical path on two hosts is two
-   * workspaces. A newly created workspace is prepended to the durable registry
-   * order. Different canonical paths may share a display title. The registry
-   * does not verify that a non-local `hostId` names a registered host.
-   * @param path - Directory to own, in a fully qualified path spelling.
+   * Create or reuse a workspace for an existing directory. The fully qualified
+   * path is canonicalized through `fs.realpath`; a relative, nonexistent, or
+   * non-directory path rejects. Repeated calls for the same canonical path
+   * return the existing entity without changing its title.
+   * A newly created workspace is prepended to the durable registry order.
+   * Different canonical paths may share a display title.
+   * @param path - Existing directory to own, in a fully qualified path spelling.
    * @param title - Display title used only when a new record is created.
-   * @param hostId - Identity of the host that interprets `path`; omitted or
-   * empty names the built-in local host.
    * @returns the existing or newly durable workspace.
    */
   // TODO: `title` lost its last production caller when the gateway's
@@ -264,10 +246,12 @@ export class WorkspaceRegistry extends Service {
   // (.agents/notes/archived/simplification/2026-07-31-one-route-to-add-a-workspace.md);
   // drop the parameter with its @param clause and the `create(path, title?)`
   // lines in this package's README pair.
-  async create(path: string, title?: string, hostId?: string): Promise<Workspace> {
-    const host = resolveWorkspaceHostId(hostId)
-    const canonical = await this.canonicalizeForCreate(path, host)
-    return await this.enqueueOperation(() => this.createCanonical(host, canonical, title))
+  async create(path: string, title?: string): Promise<Workspace> {
+    const canonical = await realpathNormalize(path)
+    if (!(await stat(canonical)).isDirectory()) {
+      throw new Error(`cannot create a workspace at '${canonical}': path is not a directory`)
+    }
+    return await this.enqueueOperation(() => this.createCanonical(canonical, title))
   }
 
   /**
@@ -297,7 +281,7 @@ export class WorkspaceRegistry extends Service {
       const canonical = await realpathNormalize(path)
       // A Session can start outside the registry queue while directory preparation awaits I/O.
       if ((await this.listStoredHeaders()).length > 0 || sessions.list().length > 0) return undefined
-      return this.createCanonical(LOCAL_HOST_ID, canonical, undefined, true)
+      return this.createCanonical(canonical, undefined, true)
     })
   }
 
@@ -520,48 +504,22 @@ export class WorkspaceRegistry extends Service {
   }
 
   /**
-   * Resolve by canonical directory path on one host without creating or
-   * mutating a workspace. On the built-in local host a missing path rejects
-   * during `realpath`; a non-local host canonicalizes the path string alone,
-   * so no Harness-host filesystem access happens. An existing unowned
-   * directory — or, on a non-local host, any unowned canonical spelling —
-   * returns `undefined`.
+   * Resolve by canonical directory path without creating or mutating a
+   * workspace. A missing path rejects during `realpath`.
    * @param path - Directory path in a fully qualified spelling.
-   * @param hostId - Identity of the host that interprets `path`; omitted or
-   * empty means the built-in local host.
-   * @returns the workspace owning the canonical path on that host, when one exists.
+   * @returns the workspace owning the canonical path, when one exists.
    */
-  async resolveByPath(path: string, hostId?: string): Promise<Workspace | undefined> {
-    const host = resolveWorkspaceHostId(hostId)
-    const canonical = await this.canonicalizeForLookup(path, host)
+  async resolveByPath(path: string): Promise<Workspace | undefined> {
+    const canonical = await realpathNormalize(path)
     for (const entity of this.entities.values()) {
-      if (entity.hostId === host && entity.path === canonical) return entity
+      if (entity.path === canonical) return entity
     }
     return undefined
   }
 
-  /**
-   * Canonicalize a create request's path and require an existing directory,
-   * because a local workspace must point at one. A non-local host's world owns
-   * that check, so only the path string is canonicalized.
-   */
-  private async canonicalizeForCreate(path: string, hostId: string): Promise<string> {
-    if (hostId !== LOCAL_HOST_ID) return remotePathNormalize(path)
-    const canonical = await realpathNormalize(path)
-    if (!(await stat(canonical)).isDirectory()) {
-      throw new Error(`cannot create a workspace at '${canonical}': path is not a directory`)
-    }
-    return canonical
-  }
-
-  /** Canonicalize a lookup path under one host without requiring the directory to exist. */
-  private async canonicalizeForLookup(path: string, hostId: string): Promise<string> {
-    return hostId === LOCAL_HOST_ID ? await realpathNormalize(path) : remotePathNormalize(path)
-  }
-
-  private async createCanonical(hostId: string, canonical: string, title?: string, firstUse = false): Promise<WorkspaceEntity> {
+  private async createCanonical(canonical: string, title?: string, firstUse = false): Promise<WorkspaceEntity> {
     for (const entity of this.entities.values()) {
-      if (entity.hostId === hostId && entity.path === canonical) return entity
+      if (entity.path === canonical) return entity
     }
 
     const workspaceName = title ?? defaultWorkspaceTitle(canonical)
@@ -570,7 +528,6 @@ export class WorkspaceRegistry extends Service {
     const id = WorkspaceId(randomUUID())
     const now = new Date().toISOString()
     const record: WorkspaceRecord = {
-      hostId,
       path: canonical,
       title: workspaceName,
       sessionIds: [],
@@ -705,7 +662,7 @@ export class WorkspaceRegistry extends Service {
     const state = this.requireState()
     const groupsByPath = new Map<string, SessionHeader[]>()
     for (const header of headers) {
-      const path = this.sessionPath(header.id, LOCAL_HOST_ID)
+      const path = this.sessionPath(header.id)
       if (path === undefined) continue
       const group = groupsByPath.get(path)
       if (group === undefined) groupsByPath.set(path, [header])
@@ -721,13 +678,12 @@ export class WorkspaceRegistry extends Service {
     const byPath = new Map<string, WorkspaceId>()
     const accounted = new Map<SessionId, WorkspaceId>()
     for (const [id, record] of table.entries()) {
-      byPath.set(hostPathKey(record.hostId, record.path), id)
+      byPath.set(record.path, id)
       for (const sessionId of record.sessionIds) accounted.set(sessionId, id)
     }
 
     for (const group of groups) {
-      const groupKey = hostPathKey(LOCAL_HOST_ID, group.path)
-      let id = byPath.get(groupKey)
+      let id = byPath.get(group.path)
       if (id === undefined) {
         const sessionIds = group.headers
           .map(header => header.id)
@@ -736,7 +692,6 @@ export class WorkspaceRegistry extends Service {
         id = WorkspaceId(randomUUID())
         const createdAt = new Date(group.newestAt).toISOString()
         const record: WorkspaceRecord = {
-          hostId: LOCAL_HOST_ID,
           path: group.path,
           title: defaultWorkspaceTitle(group.path),
           sessionIds,
@@ -744,7 +699,7 @@ export class WorkspaceRegistry extends Service {
           updatedAt: createdAt,
         }
         await table.put(id, record)
-        byPath.set(groupKey, id)
+        byPath.set(group.path, id)
         for (const sessionId of sessionIds) accounted.set(sessionId, id)
         continue
       }
@@ -818,11 +773,11 @@ export class WorkspaceRegistry extends Service {
     const paths = new Map<string, WorkspaceId>()
     const accounted = new Map<SessionId, WorkspaceId>()
     for (const [id, record] of table.entries()) {
-      const key = hostPathKey(record.hostId, record.path)
+      const key = record.path
       const pathHolder = paths.get(key)
       if (pathHolder !== undefined) {
         throw new Error(
-          `workspace domain is inconsistent: host '${record.hostId}' path '${record.path}' is claimed `
+          `workspace domain is inconsistent: path '${record.path}' is claimed `
           + `by both workspace '${pathHolder}' and workspace '${id}'`,
         )
       }
@@ -865,7 +820,6 @@ export class WorkspaceRegistry extends Service {
       return
     }
     const facts: SessionPathFacts = {}
-    if (posix.isAbsolute(header.cwd)) facts.remote = remotePathNormalize(header.cwd)
     try {
       const path = await realpathNormalize(header.cwd)
       if (!(await stat(path)).isDirectory()) {
@@ -889,10 +843,9 @@ export class WorkspaceRegistry extends Service {
    * `undefined` when the header is unindexed or its cwd has no canon under
    * that host's rules.
    */
-  private sessionPath(id: SessionId, hostId: string): string | undefined {
+  private sessionPath(id: SessionId): string | undefined {
     const facts = this.sessionPathFacts.get(id)
-    if (facts === undefined) return undefined
-    return hostId === LOCAL_HOST_ID ? facts.local : facts.remote
+    return facts?.local
   }
 
   /** Every stored session's header, projected from the persistence snapshot listing. */
@@ -912,7 +865,7 @@ export class WorkspaceRegistry extends Service {
       const record = this.requireTable().get(entity.id) as WorkspaceRecord
       for (const sessionId of record.sessionIds) {
         const facts = this.sessionPathFacts.get(sessionId)
-        const path = this.sessionPath(sessionId, record.hostId)
+        const path = this.sessionPath(sessionId)
         if (path === record.path) continue
         const reason = path === undefined
           ? facts?.invalidReason ?? 'session header is missing'

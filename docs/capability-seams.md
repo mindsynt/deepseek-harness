@@ -83,8 +83,6 @@ flowchart LR
   svc_terminalController["ctx.terminalController<br/>Session interactive terminal Remote controller"]
   pkg_api_workspace_controller["api-workspace-controller"]
   svc_workspaceController["ctx.workspaceController<br/>Host Workspace Remote controller"]
-  pkg_hosts_controller["hosts-controller"]
-  svc_hostsController["ctx.hostsController<br/>Host SSH host-management Remote controller"]
   svc_directoryPickerController["ctx.directoryPickerController<br/>Host directory-picking Remote controller"]
   pkg_typert_registry["typert-registry"]
   svc_typert["ctx.typert<br/>Runtime type registry"]
@@ -185,10 +183,6 @@ flowchart LR
   svc_sshNative["ctx.sshNative<br/>Native OpenSSH connection owner"]
   pkg_fs_sftp["fs-sftp"]
   pkg_subprocess_ssh_exec["subprocess-ssh-exec"]
-  pkg_ssh_host_registry["ssh-host-registry"]
-  svc_remoteHosts["ctx.remoteHosts<br/>Per-host execution realm registry"]
-  pkg_host_credentials["host-credentials"]
-  svc_sshHostCredentials["ctx.sshHostCredentials<br/>Stored SSH login material and controlled identities"]
   pkg_subprocess["subprocess"]
   svc_subprocess["ctx.subprocess<br/>Subprocess seam"]
   pkg_subprocess_local["subprocess-local"]
@@ -340,13 +334,11 @@ flowchart LR
   pkg_fs_sftp --> svc_fs
   pkg_goal --> svc_goals
   pkg_hmr --> svc_hmr
-  pkg_host_credentials --> svc_sshHostCredentials
   pkg_host_directory_picker --> svc_directoryPicker
   pkg_host_directory_picker_browse --> svc_directoryPicker
   pkg_host_directory_picker_native --> svc_directoryPicker
   pkg_host_product_telemetry_otel --> svc_productTelemetry
   pkg_host_webserver --> svc_webServer
-  pkg_hosts_controller --> svc_hostsController
   pkg_inspector --> svc_inspector
   pkg_jobs --> svc_jobs
   pkg_jobs_local --> svc_jobs
@@ -396,7 +388,6 @@ flowchart LR
   pkg_skill_office --> svc_skills
   pkg_spill --> svc_spillStore
   pkg_spill_local --> svc_spillStore
-  pkg_ssh_host_registry --> svc_remoteHosts
   pkg_ssh_native --> svc_sshNative
   pkg_storage --> svc_storage
   pkg_storage_domain --> svc_storageDomain
@@ -528,7 +519,6 @@ flowchart LR
   svc_speechToText --> pkg_experimental_api_speech_to_text
   svc_spillStore --> pkg_spill_policy
   svc_sshNative --> pkg_fs_sftp
-  svc_sshNative --> pkg_ssh_host_registry
   svc_sshNative --> pkg_subprocess_ssh_exec
   svc_storage --> pkg_storage_domain
   svc_storageDomain --> pkg_workspace
@@ -605,7 +595,6 @@ flowchart LR
 | `ctx.workspaceChanges` | `core` | [`workspace-changes`](../packages/deliverables/workspace-changes) | - | - | - | Serves the summary each workspace/changes event announced and each listed file's turn-start and turn-end comparison, by Session and event sequence, until that Session is disposed; the log carries only the turn. |
 | `ctx.terminalController` | `core` | [`api-terminal-controller`](../packages/api/terminal-controller) | - | - | - | Owns user terminal processes, default shell resolution and bounded screen recovery through the subprocess provider and typed Remote transport. |
 | `ctx.workspaceController` | `core` | [`api-workspace-controller`](../packages/api/workspace-controller) | - | - | - | Owns Workspace commands and reconnect-safe Workspace state delivery through the generated Remote namespace. |
-| `ctx.hostsController` | `core` | [`hosts-controller`](../packages/api/hosts-controller) | - | - | - | Exposes the remote-host registry and the credential store it composes through the generated Remote namespace: list, add and remove hosts, check a stored login, and follow durable host-record changes. |
 | `ctx.directoryPickerController` | `core` | [`api-workspace-controller`](../packages/api/workspace-controller) | - | - | - | Carries the picking seam onto the wire: capability gating, cancellation, and the seam-coded failures a browser directory flow discriminates on. |
 | `ctx.typert` | `core` | [`typert-registry`](../packages/typert/registry) | - | [`typert-loader`](../packages/typert/loader), [`api-gateway`](../packages/api/gateway) | - | Plugins register live zod contributions directly or through dsh-typert-loader; the API gateway consumes invocation descriptors and providers, while other runtime consumers query schemas and reflection metadata at their own edges. |
 | `ctx.typertGateway` | `core` | [`api-gateway`](../packages/api/gateway) | - | - | - | Associates generated Remote descriptors with live Cordis services, resolves registered identities, and exposes unary calls through the shared Connection RPC carrier. |
@@ -643,9 +632,7 @@ flowchart LR
 | `ctx.agentLoop` | `bundle` | [`agent-loop`](../packages/core/agent-loop) | - | [`base`](../packages/bundle/base), [`sdk-minimal`](../packages/bundle/sdk-minimal) | - | The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package. |
 | `ctx.schedule` | `core` | [`schedule`](../packages/schedule/schedule) | - | - | - | Stores tasks independently of Session activation and queues due messages in the original Session. |
 | `ctx.goals` | `core` | [`goal`](../packages/goal/goal) | - | - | - | Folds revisioned objective state from the session log and keeps live continuation activation process-local. |
-| `ctx.sshNative` | `core` | [`ssh-native`](../packages/ssh/ssh-native) | - | [`fs-sftp`](../packages/ssh/fs-sftp), [`subprocess-ssh-exec`](../packages/ssh/subprocess-ssh-exec), [`ssh-host-registry`](../packages/ssh/host-registry) | - | Owns one authenticated OpenSSH connection and its SFTP file operations and SSH-exec program channels; the realm disposes the connection when the host closes. |
-| `ctx.remoteHosts` | `core` | [`ssh-host-registry`](../packages/ssh/host-registry) | - | - | - | Owns one isolated Cordis service scope per registered SSH host, so the filesystem and subprocess services resolve per host instead of per process. |
-| `ctx.sshHostCredentials` | `core` | [`host-credentials`](../packages/ssh/host-credentials) | - | - | - | Stores one host login in the credential seam and materializes a DSH-controlled OpenSSH configuration, identity and known_hosts, so a connection addresses a generated alias instead of the deployment OpenSSH configuration. |
+| `ctx.sshNative` | `core` | [`ssh-native`](../packages/ssh/ssh-native) | - | [`fs-sftp`](../packages/ssh/fs-sftp), [`subprocess-ssh-exec`](../packages/ssh/subprocess-ssh-exec) | - | Owns one authenticated OpenSSH connection and its SFTP file operations and SSH-exec program channels. |
 | `ctx.subprocess` | `seam` | [`subprocess`](../packages/subprocess/subprocess) | [`subprocess-local`](../packages/subprocess/subprocess-local), [`subprocess-ssh-exec`](../packages/ssh/subprocess-ssh-exec) | [`bash-local`](../packages/shell/bash-local), [`bash-sandbox`](../packages/shell/bash-sandbox), [`terminal-bash`](../packages/terminal/terminal-bash), [`lsp-stdio`](../packages/lsp/lsp-stdio), [`subagent-acp`](../packages/subagent/subagent-acp), [`subagent-codex`](../packages/subagent/subagent-codex), [`subagent-claude-code`](../packages/subagent/subagent-claude-code) | - | The bash executors, the PTY shell backend, the LSP host, and the out-of-process ACP, Codex, and Claude Code subagent backends spawn through ctx.subprocess; the service owns process coordinates, tree/session lifetime, stdio dispositions, terminal mechanics, and kill escalation. |
 | `ctx.shell` | `seam` | [`shell`](../packages/shell/shell) | [`bash-local`](../packages/shell/bash-local), [`bash-sandbox`](../packages/shell/bash-sandbox), [`pwsh-local`](../packages/shell/pwsh-local) | [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh), [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex) | - | The model-facing shell tools and hook bridges consume this seam; sandboxed, remote, or PowerShell executors replace bash-local without touching them. |
 | `ctx.shellEnv` | `core` | [`shell-env`](../packages/shell/shell-env) | - | [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh) | - | Plugins declare effect-scoped DSH_* facts; each shell tool collects one trusted snapshot per execution and its executor rebuilds the namespace. |

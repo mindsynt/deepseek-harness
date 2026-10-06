@@ -225,30 +225,6 @@ class TestSessionQuery extends SessionQueryEngine {
   }
 }
 
-/**
- * In-memory double of the storage-domain facility for direct unit harnesses:
- * one keyed table set per opened domain, enough for the sidecar's `get`/`put`.
- * @returns a minimal `ctx.storageDomain` value.
- */
-function sessionHostDomainDouble(): unknown {
-  return {
-    async open(spec: { name: string; tables: Record<string, unknown> }) {
-      const tables = new Map(Object.keys(spec.tables).map(table => [table, new Map<string, unknown>()]))
-      return {
-        table: (name: string) => {
-          const records = tables.get(name)
-          if (records === undefined) throw new Error(`test storage domain: unknown table '${name}'`)
-          return {
-            get: (key: string) => records.get(key),
-            put: async (key: string, value: unknown) => { records.set(key, value) },
-          }
-        },
-        close: async () => {},
-      }
-    },
-  }
-}
-
 /** Install the required projection and point-query services for direct controller tests. */
 export function installSessionReadTestServices(ctx: Context): void {
   if (ctx.get('sessionProjections') === undefined) new SessionProjectionRegistry(ctx)
@@ -312,11 +288,8 @@ function installControllers(
       retirePrompt: () => {},
     } as never)
   }
-  // The Session-to-host sidecar is durable state the production composition
-  // guarantees through `ctx.storageDomain` and `ctx.workspaceRegistry`; these
-  // direct unit harnesses stub both so creation and resume stay exercised
-  // without a storage composition. Durability is covered by the dedicated spec.
-  if (ctx.get('storageDomain') === undefined) ctx.provide('storageDomain', sessionHostDomainDouble() as never)
+  // These direct unit harnesses stub the workspace registry so creation and
+  // resume stay exercised without a storage composition.
   if (ctx.get('workspaceRegistry') === undefined) {
     ctx.provide('workspaceRegistry', { list: () => [], get: () => undefined } as never)
   }

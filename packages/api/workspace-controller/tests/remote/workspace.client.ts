@@ -52,7 +52,6 @@ export function err<T>(error: RemoteFailure): RemoteResult<T> {
 export function workspace(id: string, overrides: Partial<WorkspaceView> = {}): WorkspaceView {
   return {
     workspaceId: id as WorkspaceId,
-    hostId: 'local',
     path: `/work/${id}`,
     title: id,
     sessionIds: [],
@@ -96,7 +95,6 @@ export const workspaceWorld: RemoteTable = {
     'workspace/create': (request: WorkspaceCreateRequest): RemoteResult<WorkspaceCreateValue> => ok({
       workspace: workspace('created', {
         path: request.path,
-        ...request.hostId === undefined ? {} : { hostId: request.hostId },
       }),
       created: true,
     }),

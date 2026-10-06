@@ -86,32 +86,6 @@ function connectionOf(ctx: Context): OpenInAppConnection {
   return Reflect.get(ctx, 'connection') as OpenInAppConnection
 }
 
-/**
- * Identity of the Harness host's own execution world, matching the Workspace
- * domain's exported `LOCAL_HOST_ID`. Declared here rather than imported: a
- * runtime value import across packages has to be classified in the dependency
- * policy, and this router needs the token for one comparison.
- */
-const LOCAL_HOST_ID = 'local'
-
-/**
- * The remote execution world that recorded one directory path as its
- * Workspace, or undefined when this Host's own world owns it. The request
- * carries no Session identity, so a recorded Workspace naming this exact path
- * is the only authority that can name an owner without guessing from the path
- * itself. A path some local Workspace also records stays local, which keeps
- * today's behavior whenever both worlds could own it.
- * @param ctx - Host context carrying the Workspace registry.
- * @param path - the validated absolute directory path from the request.
- * @returns the remote host that recorded the path, or undefined when this
- *   Host's own world owns it or no Workspace records it.
- */
-function remoteHostOwningPath(ctx: Context, path: string): string | undefined {
-  const owners = ctx.get('workspaceRegistry')?.list().filter(workspace => workspace.path === path) ?? []
-  if (owners.some(workspace => workspace.hostId === LOCAL_HOST_ID)) return undefined
-  return owners[0]?.hostId
-}
-
 /** Open-route request bodies are tiny JSON objects; anything larger is hostile. */
 const MAX_BODY_BYTES = 64 * 1024
 
@@ -306,14 +280,6 @@ export function apply(ctx: Context, config: Config): void {
       }
       if (parsed.path === '' || !isAbsolute(parsed.path)) {
         sendJson(res, 400, { code: 'bad-request', message: 'path must be an absolute directory path' })
-        return
-      }
-      const remoteHost = remoteHostOwningPath(ctx, parsed.path)
-      if (remoteHost !== undefined) {
-        sendJson(res, 409, {
-          hostId: remoteHost,
-          message: `"${parsed.path}" is a workspace on remote host "${remoteHost}"; this Harness host's desktop cannot open that execution world's directories — open it on "${remoteHost}"`,
-        })
         return
       }
       let directory: boolean

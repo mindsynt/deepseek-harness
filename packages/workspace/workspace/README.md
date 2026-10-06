@@ -59,7 +59,7 @@ await project.setTitle('Renamed')
 ctx.workspaceRegistry.list() // shows the project, newest first
 ```
 
-`create(path, title?, hostId?)` bounds the project to a host. Omitted or empty `hostId` selects the built-in local host, exported as `LOCAL_HOST_ID` (`'local'`); any other value names a host another composition registered, and the same path on two hosts is two projects. `resolveByPath(path, hostId?)` uses the same pairing.
+`create(path, title?)` bounds the project to one directory, canonicalized through `fs.realpath`, and refuses a path that does not name an existing directory. `resolveByPath(path)` uses the same canonical path.
 
 <a id="first-use-workspace"></a>
 ### First-use Workspace
@@ -92,7 +92,7 @@ This section explains the design decisions behind the feature and points at the 
 
 ### Design philosophy
 
-- **One record per host and canonical path.** The local host's uniqueness canon is `fs.realpath`; a non-local host's is string canon (trailing slashes removed, absolute spelling required), because only that host's execution world can resolve the path further. Uniqueness is string equality of `(hostId, canonical path)`.
+- **One record per canonical path.** The uniqueness canon is `fs.realpath` (trailing slashes, `..`, and symlinks all resolve), so a symlink pointing at an already owned directory collides with it. Uniqueness is string equality of the canonical path.
 - **Membership is ownership plus a live cwd fact.** The record's ordered `sessionIds` is the ownership truth; the startup header index validates it, and `sessionIds` filters on read while the next mutation prunes durably.
 - **Header-only reads.** Bootstrap and attach validation read `SessionHeader` fields only; event bodies are never loaded.
 - **Two-write mutations with an explicit marker.** Create and delete persist a `pendingMutation` marker before the record/order pair can diverge, so startup completes exactly the interrupted operation and unmarked divergence fails loud as corruption.
@@ -116,7 +116,7 @@ Archive admission is a capability seam over two Host events this package declare
 
 ### Durable shape
 
-The registry opens the `workspace` domain (version 2): a `workspaces` table keyed by `WorkspaceId` plus one global state holding `workspaceIds` (the authoritative display order), `archivedSessionIds`, `pinnedSessionIds`, the optional `defaultWorkspaceId` first-use identity, and the optional `pendingMutation` marker. Archive and pin sets contain Session id strings, default to empty, and carry no per-entry objects or timestamps; the pin array keeps the most recently pinned id first. Records written before `archivedSessionIds` existed parse with an empty set through the schema default, and a record written before `hostId` existed reads as the built-in local host. A `hostId` carrying whitespace or a path separator is refused at the durable boundary. Archiving clears the pin in the same global-state write without changing Workspace membership. Archiving and unarchiving both rewrite only that global state, so a restore is one filtered write of the same field; unarchive runs no session-existence probe, because dropping an id from the set cannot introduce an unknown one, while archive verifies the session before adding it.
+The registry opens the `workspace` domain (version 2): a `workspaces` table keyed by `WorkspaceId` plus one global state holding `workspaceIds` (the authoritative display order), `archivedSessionIds`, `pinnedSessionIds`, the optional `defaultWorkspaceId` first-use identity, and the optional `pendingMutation` marker. Archive and pin sets contain Session id strings, default to empty, and carry no per-entry objects or timestamps; the pin array keeps the most recently pinned id first. Records written before `archivedSessionIds` existed parse with an empty set through the schema default, Archiving clears the pin in the same global-state write without changing Workspace membership. Archiving and unarchiving both rewrite only that global state, so a restore is one filtered write of the same field; unarchive runs no session-existence probe, because dropping an id from the set cannot introduce an unknown one, while archive verifies the session before adding it.
 
 ### Lifecycle
 
@@ -168,8 +168,7 @@ Independent of live requests: the package never touches a request prefix, so it 
 These limits define when the project list is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
 - **Removal never deletes data** — removing a project leaves its folder, files, and session histories in place; those sessions become ungrouped, and session deletion or folder removal are separate, absent capabilities.
-- **A session joins only with a recorded directory** — a session belongs to a project only when its record carries a directory that canonicalizes to the project's path under the project's host; sessions without one stay ungrouped, and a session from another directory cannot be moved in.
-- **A non-local host's path stays a string** — this package cannot reach a host's execution world, so a non-local path is canonicalized by string alone: trailing slashes are removed while `..`, `.`, interior repeated slashes, and symlinks stay unresolved. Two spellings the remote world would treat as one directory are two projects until host realms are addressable, and `status()` reports the Harness-host filesystem rather than the remote one. A non-local `hostId` is also not checked against registered hosts.
+- **A session joins only with a recorded directory** — a session belongs to a project only when its record carries a directory that canonicalizes to the project's path; sessions without one stay ungrouped, and a session from another directory cannot be moved in.
 - **External changes are seen late** — if another process deletes or damages a directory, the project reflects it only at the next refresh or restart.
 - **Archive and unarchive enforce different session checks** — a restore only drops an id from the archive set, so an entry whose session is gone still unarchives and leaves no unknown referent; a restore of an id that is not archived resolves without writing, while `archiveSession` rejects a session that is neither live nor persisted.
 - **The activity check and the archive write are not one atomic step** — a turn that starts between the providers' answer and the durable write is hidden while running, and every model step whose `agent/pre-step` precedes the write still runs with its tool calls; the API Session Controller's gate ends the first step proposed after the write as `blocked`, so the exposure is bounded by that write's latency, in practice one model step.

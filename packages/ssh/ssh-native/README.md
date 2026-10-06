@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the service in a composition with `await realm.plugin(SshNativeConnection, config)`, which is the packaged shape: [the host registry's native composition](../host-registry/README.md) does exactly that, then mounts the filesystem and subprocess providers beside it. The package default-exports the service class, registers it as `ctx.sshNative`, and declares no `static inject`, so no other service must be present for it to activate. Call `validateConfig()` to check a configuration without connecting.
+Mount the service in a composition with `await realm.plugin(SshNativeConnection, config)`, then mount the filesystem and subprocess providers beside it in the same realm. The package default-exports the service class, registers it as `ctx.sshNative`, and declares no `static inject`, so no other service must be present for it to activate. Call `validateConfig()` to check a configuration without connecting.
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -98,8 +98,6 @@ The generated [ctx.sshNative API](../../../docs/subsystems/ssh.md#ctxsshnative--
 ## Further Exploration
 
 - [SSH subsystem](../../../docs/subsystems/ssh.md) — connection ownership, execution coordinates, and the generated `ctx.sshNative` API.
-- [Host registry](../host-registry/README.md) — the per-host realm that mounts this service beside its execution providers.
-- [Host credentials](../host-credentials/README.md) — the OpenSSH configuration, identity, and known_hosts a connection authenticates with.
 - [fs-sftp](../fs-sftp/README.md) — the filesystem provider built on the SFTP operations here.
 - [subprocess-ssh-exec](../subprocess-ssh-exec/README.md) — the subprocess provider built on `exec`.
 
@@ -127,7 +125,7 @@ None. The service contributes no request-prefix content, so it cannot invalidate
 <a id="known-limitations-and-deferred-work"></a>
 
 - `knownHostsFile`, `compression`, and `proxy` are parsed but never reach the ssh2 connection config, so a caller that sets them gets no custom verification path, no compression, and no jump host; `strictHostKeyChecking` is the only host-key control that takes effect.
-- A dropped connection disposes the instance unless `reconnect.enabled` is `true`, so `ctx.sshNative` rejects permanently with `ssh-native: connection is disposed` for that realm; [the host registry](../host-registry/README.md) reopens the host rather than reviving the realm.
+- A dropped connection disposes the instance unless `reconnect.enabled` is `true`, so `ctx.sshNative` rejects permanently with `ssh-native: connection is disposed` for that realm; re-activation of the realm replaces the disposed instance rather than reviving it.
 - Reconnection retries the `close` event only; an `error` before readiness, a refused connection, or an authentication failure rejects `ready` and fails activation without a retry.
 - `healthStatus` returns only `'healthy'` or `'disconnected'`, so the declared `'degraded'` value is unreachable.
 - `metrics` reports only `connectionTime`; `requestsSent`, `requestsReceived`, `bytesSent`, `bytesReceived`, and `avgLatency` stay `0` because ssh2 exposes no counters.

@@ -60,7 +60,7 @@ export interface IWorkspaces {
    * @param input - Host create payload: the path and the host that interprets it.
    * @returns the created or idempotently resolved Workspace.
    */
-  create(input: { path: string; hostId?: string }): Promise<WorkspaceView>
+  create(input: { path: string }): Promise<WorkspaceView>
   /**
    * Initialize or reuse the default Workspace.
    * @param signal - caller lifetime.
@@ -139,7 +139,7 @@ export class WorkspaceController extends Service implements IWorkspaces {
     return this.model.refreshBranches()
   }
 
-  async create(input: { path: string; hostId?: string }): Promise<WorkspaceView> {
+  async create(input: { path: string }): Promise<WorkspaceView> {
     const result = await this.model.create(input)
     if (!result.ok) throw new WorkspaceCreateError(result.error)
     return result.value.workspace

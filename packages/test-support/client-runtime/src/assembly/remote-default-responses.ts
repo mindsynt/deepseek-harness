@@ -58,7 +58,5 @@ export const remoteDefaultResponses: RemoteTable = {
     'account/watch': openStream([{ status: 'signed-out', attempt: null, links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } }]),
     // api-workspace-controller client `apply`: the follow stream's opening baseline, then open.
     'workspace/follow': openStream([{ type: 'baseline', value: { items: [], archivedSessionIds: [], pinnedSessionIds: [] } }]),
-    // ui-remote-hosts client `apply`: the host-list follow stream's opening baseline, then open.
-    'hosts/follow': openStream([{ type: 'baseline', value: { items: [] } }]),
   },
 }

@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-用 `ctx.plugin(SftpFileSystem)` 把该服务类挂载进一个组合中，或让[主机注册表](../host-registry/README.zh.md)替你挂载：它的默认组合会为每个已打开的主机领域调用 `realm.plugin(SftpFileSystem)`，该提供方由此在 `sshNative` 与 `subprocess` 旁边以 `fs` 服务名注册。
+用 `ctx.plugin(SftpFileSystem)` 把该服务类挂载进一个组合中，或用 `ctx.isolate('fs', …)` 把它挂载到 `sshNative` 与 `subprocess` 所在的领域中：该提供方会在其被挂载的领域里以 `fs` 服务名注册。
 
 本包没有声明任何插件 `Config`，因此没有字段可设，挂载时也不携带任何配置。所有可调项都位于被注入的 `sshNative` 服务中——远端主机、端口、凭证、主机密钥策略与读取上限——因为本提供方不拥有自己的连接坐标。
 
@@ -79,7 +79,6 @@ kind: "package-reference"
 ## 进一步探索
 
 - [fs](../../fs/fs/README.zh.md) — 本提供方所扩展的 seam，以及它无法满足的守卫语义。
-- [主机注册表](../host-registry/README.zh.md) — 为每个已注册主机挂载一个领域，其中挂载本提供方。
 - [ssh-native](../ssh-native/README.zh.md) — 支撑每次调用的 SSH 连接与 SFTP 操作。
 - [subprocess-ssh-exec](../subprocess-ssh-exec/README.zh.md) — 同一领域中的姊妹远程子进程提供方。
 - [SSH 子系统](../../../docs/subsystems/ssh.zh.md) — 共享连接所有权与提供方组合。

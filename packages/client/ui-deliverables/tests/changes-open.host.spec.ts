@@ -61,12 +61,10 @@ async function fixture() {
     sessionId === 'owner' && seq === 9 && index === 0 ? comparison : undefined)
   ctx.provide('workspaceChanges', { summary, diff })
   const opener = vi.fn(async (_request: { path: string; action?: 'reveal' }, _signal: AbortSignal) => ({ opened: true as const }))
-  const remoteHost = vi.fn(async (_sessionId: SessionId) => undefined as string | undefined)
   const applications = vi.fn(async () => [{ id: 'player', name: 'Player', default: true, icon: null }])
   ctx.provide('sessionController', {
     workspacePathApplications: applications,
     openWorkspacePath: opener,
-    remoteHostOf: remoteHost,
     workspaceDesktop: () => ({ name: 'desktop', available: true, fileManager: 'finder' }),
   } as never)
   const connection = new HostConnectionService(ctx, [], {} as BrowserAuth)
@@ -79,7 +77,7 @@ async function fixture() {
   const read = (query = '?sessionId=owner&seq=9') => handler.fetch(new Request(`http://localhost${CHANGED_FILES_PATH}${query}`))
   const compare = (query = '?sessionId=owner&seq=9&index=0') => handler.fetch(new Request(`http://localhost${CHANGES_DIFF_PATH}${query}`))
   return {
-    handler, applications, remoteHost, root, cwd, ctx, data, readEvent, open, read, compare, comparison, diff, opener, outside, summary,
+    handler, applications, root, cwd, ctx, data, readEvent, open, read, compare, comparison, diff, opener, outside, summary,
   }
 }
 
@@ -183,19 +181,6 @@ describe('changed files native open route', () => {
     expect((await open()).status).toBe(204)
   })
 
-  it('refuses a remote-host Session with its host named instead of mapping the path', async () => {
-    const { open, opener, remoteHost } = await fixture()
-    remoteHost.mockResolvedValue('remote-1')
-    const response = await open()
-    expect(response.status).toBe(409)
-    expect(response.headers.get('cache-control')).toBe('no-store')
-    expect(await response.json()).toEqual({
-      hostId: 'remote-1',
-      message: '"src/lib/a.ts" lives in remote host "remote-1"\'s execution world, so this Harness host\'s desktop cannot open it; open it on "remote-1"',
-    })
-    expect(remoteHost).toHaveBeenCalledWith(SessionId('owner'))
-    expect(opener).not.toHaveBeenCalled()
-  })
 
   it('validates served summaries and logged announcements', () => {
     expect(isChangedFile({ path: 'a', display: 'a', added: 1, deleted: 2, binary: true })).toBe(true)

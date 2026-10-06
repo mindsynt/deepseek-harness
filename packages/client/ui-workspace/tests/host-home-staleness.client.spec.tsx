@@ -31,7 +31,6 @@ async function bench() {
   const runtime = await SlotTestRuntime.create()
   runtime.ctx.provide('layout', { selectPanel: vi.fn(), beginNavigation: () => new AbortController().signal })
   runtime.ctx.provide('shortcuts', { register: () => () => {}, catalog: createSnapshotStore([]) })
-  runtime.ctx.provide('remoteHostSelection', { source: createSnapshotStore({}) })
   runtime.ctx.provide('uiConversation', {})
   runtime.releaseWorkspaceSource()
   const directoryPicker = {}
@@ -42,7 +41,7 @@ async function bench() {
   runtime.slots.installLocale(locale)
   await runtime.workspaces.update((draft) => {
     draft.items = [{
-      workspaceId: 'w1' as WorkspaceId, hostId: 'local', title: 'Project', path: '/home/u/Documents/project',
+      workspaceId: 'w1' as WorkspaceId, title: 'Project', path: '/home/u/Documents/project',
       sessionIds: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     }] as never
   })

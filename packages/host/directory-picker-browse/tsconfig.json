@@ -24,9 +24,6 @@
       "path": "../../fs/fs"
     },
     {
-      "path": "../../ssh/host-registry"
-    },
-    {
       "path": "../../util/brand"
     }
   ]

@@ -25,8 +25,6 @@ This family runs files and processes on one POSIX SSH host while the Harness sta
 | `ssh-native` | Native OpenSSH connection: SFTP file operations, SSH-exec process channels and PTY sessions | `ctx.sshNative` |
 | `fs-sftp` | Remote filesystem provider over the SFTP subsystem | `ctx.fs` |
 | `subprocess-ssh-exec` | Remote subprocess provider over SSH exec channels | `ctx.subprocess` |
-| [`host-registry`](host-registry/README.md) | One isolated execution realm per registered SSH host | `ctx.remoteHosts` |
-| [`host-credentials`](host-credentials/README.md) | Stored SSH login material for registered remote hosts | `ctx.sshHostCredentials` |
 
 <a id="related-documentation"></a>
 ## Related documentation

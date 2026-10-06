@@ -16,7 +16,7 @@ Source: [`packages/workspace/workspace/src/types.ts`](../../packages/workspace/w
 type WorkspaceId = Branded<'WorkspaceId'>
 ```
 
-`WorkspaceId` is a [branded id](core.md#branded-ids). Path identity is separate and host-scoped: a record stores `hostId` (the built-in `LOCAL_HOST_ID` (`'local'`) when omitted) beside `path`, and uniqueness is string equality of `(hostId, canonical path)`. The local host's canon is `realpathNormalize` (`fs.realpath`; trailing slashes, `..`, and symlinks resolved), so a symlink to an owned directory collides and attach-time session cwd checks go through the same canon. Another host's canon is `remotePathNormalize` — the caller's absolutely rooted POSIX spelling with trailing slashes removed — because only that host's execution world can resolve `..`, symlinks, or existence; the same path on two hosts is two workspaces.
+`WorkspaceId` is a [branded id](core.md#branded-ids). Path identity is separate from it: the registry canonicalizes every requested path with `realpathNormalize` (`fs.realpath`; trailing slashes, `..`, and symlinks resolved), and uniqueness is string equality of the canonical path, so a symlink to an owned directory collides and attach-time session cwd checks go through the same canon.
 
 ## The workspace entity
 
@@ -24,32 +24,19 @@ Consumers see only the `Workspace` interface; the implementation stays package-p
 
 ```ts type-equiv
 /**
- * One workspace: a stable id over an existing directory on one host, a display
- * title, and an ordered candidate account of sessions. Membership requires
- * both an id in that account and a session header whose cwd canonicalizes to
- * the workspace path under {@link hostId}'s rules. Consumers only see this
- * interface; the implementation stays private.
+ * One workspace: a stable id over an existing directory, a display title, and
+ * an ordered candidate account of sessions. Membership requires both an id in
+ * that account and a session header whose cwd canonicalizes to the workspace
+ * path. Consumers only see this interface; the implementation stays private.
  */
 interface Workspace {
   /** Stable record id (generated uuid). */
   readonly id: WorkspaceId
 
   /**
-   * Identity of the host whose execution world interprets {@link path}:
-   * `'local'` (the exported `LOCAL_HOST_ID`) for the Harness host machine,
-   * otherwise the id of a host another composition registered. A record that
-   * stores no host identity reads as `'local'`. The registry does not verify
-   * that a non-local id names a registered host.
-   */
-  readonly hostId: string
-
-  /**
-   * Canonical directory path on {@link hostId}. On the local host this is the
-   * `fs.realpath` of the path given at create time (trailing slashes, `..`,
-   * and symlinks all resolved); on a non-local host it is the caller's
-   * absolutely rooted POSIX spelling with trailing slashes removed, because
-   * only that host's execution world can resolve it further. Never rewritten
-   * afterwards, even when the directory disappears (see {@link status}).
+   * Canonical directory path: the `fs.realpath` of the path given at create
+   * time, with trailing slashes, `..`, and symlinks all resolved. Never
+   * rewritten afterwards, even when the directory disappears (see {@link status}).
    */
   readonly path: string
 
@@ -67,7 +54,7 @@ interface Workspace {
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
    * account is filtered synchronously: missing headers, invalid cwd values,
-   * and cwd mismatches under {@link hostId}'s canon are never returned. A
+   * and cwd mismatches under the registry's canon are never returned. A
    * subsequent workspace mutation prunes those filtered candidates durably.
    */
   readonly sessionIds: readonly SessionId[]
@@ -83,12 +70,9 @@ interface Workspace {
    * Prepend a session to this workspace's candidate account. An already
    * accounted id resolves without writing, aside from the durable
    * filtered-candidate prune every accepted mutation performs. A new id's
-   * live or persisted header cwd must canonicalize to {@link path} in
-   * {@link hostId}'s terms: on the local host through `fs.realpath` plus an
-   * existing-directory check, on a non-local host through the same string
-   * canon the host's execution world applies, with no Harness-host filesystem
-   * access. Unknown ids, missing or invalid cwd values, and mismatches reject
-   * without writing.
+   * live or persisted header cwd must canonicalize to {@link path} through
+   * `fs.realpath` plus an existing-directory check. Unknown ids, missing or
+   * invalid cwd values, and mismatches reject without writing.
    * @param sessionId - The session to record.
    * @returns resolution after durability.
    */
@@ -120,9 +104,7 @@ interface Workspace {
 
   /**
    * Live directory check, uncached: whether {@link path} currently exists and
-   * is a directory. The check reads the Harness host's filesystem even for a
-   * non-local {@link hostId}, whose execution world is not addressable from
-   * this package. A missing directory never mutates the record — the
+   * is a directory. A missing directory never mutates the record — the
    * directory may only be temporarily moved.
    * @returns `'ok'` when the directory exists, `'missing-dir'` otherwise.
    */
@@ -134,7 +116,7 @@ Ownership truth is the record's ordered `sessionIds`, never derived from session
 
 ## The registry: `ctx.workspaceRegistry`
 
-`WorkspaceRegistry` ([signatures](#ctxworkspaceregistry--workspaceregistry)) owns registration and resolution. `create(path, title?, hostId?)` names the host that owns the directory — omitted or empty `hostId` is the built-in local host — requires a fully qualified path, canonicalizes it, and on the local host rejects a nonexistent path (the original `ENOENT`) or a non-directory; a non-local host canonicalizes the path string alone and reads no Harness-host filesystem. It returns the existing entity unchanged when the `(hostId, canonical path)` pair is already owned, and otherwise creates a record with `title ?? defaultWorkspaceTitle(path)` prepended to the durable registry order (different canonical paths may share a display title, and a path with no final segment uses its root spelling). `get(id)` and the ordered `list()` are synchronous cache reads; `resolveByPath(path, hostId?)` applies the same host-scoped canon without creating. `delete(id)` removes only the registration, order entry, and session account — the directory, user files, live sessions, and persisted logs are never touched, so those sessions become Ungrouped ([decision](../../.agents/notes/archived/feature/2026-07-27-workspace-registration-deletion.md)); unknown ids return `false`. Create and delete persist a pending-mutation marker before their two writes (record + order) can diverge; startup resolves exactly the marked mutation — by deleting the marked table row, which completes an interrupted delete and rolls back an interrupted create (the registration is re-creatable, so rollback is the safe direction) — and an unmarked order/table mismatch fails loud as corruption.
+`WorkspaceRegistry` ([signatures](#ctxworkspaceregistry--workspaceregistry)) owns registration and resolution. `create(path, title?)` requires a fully qualified path, canonicalizes it, and rejects a nonexistent path (the original `ENOENT`) or a non-directory. It returns the existing entity unchanged when the canonical path is already owned, and otherwise creates a record with `title ?? defaultWorkspaceTitle(path)` prepended to the durable registry order (different canonical paths may share a display title, and a path with no final segment uses its root spelling). `get(id)` and the ordered `list()` are synchronous cache reads; `resolveByPath(path)` applies the same canon without creating. `delete(id)` removes only the registration, order entry, and session account — the directory, user files, live sessions, and persisted logs are never touched, so those sessions become Ungrouped ([decision](../../.agents/notes/archived/feature/2026-07-27-workspace-registration-deletion.md)); unknown ids return `false`. Create and delete persist a pending-mutation marker before their two writes (record + order) can diverge; startup resolves exactly the marked mutation — by deleting the marked table row, which completes an interrupted delete and rolls back an interrupted create (the registration is re-creatable, so rollback is the safe direction) — and an unmarked order/table mismatch fails loud as corruption.
 
 Sessions get their cwd at create time from whoever creates them, not from this registry — the API gateway resolves a new session's cwd from the chosen workspace's `path` (falling back to an explicit or default cwd), creates the session so the cwd lands in its immutable [`SessionHeader`](persistence.md#sessionheader--metadata-beside-the-log), then calls `attachSession`, which re-validates that stored header cwd against the workspace path under the owner's host canon. On the first successful start, the registry bootstraps history from persisted headers alone (`id`, `cwd`, `createdAt` — never event bodies), grouping sessions with a valid local canonical cwd into per-directory local-host workspaces, newest first; the initialized marker is written last so an interrupted bootstrap resumes safely. The bootstrap is one-time: cwd-less legacy sessions stay Ungrouped, remote-host records are never merged with a local group on the same path, and sessions created afterwards join a workspace only through `attachSession`.
 
@@ -223,26 +205,20 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 
 /**
  * List one directory level for a Remote caller's in-app browser.
- * @param path - absolute directory to list; absent lists the addressed world's anchor.
- * @param hostId - host whose filesystem is listed; absent or the built-in
- *   local identity addresses the Harness host, any other identity the open
- *   execution world of that remote host.
+ * @param path - absolute directory to list; absent lists the home directory.
  * @param signal - caller lifetime; abort stops the backend's scan instead of
  *   letting it outlive a disconnected caller.
  * @returns the level's listing with its ancestry.
  */
-@Remote('list') async list(path: string | undefined, hostId: string | undefined, signal: AbortSignal): Promise<DirectoryListing>
+@Remote('list') async list(path: string | undefined, signal: AbortSignal): Promise<DirectoryListing>
 
 /**
  * Create one child directory for a Remote caller's in-app browser.
  * @param path - absolute existing parent directory.
  * @param name - single non-blank path segment.
- * @param hostId - host whose filesystem the child is created on; absent or
- *   the built-in local identity addresses the Harness host, any other
- *   identity the open execution world of that remote host.
  * @returns the created directory's absolute path.
  */
-@Remote('createDirectory') async createDirectory(path: string, name: string, hostId: string | undefined): Promise<string>
+@Remote('createDirectory') async createDirectory(path: string, name: string): Promise<string>
 ```
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
@@ -419,9 +395,6 @@ Host service backing the generated `ctx.remote.workspace` namespace.
  *
  * A branch is external checkout state that no Workspace mutation announces,
  * so it stays out of the durable projection and is read on demand instead.
- * A Workspace whose world this Host cannot reach contributes no label: the
- * branch is decorative, and reading the Harness host's own filesystem instead
- * would name a branch the Workspace does not have.
  * @returns one entry per registered Workspace, each omitting `branch` when its path is not a checkout.
  */
 @Remote('branches') async branches(): Promise<WorkspaceBranchesValue>
@@ -513,29 +486,21 @@ Source: [`packages/api/workspace-files/src/index.ts`](../../packages/api/workspa
 
 ### `ctx.workspaceRegistry` — `WorkspaceRegistry`
 
-Durable workspace registry. Startup waits for `sessionPersistence`, builds one header index carrying each session's local and non-local path canons, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.
+Durable workspace registry. Startup waits for `sessionPersistence`, builds one header index carrying each session's canonical path, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.
 
 ```ts cordis-catalog
 /**
- * Create or reuse a workspace for a directory on one host. On the built-in
- * local host the fully qualified path is canonicalized through `fs.realpath`
- * and must name an existing directory, so a relative, nonexistent, or
- * non-directory path rejects. On any other host the path is canonicalized by
- * string alone (absolutely rooted POSIX spelling, trailing slashes removed)
- * and no Harness-host filesystem access happens, because that host's
- * execution world owns the directory. Repeated calls for the same
- * `(hostId, canonical path)` pair return the existing entity without
- * changing its title; the same canonical path on two hosts is two
- * workspaces. A newly created workspace is prepended to the durable registry
- * order. Different canonical paths may share a display title. The registry
- * does not verify that a non-local `hostId` names a registered host.
- * @param path - Directory to own, in a fully qualified path spelling.
+ * Create or reuse a workspace for an existing directory. The fully qualified
+ * path is canonicalized through `fs.realpath`; a relative, nonexistent, or
+ * non-directory path rejects. Repeated calls for the same canonical path
+ * return the existing entity without changing its title.
+ * A newly created workspace is prepended to the durable registry order.
+ * Different canonical paths may share a display title.
+ * @param path - Existing directory to own, in a fully qualified path spelling.
  * @param title - Display title used only when a new record is created.
- * @param hostId - Identity of the host that interprets `path`; omitted or
- * empty names the built-in local host.
  * @returns the existing or newly durable workspace.
  */
-async create(path: string, title?: string, hostId?: string): Promise<Workspace>
+async create(path: string, title?: string): Promise<Workspace>
 
 /**
  * Initialize the default Workspace only while both the registry and Session
@@ -636,18 +601,12 @@ pinSession(sessionId: SessionId): Promise<void>
 unpinSession(sessionId: SessionId): Promise<void>
 
 /**
- * Resolve by canonical directory path on one host without creating or
- * mutating a workspace. On the built-in local host a missing path rejects
- * during `realpath`; a non-local host canonicalizes the path string alone,
- * so no Harness-host filesystem access happens. An existing unowned
- * directory — or, on a non-local host, any unowned canonical spelling —
- * returns `undefined`.
+ * Resolve by canonical directory path without creating or mutating a
+ * workspace. A missing path rejects during `realpath`.
  * @param path - Directory path in a fully qualified spelling.
- * @param hostId - Identity of the host that interprets `path`; omitted or
- * empty means the built-in local host.
- * @returns the workspace owning the canonical path on that host, when one exists.
+ * @returns the workspace owning the canonical path, when one exists.
  */
-async resolveByPath(path: string, hostId?: string): Promise<Workspace | undefined>
+async resolveByPath(path: string): Promise<Workspace | undefined>
 ```
 
 Types: [SessionId](core.md)

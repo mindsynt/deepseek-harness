@@ -18,7 +18,6 @@ export type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-host-dir
 export interface WorkspaceView {
   readonly workspaceId: WorkspaceId
   /** Identity of the host whose filesystem interprets {@link path}; the built-in local host when the record names none. */
-  readonly hostId: string
   /** Canonical host directory path. */
   readonly path: string
   /** User-visible title. */
@@ -67,7 +66,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 export interface WorkspaceCreateRequest {
   readonly path: string
   /** Identity of the host that interprets {@link path}; omitted or empty names the built-in local host. */
-  readonly hostId?: string
 }
 
 /** Created or previously registered Workspace. */

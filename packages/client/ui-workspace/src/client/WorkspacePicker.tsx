@@ -19,7 +19,6 @@ import type {
 import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/slots.ts'
-import type { SelectedHostWorldProbe } from './selected-host-world.ts'
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
@@ -36,12 +35,8 @@ export interface WorkspacePickFlowProps {
   useWorkspaces: <S>(selector: (state: WorkspaceSnapshot) => S) => S
   /** Adopt a picked host directory as a real Workspace. */
   createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
-  /** Sample the selected remote host's execution world before this flow opens or adopts. */
-  checkSelectedHostWorld: SelectedHostWorldProbe
   /** Bound occupancy selector hook for this surface's directory-flow hole (empty leaves the surface with no add action). */
   useDirectoryFlow: SnapshotSelectorHook<boolean>
-  /** Display label of the selected remote host; absent means the Harness host. */
-  remoteHostLabel?: string | undefined
   /** Render this surface's directory-flow hole with the owner conversation (the entry's narrowed renderSlot). */
   renderDirectoryFlow: (owner: DirectoryFlowOwnerProps) => ReactNode
   /** A real Workspace was picked or created. */
@@ -69,9 +64,7 @@ export function WorkspacePickFlow({
   anchorRef,
   useWorkspaces,
   createWorkspace,
-  checkSelectedHostWorld,
   useDirectoryFlow,
-  remoteHostLabel,
   renderDirectoryFlow,
   onPick,
   onClose,
@@ -113,9 +106,7 @@ export function WorkspacePickFlow({
   const addEntries: MenuEntry[] = flowAvailable
     ? [{
       id: ADD_WORKSPACE,
-      label: remoteHostLabel === undefined
-        ? t('menu.addWorkspace')
-        : t('menu.addWorkspaceOn', { host: remoteHostLabel }),
+      label: t('menu.addWorkspace'),
       icon: <IconPlusOutlineRegular size={16} />,
       disabled: flowBusy,
     }]
@@ -141,34 +132,17 @@ export function WorkspacePickFlow({
     setModalError(null)
   }
 
-  /** Named by the folder-error dialog when the addressed world is gone. */
-  const reportDisconnectedWorld = useCallback((): void => {
-    setModalError(t('hostWorld.disconnected'))
-    setErrorOpen(true)
-  }, [t])
-
   /** Adopt a picked directory; failures land in the folder-error dialog (Choose again reopens the flow). */
   const adoptDirectory = (path: string): Promise<void> => {
-    const adopt = (): Promise<void> =>
-      createWorkspace({ path }).then((workspace) => {
-        setFlowOpen(false)
-        onPick(workspace.workspaceId)
-      }).catch((reason: unknown) => {
-        // The create rejection carries the Host's own diagnostic (a refused
-        // path, an unknown host), so it lands verbatim in the error dialog.
-        setModalError(reason instanceof Error ? reason.message : String(reason))
-        setFlowOpen(false)
-        setErrorOpen(true)
-      })
-    // This machine always holds its own world. A selected host's world can
-    // stop between the flow opening and this adoption (the native chooser
-    // never listed it), and the Host records a remote-id Workspace without
-    // checking that world, so the create is sampled here as well.
-    if (remoteHostLabel === undefined) return adopt()
-    return checkSelectedHostWorld().then((state) => {
-      if (state !== 'disconnected') return adopt()
+    return createWorkspace({ path }).then((workspace) => {
       setFlowOpen(false)
-      reportDisconnectedWorld()
+      onPick(workspace.workspaceId)
+    }).catch((reason: unknown) => {
+      // The create rejection carries the Host's own diagnostic (a refused path),
+      // so it lands verbatim in the error dialog.
+      setModalError(reason instanceof Error ? reason.message : String(reason))
+      setFlowOpen(false)
+      setErrorOpen(true)
     })
   }
 
@@ -176,21 +150,8 @@ export function WorkspacePickFlow({
     onClose()
     setErrorOpen(false)
     setModalError(null)
-    // This machine's filesystem is not a remote execution world, so only a
-    // selected host can have stopped holding one; that entry asks the Host
-    // before it opens a flow whose every listing would fail.
-    if (remoteHostLabel === undefined) {
-      setFlowOpen(true)
-      return
-    }
-    void checkSelectedHostWorld().then((state) => {
-      if (state === 'disconnected') {
-        reportDisconnectedWorld()
-        return
-      }
-      setFlowOpen(true)
-    })
-  }, [checkSelectedHostWorld, onClose, remoteHostLabel, reportDisconnectedWorld])
+    setFlowOpen(true)
+  }, [onClose])
 
   // A menu exists to disambiguate between targets. With no workspaces listed
   // and the add action the only entry left, the anchor gesture IS that action:
@@ -212,7 +173,6 @@ export function WorkspacePickFlow({
   const flowOwner: DirectoryFlowOwnerProps = {
     open: flowOpen,
     busy: pickingFolder,
-    hostLabel: remoteHostLabel ?? t('host.local'),
     onPicked: (path) => {
       setPickingFolder(true)
       void adoptDirectory(path).finally(() => { setPickingFolder(false) })
@@ -283,9 +243,7 @@ export function WorkspacePicker({
   onPick,
   onClose,
   createWorkspace,
-  checkSelectedHostWorld,
   useDirectoryFlow,
-  useSelectedHost,
   renderSlot,
   t,
 }: WorkspacePickerProps) {
@@ -296,9 +254,7 @@ export function WorkspacePicker({
       anchorRef={anchorRef}
       useWorkspaces={useWorkspaces}
       createWorkspace={createWorkspace}
-      checkSelectedHostWorld={checkSelectedHostWorld}
       useDirectoryFlow={useDirectoryFlow}
-      remoteHostLabel={useSelectedHost(value => value.hostLabel)}
       renderDirectoryFlow={owner => renderSlot('conversation.hero.workspace.directoryFlow', owner)}
       selectedId={selectedId}
       onPick={onPick}

@@ -163,7 +163,6 @@
     "@deepseek-ai/dsh-workspace": "workspace:*",
     "@types/mime-types": "^3.0.1",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
-    "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
-    "@deepseek-ai/dsh-ssh-host-registry": "workspace:*"
+    "@deepseek-ai/dsh-sandbox-policy": "workspace:*"
   }
 }

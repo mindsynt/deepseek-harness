@@ -46,13 +46,11 @@ async function fixture() {
   })
   ctx.provide('sessionQuery', { readEvent } as never)
   const opener = vi.fn(async (_request: { path: string; action?: 'reveal' }, _signal: AbortSignal) => ({ opened: true as const }))
-  const remoteHost = vi.fn(async (_sessionId: SessionId) => undefined as string | undefined)
   const applications = vi.fn(async () => [{ id: 'player', name: 'Player', default: true, icon: null }])
   ctx.provide('sessionController', {
     workspacePathApplications: applications,
     resolveAgent,
     openWorkspacePath: opener,
-    remoteHostOf: remoteHost,
     workspaceDesktop: () => ({ name: 'desktop', available: true, fileManager: 'finder' }),
   } as never)
   const connection = new HostConnectionService(ctx, [], {} as BrowserAuth)
@@ -62,7 +60,7 @@ async function fixture() {
   const open = (query = '?sessionId=owner&seq=7&index=0', signal?: AbortSignal) => handler.fetch(new Request(
     `http://localhost${PRESENT_OPEN_PATH}${query}`, { method: 'POST', signal: signal ?? null },
   ))
-  return { applications, remoteHost, root, cwd, ctx, fiber, file, session, readEvent, open, opener, handler, resolveAgent }
+  return { applications, root, cwd, ctx, fiber, file, session, readEvent, open, opener, handler, resolveAgent }
 }
 
 describe('Presented workspace file native open route', () => {
@@ -218,21 +216,6 @@ it('refuses native actions when the configured Host desktop is unavailable', asy
 })
 
 
-it('refuses a remote-host Session with its host named and never touches the Host desktop', async () => {
-  const { open, opener, remoteHost } = await fixture()
-  remoteHost.mockResolvedValue('remote-1')
-  for (const action of ['open', 'reveal']) {
-    const response = await open(`?sessionId=owner&seq=7&index=0&action=${action}`)
-    expect(response.status).toBe(409)
-    expect(response.headers.get('cache-control')).toBe('no-store')
-    expect(await response.json()).toEqual({
-      hostId: 'remote-1',
-      message: '"日记模板.docx" lives in remote host "remote-1"\'s execution world, so this Harness host\'s desktop cannot open it; open it on "remote-1"',
-    })
-  }
-  expect(remoteHost).toHaveBeenCalledWith(SessionId('owner'))
-  expect(opener).not.toHaveBeenCalled()
-})
 
 it('refuses native opening without a matching Host mapping even when a same-name Host file exists', async () => {
   const { ctx, open, opener } = await fixture()

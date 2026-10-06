@@ -855,19 +855,6 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspectio
 workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 'explorer' | 'directory' | null }
 
 /**
- * Resolve the remote execution world that owns one Session's paths, for the
- * in-process Host routes that hand paths to the serving desktop. The answer
- * comes from {@link ApiSessionAgentController.resolvedHostOf} — the sidecar,
- * then the Workspace accounting, then the local fallback — so this method
- * adds no second host vocabulary, and a Session on this Harness host is
- * reported as `undefined` rather than as another host the caller must know.
- * @param sessionId - Session whose execution world is resolved.
- * @returns the remote host identity interpreting the Session cwd, or
- *   `undefined` when that world is the Harness host's own.
- */
-async remoteHostOf(sessionId: SessionId): Promise<string | undefined>
-
-/**
  * Verify one path through the composed filesystem and open it on the Host desktop.
  * @param request - path after best-effort Session workspace resolution.
  * @param signal - caller lifetime; abort terminates the native command.

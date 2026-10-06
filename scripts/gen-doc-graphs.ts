@@ -316,13 +316,6 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns Workspace commands and reconnect-safe Workspace state delivery through the generated Remote namespace.',
   },
   {
-    key: 'hostsController',
-    pkg: 'hosts-controller',
-    title: 'Host SSH host-management Remote controller',
-    mode: 'core',
-    note: 'Exposes the remote-host registry and the credential store it composes through the generated Remote namespace: list, add and remove hosts, check a stored login, and follow durable host-record changes.',
-  },
-  {
     key: 'directoryPickerController',
     pkg: 'api-workspace-controller',
     title: 'Host directory-picking Remote controller',
@@ -621,22 +614,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'ssh-native',
     title: 'Native OpenSSH connection owner',
     mode: 'core',
-    consumers: ['fs-sftp', 'subprocess-ssh-exec', 'ssh-host-registry'],
-    note: 'Owns one authenticated OpenSSH connection and its SFTP file operations and SSH-exec program channels; the realm disposes the connection when the host closes.',
-  },
-  {
-    key: 'remoteHosts',
-    pkg: 'ssh-host-registry',
-    title: 'Per-host execution realm registry',
-    mode: 'core',
-    note: 'Owns one isolated Cordis service scope per registered SSH host, so the filesystem and subprocess services resolve per host instead of per process.',
-  },
-  {
-    key: 'sshHostCredentials',
-    pkg: 'host-credentials',
-    title: 'Stored SSH login material and controlled identities',
-    mode: 'core',
-    note: 'Stores one host login in the credential seam and materializes a DSH-controlled OpenSSH configuration, identity and known_hosts, so a connection addresses a generated alias instead of the deployment OpenSSH configuration.',
+    consumers: ['fs-sftp', 'subprocess-ssh-exec'],
+    note: 'Owns one authenticated OpenSSH connection and its SFTP file operations and SSH-exec program channels.',
   },
   {
     key: 'subprocess',

@@ -20,7 +20,6 @@
     "src/media-references.ts",
     "src/model-selection-projection.ts",
     "src/archived-session-gate.ts",
-    "src/session-hosts.ts",
     "src/skill-catalog.ts"
   ],
   "references": [
@@ -49,7 +48,6 @@
     { "path": "../../session/session-title" },
     { "path": "../../session-query/session-query" },
     { "path": "../../skill/skill" },
-    { "path": "../../ssh/host-registry" },
     { "path": "../../storage/storage-domain" },
     { "path": "../../subagent/subagent" },
     { "path": "../../util/time" },

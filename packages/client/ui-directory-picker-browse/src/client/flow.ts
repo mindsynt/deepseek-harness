@@ -34,7 +34,6 @@ export function BrowseDirectoryFlow(props: DirectoryFlowOwnerProps & BrowseFlowI
   return createElement(DirectoryBrowser, {
     open: props.open,
     busy: props.busy,
-    hostLabel: props.hostLabel,
     listDirectory: props.listDirectory,
     createDirectory: props.createDirectory,
     t: props.t,

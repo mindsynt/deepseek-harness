@@ -20,7 +20,6 @@ import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
 import { ApiSessionAgentController } from '../src/agent.ts'
-import { SessionHostStore } from '../src/session-hosts.ts'
 import { buildModelCatalog, hasProviderApiKey } from '../src/catalog.ts'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -613,7 +612,7 @@ describe('Web session model selection', () => {
       cwd: '/tmp',
     })
 
-    expect(new ApiSessionAgentController(ctx, new SessionHostStore(ctx)).selectionFor(agent).current)
+    expect(new ApiSessionAgentController(ctx).selectionFor(agent).current)
       .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
     await ctx.fiber.dispose()
   })

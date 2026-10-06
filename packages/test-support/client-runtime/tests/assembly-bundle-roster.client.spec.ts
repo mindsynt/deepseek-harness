@@ -15,7 +15,7 @@ function profileScope(name: string) {
 describe('webApp (the real web profile)', () => {
   it('composes dsh-base then dsh-web-app: unique names, inject edges on roster rows or platform seed words', () => {
     expect(WEB_PROFILE_BUNDLES).toEqual([
-      '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-ssh-hosts', '@deepseek-ai/dsh-web-app',
+      '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app',
     ])
     const names = webApp.rows.map(row => row.name)
     expect(new Set(names).size).toBe(names.length)

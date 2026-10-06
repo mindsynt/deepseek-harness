@@ -5,7 +5,6 @@ import { Button, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } fr
 import type { GlobalStandardProps, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PresentedOpenController } from './present-open.ts'
-import { presentedOpenPhase, presentedOpenRemoteHost } from './present-open.ts'
 import type { ChangesDiffStore } from './changes-diff.ts'
 import type { ChangesSummaryStore } from './changes-summary.ts'
 import { ChangedFiles } from './ChangedFiles.tsx'
@@ -108,9 +107,9 @@ export function Deliverables({
       <div className={css.presented} data-presented-files-row data-single={matched.presented.length === 1 ? true : undefined}>
         {presented.map((file) => {
           const opened = states[presentedFileUrl(sessionId, file.seq, file.index)]
-          const phase = presentedOpenPhase(opened)
+          const phase = opened
           return <PresentedFileCard key={`${file.seq}:${file.index}`} file={file} cwd={cwd}
-            phase={phase} remoteHost={presentedOpenRemoteHost(opened)}
+            phase={phase}
             host={host === 'error' ? null : host} t={t}
             onPreview={() => { openFile(file.path) }}
             actions={renderSlot('deliverables.file.actions', {

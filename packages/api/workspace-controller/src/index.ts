@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { WorkspaceBranchWatch } from './branch-watch.ts'
-import { fileSystemFor, readWorkspaceBranch } from './branches.ts'
+import { readWorkspaceBranch } from './branches.ts'
 import { WorkspaceCommands } from './commands.ts'
 import { DirectoryPickerController } from './directory-picker.ts'
 import { WorkspaceFeed, workspaceView } from './feed.ts'
@@ -79,13 +79,12 @@ export class WorkspaceController extends TypertRemoteService {
     this.feed = new WorkspaceFeed(ctx)
     // A checkout replaces HEAD outside every DSH operation, so the branch is
     // observed on disk and pushed; the unary verb below seeds a cold client.
-    this.branchWatch = new WorkspaceBranchWatch(ctx, this.config.branchWatchDebounceMs, (change) => {
+    this.branchWatch = new WorkspaceBranchWatch(this.config.branchWatchDebounceMs, (change) => {
       ctx.emit('workspace/branch-changed', change)
     })
     const observe = (): void => {
       void this.branchWatch.sync(ctx.workspaceRegistry.list().map(workspace => ({
         workspaceId: workspace.id,
-        hostId: workspace.hostId,
         path: workspace.path,
       })))
     }
@@ -194,16 +193,12 @@ export class WorkspaceController extends TypertRemoteService {
    *
    * A branch is external checkout state that no Workspace mutation announces,
    * so it stays out of the durable projection and is read on demand instead.
-   * A Workspace whose world this Host cannot reach contributes no label: the
-   * branch is decorative, and reading the Harness host's own filesystem instead
-   * would name a branch the Workspace does not have.
    * @returns one entry per registered Workspace, each omitting `branch` when its path is not a checkout.
    */
   @Remote('branches')
   async branches(): Promise<WorkspaceBranchesValue> {
     const items = await Promise.all(this.ctx.workspaceRegistry.list().map(async (workspace) => {
-      const fs = fileSystemFor(this.ctx, workspace.hostId)
-      const branch = fs === undefined ? undefined : await readWorkspaceBranch(fs, workspace.path)
+      const branch = await readWorkspaceBranch(workspace.path)
       return branch === undefined
         ? { workspaceId: workspace.id }
         : { workspaceId: workspace.id, branch }

@@ -3,20 +3,18 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import WorkspaceRegistry, { LOCAL_HOST_ID } from '@deepseek-ai/dsh-workspace'
+import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import WorkspaceController from '../src/index.ts'
 import { DEFAULT_WORKSPACE_DIRECTORY } from '../src/default-workspace.ts'
 import { WorkspaceFeed } from '../src/feed.ts'
 import type { WorkspaceFollowFrame } from '../src/types.ts'
 import { MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
-import { scriptedWorld } from './scripted-world.ts'
 
 // The controller relays whatever families the providers report; this suite merges its own.
 declare module '@deepseek-ai/dsh-workspace/types' {
@@ -80,16 +78,6 @@ async function harness(options: { readonly fileSystem?: boolean; systemDocuments
   return { controller, ctx, root, storageDomain }
 }
 
-/** A `ctx.remoteHosts` double exposing the worlds that are open, keyed by host id. */
-function remoteHosts(open: Readonly<Record<string, FileSystem>>): unknown {
-  return {
-    get: (id: string) => {
-      const fs = open[id]
-      return fs === undefined ? undefined : { world: { fs } }
-    },
-  }
-}
-
 function stageDir(root: string, name: string): string {
   const path = join(root, name)
   mkdirSync(path, { recursive: true })
@@ -126,19 +114,6 @@ describe('WorkspaceController commands', () => {
     })
   })
 
-  it('provisions the requested host on create and defaults a local record to the built-in host', async () => {
-    const { controller, root } = await harness()
-    const local = await controller.create({ path: stageDir(root, 'local') })
-    expect(local.workspace).toMatchObject({ hostId: LOCAL_HOST_ID })
-    const remote = await controller.create({ path: '/srv/app', hostId: 'alpha' })
-    expect(remote).toMatchObject({ created: true, workspace: { hostId: 'alpha', path: '/srv/app' } })
-    // A repeat of the same (host, path) pair resolves the durable row unchanged.
-    await expect(controller.create({ path: '/srv/app', hostId: 'alpha' })).resolves.toMatchObject({
-      created: false,
-      workspace: { workspaceId: remote.workspace.workspaceId, hostId: 'alpha' },
-    })
-  })
-
   it('reads the checked-out branch of each registered Workspace', async () => {
     const { controller, root } = await harness()
     const checkedOut = stageDir(root, 'checked-out')
@@ -152,51 +127,6 @@ describe('WorkspaceController commands', () => {
     expect(value.items).toHaveLength(2)
     expect(value.items).toContainEqual({ workspaceId: branchy.workspace.workspaceId, branch: 'dev' })
     expect(value.items).toContainEqual({ workspaceId: bare.workspace.workspaceId })
-  })
-
-  it('reads each branch in the execution world its Workspace host addresses', async () => {
-    const { controller, ctx, root } = await harness()
-    const checkedOut = stageDir(root, 'checked-out')
-    mkdirSync(join(checkedOut, '.git'), { recursive: true })
-    writeFileSync(join(checkedOut, '.git', 'HEAD'), 'ref: refs/heads/local-main\n')
-    ctx.provide('remoteHosts', remoteHosts({
-      alpha: scriptedWorld({ files: { '/srv/app/.git/HEAD': 'ref: refs/heads/remote-main\n' } }),
-    }) as never)
-
-    const local = await controller.create({ path: checkedOut })
-    const remote = await controller.create({ path: '/srv/app', hostId: 'alpha' })
-    const value = await controller.branches()
-    expect(value.items).toHaveLength(2)
-    expect(value.items).toContainEqual({ workspaceId: local.workspace.workspaceId, branch: 'local-main' })
-    expect(value.items).toContainEqual({ workspaceId: remote.workspace.workspaceId, branch: 'remote-main' })
-  })
-
-  it('reports no branch instead of reading the Harness host filesystem for a host that is not open', async () => {
-    const { controller, ctx, root } = await harness()
-    const plain = stageDir(root, 'plain')
-    const remote = await controller.create({ path: '/srv/app', hostId: 'alpha' })
-    const local = await controller.create({ path: plain })
-    ctx.provide('remoteHosts', remoteHosts({}) as never)
-    const rootFs = vi.spyOn(ctx.fs, 'resolve')
-
-    const value = await controller.branches()
-    expect(value.items).toHaveLength(2)
-    expect(value.items).toContainEqual({ workspaceId: local.workspace.workspaceId })
-    expect(value.items).toContainEqual({ workspaceId: remote.workspace.workspaceId })
-    // The remote path never reached the Harness host's own backend, while the
-    // local Workspace was still read through it.
-    expect(rootFs.mock.calls.length).toBeGreaterThan(0)
-    expect(rootFs.mock.calls.every(([, opts]) => opts?.cwd !== '/srv/app')).toBe(true)
-    rootFs.mockRestore()
-  })
-
-  it('reports no branch for a remote Workspace when no host registry is composed', async () => {
-    const { controller, ctx } = await harness()
-    expect(ctx.get('remoteHosts')).toBeUndefined()
-    const remote = await controller.create({ path: '/srv/app', hostId: 'alpha' })
-    await expect(controller.branches()).resolves.toEqual({
-      items: [{ workspaceId: remote.workspace.workspaceId }],
-    })
   })
 
   it('reports no branch when no filesystem is composed on this Host', async () => {
@@ -511,32 +441,6 @@ describe('WorkspaceController follow', () => {
       type: 'remove', workspaceId: second.workspace.workspaceId,
     })
 
-    abort.abort()
-    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined })
-  })
-
-  it('carries each row host identity through the baseline and committed increments', async () => {
-    const { controller, root } = await harness()
-    const local = await controller.create({ path: stageDir(root, 'first') })
-    const remote = await controller.create({ path: '/srv/remote', hostId: 'alpha' })
-    const abort = new AbortController()
-    const iterator = controller.follow(abort.signal)[Symbol.asyncIterator]()
-    await expect(nextFrame(iterator)).resolves.toMatchObject({
-      type: 'baseline',
-      value: {
-        items: [
-          { workspaceId: remote.workspace.workspaceId, hostId: 'alpha' },
-          { workspaceId: local.workspace.workspaceId, hostId: LOCAL_HOST_ID },
-        ],
-      },
-    })
-
-    // A committed row change republishes the same host identity.
-    await controller.rename({ workspaceId: remote.workspace.workspaceId, title: 'renamed' })
-    await expect(nextFrame(iterator)).resolves.toMatchObject({
-      type: 'upsert',
-      workspace: { workspaceId: remote.workspace.workspaceId, hostId: 'alpha', title: 'renamed' },
-    })
     abort.abort()
     await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined })
   })

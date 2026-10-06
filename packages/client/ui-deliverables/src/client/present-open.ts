@@ -13,38 +13,12 @@ export const PRESENTED_SUCCESS_FADE_MS = 200
 export type PresentedOpenFailure = 'openError' | 'revealError' | null
 
 /** State published on the owning file card. */
-export type PresentedOpenPhase = 'opening' | 'opened' | 'revealing' | 'revealed' | 'error' | 'revealError' | 'nativeUnavailable' | 'remoteUnavailable'
-
-/**
- * One open gesture's result. A remote-world refusal carries the host that owns
- * the file, so the card can say which host's desktop could open it.
- */
-export type PresentedOpenState =
-  | PresentedOpenPhase
-  | { readonly phase: 'remoteUnavailable'; readonly hostId: string }
-
-/**
- * Phase of one open state, whether or not it carries a remote host.
- * @param state - open state to read, absent when no gesture has published one.
- * @returns the phase, or undefined when the state is unset.
- */
-export function presentedOpenPhase(state: PresentedOpenState | undefined): PresentedOpenPhase | undefined {
-  return typeof state === 'string' ? state : state?.phase
-}
-
-/**
- * The remote host a remote-world refusal names, absent for every other state.
- * @param state - open state to read.
- * @returns the host reference when the state is a remote-world refusal.
- */
-export function presentedOpenRemoteHost(state: PresentedOpenState | undefined): { readonly hostId: string } | undefined {
-  return typeof state === 'object' ? state : undefined
-}
+export type PresentedOpenPhase = 'opening' | 'opened' | 'revealing' | 'revealed' | 'error' | 'revealError' | 'nativeUnavailable'
 
 /** One browser plugin's file-open requests, cancelled when that plugin is disposed. */
 export class PresentedOpenController {
   /** File action URLs key the state across Sessions, turns, and both clickable surfaces. */
-  readonly state = createSnapshotStore<Record<string, PresentedOpenState | undefined>>({})
+  readonly state = createSnapshotStore<Record<string, PresentedOpenPhase | undefined>>({})
   /** Native destination metadata, or a retryable read failure. */
   readonly host = createSnapshotStore<PresentedHost | 'error' | null>(null)
   private readonly expiry = new Map<string, ReturnType<typeof setTimeout>>()
@@ -154,12 +128,12 @@ export class PresentedOpenController {
 
   private async request(url: string, action: PresentedAction, application?: string): Promise<PresentedOpenFailure> {
     const failure = action === 'open' ? 'error' : 'revealError'
-    let state: PresentedOpenState = action === 'open' ? 'opened' : 'revealed'
+    let state: PresentedOpenPhase = action === 'open' ? 'opened' : 'revealed'
     try {
       const target = action === 'reveal' ? `${url}&action=reveal`
         : application === undefined ? url : `${url}&application=${encodeURIComponent(application)}`
       const response = await fetch(target, { method: 'POST', signal: this.lifetime.signal })
-      if (!response.ok) state = await refusalState(response, failure)
+      if (!response.ok) state = response.status === 422 ? 'nativeUnavailable' : failure
     } catch {
       // Transport failures share the retryable card state with Host open failures.
       state = failure
@@ -175,22 +149,4 @@ export class PresentedOpenController {
     }
     return state === 'opened' || state === 'revealed' ? null : action === 'reveal' ? 'revealError' : 'openError'
   }
-}
-
-/**
- * Classify one failed open: a remote-world refusal keeps the host it names so
- * the card can say whose desktop could open the file, a missing Host mapping
- * keeps the retryable native-unavailable copy, and every other failure stays
- * retryable.
- * @param response - the failed route response.
- * @param failure - the retryable phase for this gesture's action.
- * @returns the state to publish for the gesture.
- */
-async function refusalState(response: Response, failure: PresentedOpenPhase): Promise<PresentedOpenState> {
-  if (response.status !== 409) return response.status === 422 ? 'nativeUnavailable' : failure
-  const body: unknown = await response.json().catch(() => undefined)
-  const hostId = typeof body === 'object' && body !== null && typeof (body as { hostId?: unknown }).hostId === 'string'
-    ? (body as { hostId: string }).hostId
-    : undefined
-  return hostId === undefined ? failure : { phase: 'remoteUnavailable', hostId }
 }

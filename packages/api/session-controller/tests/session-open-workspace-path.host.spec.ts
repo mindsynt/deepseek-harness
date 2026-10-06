@@ -4,7 +4,6 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionStore from '@deepseek-ai/dsh-session'
 import FsLocal from '@deepseek-ai/dsh-fs-local'
-import { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   createSessionTestController,
@@ -146,20 +145,6 @@ describe('session/openWorkspacePath', () => {
 })
 
 
-it('reports the remote execution world owning a Session and keeps this host unnamed', async () => {
-  const ctx = await context()
-  ctx.provide('workspaceRegistry', {
-    list: () => [{ hostId: 'remote-1', sessionIds: [SessionId('remote-session')] }],
-  } as never)
-  const controller = createSessionTestController(ctx, {
-    defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
-    cwd: '/default',
-  })
-  try {
-    await expect(controller.remoteHostOf(SessionId('remote-session'))).resolves.toBe('remote-1')
-    await expect(controller.remoteHostOf(SessionId('unrecorded-session'))).resolves.toBeUndefined()
-  } finally { await ctx.fiber.dispose() }
-})
 
 it('reports Host file-manager metadata and dispatches reveal separately from default-app open', async () => {
   const ctx = await context()

@@ -103,7 +103,6 @@
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-workspace": "workspace:*",
     "@deepseek-ai/dsh-fs": "workspace:*",
-    "@deepseek-ai/dsh-fs-local": "workspace:*",
-    "@deepseek-ai/dsh-ssh-host-registry": "workspace:*"
+    "@deepseek-ai/dsh-fs-local": "workspace:*"
   }
 }

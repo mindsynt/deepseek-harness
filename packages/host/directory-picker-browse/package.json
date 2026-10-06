@@ -37,7 +37,6 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-fs": "workspace:*",
-    "@deepseek-ai/dsh-fs-local": "workspace:*",
-    "@deepseek-ai/dsh-ssh-host-registry": "workspace:*"
+    "@deepseek-ai/dsh-fs-local": "workspace:*"
   }
 }

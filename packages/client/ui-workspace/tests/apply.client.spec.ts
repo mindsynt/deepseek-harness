@@ -39,7 +39,7 @@ const sessionState = (items: readonly SessionSummary[]): SessionListState => ({
   projectionsBySession: {},
 })
 const workspace = (id: string, sessionIds: readonly string[]): WorkspaceView => ({
-  workspaceId: id as WorkspaceId, hostId: 'local', path: `/projects/${id}`, title: id,
+  workspaceId: id as WorkspaceId, path: `/projects/${id}`, title: id,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 })
 const workspaceState = (
@@ -57,7 +57,6 @@ async function bench() {
   await ctx.plugin(SlotRegistry).await()
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
     workspaceId: 'ws-new' as never,
-    hostId: 'local',
     path: 'name' in input ? `/projects/${input.name}` : input.path,
     title: 'new', sessionIds: [], createdAt: '0', updatedAt: '0',
   }))
@@ -127,8 +126,6 @@ async function bench() {
   const directoryPicker = { pick: pickDirectory }
   Object.assign(new TestRemote(ctx), { directoryPicker })
   ctx.provide('remote.directoryPicker', directoryPicker as never)
-  const hostSelection = createSnapshotStore<{ hostId?: string; hostLabel?: string }>({})
-  ctx.provide('remoteHostSelection', { source: hostSelection })
   const locale = new LocaleRuntime(ctx)
   // These specs assert the shipped Chinese copy. There is no jsdom `window`
   // in this lane, so browser-language detection never runs and the locale
@@ -138,7 +135,7 @@ async function bench() {
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
     retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
-    workspacesSubscribe, initializeDefault, hostSelection,
+    workspacesSubscribe, initializeDefault,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
     setSessions: (snapshot: SessionListState): void => { sessionSnapshot = snapshot },
   }
@@ -190,9 +187,6 @@ describe('ui-workspace apply', () => {
     expect(inject).toEqual([
       'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts',
     ])
-    // ui-remote-hosts' selection is optional: requiring it would suspend this
-    // fiber for a composition that drops that row.
-    expect(inject).not.toContain('remoteHostSelection')
   })
 
   it('reports a default Workspace creation failure through the shared notice overlay', async () => {
@@ -557,34 +551,6 @@ describe('ui-workspace apply', () => {
     const picker = faceOf(b.slots.entries('conversation.hero.workspace')[0]!) as WorkspacePickerInjected
     await picker.createWorkspace({ path: '/tmp/project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
-  })
-
-  it('addresses creation and reports the selected host through both surfaces', async () => {
-    const b = await bench()
-    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
-    await b.ctx.plugin({ inject: [...inject], apply }).await()
-
-    const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
-    const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
-    // No remote host selected: the Harness host, exactly as before this seam.
-    expect(browser.hooks.selectedHost.getSnapshot()).toEqual({})
-    expect(picker.hooks.selectedHost.getSnapshot()).toEqual({})
-    await browser.createWorkspace({ path: '/tmp/local' })
-    expect(b.create).toHaveBeenCalledWith({ path: '/tmp/local' })
-
-    // The selection is read per call and republished through the very source
-    // both surfaces bound, so a host chosen after activation reaches them.
-    const notified = vi.fn()
-    const unsubscribe = picker.hooks.selectedHost.subscribe(notified)
-    b.hostSelection.set({ hostId: 'alpha', hostLabel: 'Alpha' })
-    await Promise.resolve()
-    expect(notified).toHaveBeenCalled()
-    expect(browser.hooks.selectedHost.getSnapshot()).toEqual({ hostId: 'alpha', hostLabel: 'Alpha' })
-    await picker.createWorkspace({ path: '/srv/work' })
-    expect(b.create).toHaveBeenLastCalledWith({ path: '/srv/work', hostId: 'alpha' })
-    unsubscribe()
-
-    await b.ctx.fiber.dispose()
   })
 
   it('declares the browser child slots and reports directory-flow occupancy per surface', async () => {

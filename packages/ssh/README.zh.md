@@ -25,8 +25,6 @@ kind: "package-group"
 | `ssh-native` | 原生 OpenSSH 连接：SFTP 文件操作、SSH exec 进程通道与 PTY 会话 | `ctx.sshNative` |
 | `fs-sftp` | 基于 SFTP 子系统的远端文件系统提供方 | `ctx.fs` |
 | `subprocess-ssh-exec` | 基于 SSH exec 通道的远端子进程提供方 | `ctx.subprocess` |
-| [`host-registry`](host-registry/README.zh.md) | 每台已注册 SSH 主机一个隔离执行 realm | `ctx.remoteHosts` |
-| [`host-credentials`](host-credentials/README.zh.md) | 已注册远程主机的已存 SSH 登录材料 | `ctx.sshHostCredentials` |
 
 <a id="related-documentation"></a>
 ## 相关文档

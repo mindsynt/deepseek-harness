@@ -41,7 +41,7 @@ The selected blank **New Session** retains its provisional first slot and cannot
 
 ### Workspace hierarchy
 
-Choose **Add workspace** and select a directory to register it and open a Session. **View options → Group by** defaults to **WorkSpace**, which lists Workspaces as sibling sections. Select **Workspace Tree** to nest each Workspace under its nearest registered ancestor, including Workspaces added later. Each Workspace keeps its own Sessions and row actions. Child Workspaces appear before the parent's own Sessions. Ancestors start expanded unless a saved collapsed state exists. A saved collapse also hides the current Session; ancestor folder icons stay highlighted when a descendant Workspace contains it. Row fills and hit targets span the same width at every level; only the contents indent. Workspace dragging reorders siblings; dropping on a descendant targets the nearest compatible ancestor, so an expanded parent can be moved past without collapsing it. Search-result navigation expands every ancestor. Grouping and expansion are saved in the current browser; switching modes preserves each Workspace's expansion preference, and the single-list view stays flat. The execution world a new Workspace addresses is the host selected in **Settings → Remote hosts**: the browsing dialog names that world, and the picked path is registered on it. With no remote host selected, that world is the Harness host and paths are its own.
+Choose **Add workspace** and select a directory to register it and open a Session. **View options → Group by** defaults to **WorkSpace**, which lists Workspaces as sibling sections. Select **Workspace Tree** to nest each Workspace under its nearest registered ancestor, including Workspaces added later. Each Workspace keeps its own Sessions and row actions. Child Workspaces appear before the parent's own Sessions. Ancestors start expanded unless a saved collapsed state exists. A saved collapse also hides the current Session; ancestor folder icons stay highlighted when a descendant Workspace contains it. Row fills and hit targets span the same width at every level; only the contents indent. Workspace dragging reorders siblings; dropping on a descendant targets the nearest compatible ancestor, so an expanded parent can be moved past without collapsing it. Search-result navigation expands every ancestor. Grouping and expansion are saved in the current browser; switching modes preserves each Workspace's expansion preference, and the single-list view stays flat.
 
 Hierarchy uses registered canonical paths only. It does not scan for projects or resolve symlink aliases. Nesting does not change Session working directories, logs, or Workspace membership. Deleting a parent Workspace leaves its child Workspaces registered and places them under their next registered ancestor, or at the root.
 
@@ -93,11 +93,7 @@ Client callers can pass `prompt` and `clearPreviousDraft` in the second argument
 
 ### The directory-flow hole
 
-Each registration declares a **directory-flow child hole** (`single` kind: `conversation.hero.workspace.directoryFlow` / `sidebar.workspaces.directoryFlow`) that the composed picker package's client half fills with its picking interaction — the `-native` backend's renderless OS-chooser driver, an in-app browsing dialog under a `-browse` composition. The flat **Add workspace...** action renders only while the surface's hole is occupied; an empty hole means the composition has no picking affordance. This package owns the trigger and the adoption: the occupant reports one picked path per open through the hole's owner conversation (`open`/`busy`/`hostLabel`/`onPicked`/`onCancel`/`onError`), and the owner adopts it through the object layer, selecting the committed Workspace only after its list projection has refreshed. `hostLabel` names the execution world the flow browses, so an occupant whose dialog lists absolute paths can say which host they belong to.
-
-### The host selection
-
-Browsing and creation address the host selected in **Settings → Remote hosts**, read optionally from `ctx.remoteHostSelection` at each listing and each creation. A composition that drops the ui-remote-hosts row keeps both on the Harness host — the same behavior as no remote host being selected. The read follows the service registration, so a provider activated later, or removed under HMR, takes effect without re-applying this plugin. Before a browse or creation entry addresses a selected host, it samples that host's live execution world through the existing `hosts.list` verb, because a remote world never reconnects and an entry reaching one the Host no longer holds fails on every request: a disconnected world is reported beside the folder-error copy instead of raising a flow, and the adoption samples again because a native chooser never listed the world.
+Each registration declares a **directory-flow child hole** (`single` kind: `conversation.hero.workspace.directoryFlow` / `sidebar.workspaces.directoryFlow`) that the composed picker package's client half fills with its picking interaction — the `-native` backend's renderless OS-chooser driver, an in-app browsing dialog under a `-browse` composition. The flat **Add workspace...** action renders only while the surface's hole is occupied; an empty hole means the composition has no picking affordance. This package owns the trigger and the adoption: the occupant reports one picked path per open through the hole's owner conversation (`open`/`busy`/`onPicked`/`onCancel`/`onError`), and the owner adopts it through the object layer, selecting the committed Workspace only after its list projection has refreshed.
 
 ### Session row actions
 
@@ -196,7 +192,6 @@ These pages cover the sidebar host, the hero surface, and the picking backends.
 - [ui-sidebar](../ui-sidebar/README.md) — the sidebar shell hosting the `sidebar.workspaces` hole.
 - [ui-conversation](../ui-conversation/README.md) — the chat surface hosting the Session Intent hero's picker hole.
 - [directory-picker-native](../../host/directory-picker-native/README.md) — the OS-chooser backend filling the directory-flow hole.
-- [ui-remote-hosts](../ui-remote-hosts/README.md) — the settings section that owns the selected workspace-creation host.
 - [Workspace Controller](../../api/workspace-controller/README.md) — the Host mutations and framework-neutral Client projection that own Workspaces, membership, and Workspace group order.
 
 -----
@@ -221,7 +216,6 @@ These limits define the search depth, the archive surface, and the picking carri
 - **No Session deletion** — sessions can be archived but never deleted; archived rows stay recoverable in place through the archived view filter and the search results' unarchive action, and Workspace registration deletion does not delete Sessions.
 - **Pending user interaction is not aggregated into collapsed groups** — a waiting row inside a collapsed group lights no group-header indicator and becomes visible only after that group is expanded.
 - **Native folder selection depends on the local Host carrier** — under the `-native` composition, in-process or remote browser deployments cannot open a local operating-system dialog; remote-capable picking is the `-browse` composition's in-app flow.
-- **A disconnected remote world is refused, not reopened** — the entry reports a selected host whose world is gone and offers no action to open a new one; reopening a world is the remote-host section's remove-and-add flow.
 
 <a id="dev-note"></a>
 ### Dev Note

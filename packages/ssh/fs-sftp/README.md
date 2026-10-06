@@ -25,7 +25,7 @@ Use `dsh-fs-sftp` when a remote host's files must be read, listed, written and e
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the class in a composition with `ctx.plugin(SftpFileSystem)`, or let the [host registry](../host-registry/README.md) mount it: its default composition calls `realm.plugin(SftpFileSystem)` for each opened host realm, where this backend registers under the `fs` service name beside `sshNative` and `subprocess`.
+Mount the class in a composition with `ctx.plugin(SftpFileSystem)`, or mount it on a `ctx.isolate('fs', …)` realm beside `sshNative` and `subprocess`: the backend registers under the `fs` service name in whichever realm it is mounted into.
 
 The package declares no plugin `Config`, so there is no field to set and no configuration to carry in a mount. Every tunable lives in the injected `sshNative` service — the remote host, port, credentials, host-key policy and read caps — because this backend owns no coordinates of its own.
 
@@ -79,7 +79,6 @@ Reads split into one-shot and streaming paths. `readText` is a single `sftpRead`
 ## Further Exploration
 
 - [fs](../../fs/fs/README.md) — the seam this package extends, including the guard semantics it cannot honor.
-- [host registry](../host-registry/README.md) — mounts this backend in one realm per registered host.
 - [ssh-native](../ssh-native/README.md) — the SSH connection and SFTP operations behind every call.
 - [subprocess-ssh-exec](../subprocess-ssh-exec/README.md) — the sibling remote subprocess provider in the same realm.
 - [SSH subsystem](../../../docs/subsystems/ssh.md) — shared connection ownership and provider composition.

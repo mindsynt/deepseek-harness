@@ -1,13 +1,10 @@
 /** Delivery gestures share pending state, report failures, and cancel with the plugin. */
 import { afterEach, expect, it, vi } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { PresentedOpenController, presentedOpenPhase, presentedOpenRemoteHost } from '../src/client/present-open.ts'
-
+import { PresentedOpenController } from '../src/client/present-open.ts'
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
-
 const id = SessionId('fork')
 const url = 'api/present.open?sessionId=fork&seq=2&index=1'
-
 it('coalesces concurrent card and mention gestures, then allows another open', async () => {
   const reply = Promise.withResolvers<Response>()
   const fetcher = vi.fn().mockReturnValue(reply.promise)
@@ -25,7 +22,6 @@ it('coalesces concurrent card and mention gestures, then allows another open', a
   expect(fetcher).toHaveBeenCalledTimes(2)
   await controller.dispose()
 })
-
 it('opens changed files through their own coordinates', async () => {
   const fetcher = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null, { status: 204 }))
   vi.stubGlobal('fetch', fetcher)
@@ -38,7 +34,6 @@ it('opens changed files through their own coordinates', async () => {
   expect(controller.state.getSnapshot()['api/changes.open?sessionId=fork&seq=9&index=1']).toBe('nativeUnavailable')
   await controller.dispose()
 })
-
 it.each(['http', 'network'])('publishes retryable %s failures', async (failure) => {
   const fetcher = vi.fn()
   if (failure === 'http') fetcher.mockResolvedValueOnce(new Response(null, { status: 500 }))
@@ -52,7 +47,6 @@ it.each(['http', 'network'])('publishes retryable %s failures', async (failure) 
   expect(controller.state.getSnapshot()[url]).toBe('opened')
   await controller.dispose()
 })
-
 it('awaits cancellation and prevents late state publication or new requests after disposal', async () => {
   const aborted = Promise.withResolvers<undefined>()
   const release = Promise.withResolvers<Response>()
@@ -74,8 +68,6 @@ it('awaits cancellation and prevents late state publication or new requests afte
   await controller.open(id, 2, 1)
   expect(fetcher).toHaveBeenCalledOnce()
 })
-
-
 it('shares pending state across open and reveal and retries the selected action', async () => {
   const reply = Promise.withResolvers<Response>()
   const fetcher = vi.fn().mockReturnValueOnce(reply.promise).mockResolvedValue(new Response(null, { status: 204 }))
@@ -93,7 +85,6 @@ it('shares pending state across open and reveal and retries the selected action'
   expect(controller.state.getSnapshot()[url]).toBe('revealed')
   await controller.dispose()
 })
-
 it.each([null, {}, { name: 'host', available: 'yes', fileManager: 'finder' },
   { name: 'host', available: true, fileManager: 'unknown' }, 'invalid json', 'http', 'network',
 ])('makes invalid Host metadata retryable: %j', async (value) => {
@@ -114,7 +105,6 @@ it.each([null, {}, { name: 'host', available: 'yes', fileManager: 'finder' },
   await controller.loadHost()
   expect(fetcher).toHaveBeenCalledTimes(2)
 })
-
 it('coalesces metadata reads and suppresses their publication after disposal', async () => {
   const reply = Promise.withResolvers<Response>()
   const fetcher = vi.fn().mockReturnValue(reply.promise)
@@ -129,8 +119,6 @@ it('coalesces metadata reads and suppresses their publication after disposal', a
   await Promise.all([first, second, disposal])
   expect(controller.host.getSnapshot()).toBeNull()
 })
-
-
 it('invalidates cached desktop metadata without eagerly fetching an unused Host', async () => {
   const fetcher = vi.fn().mockResolvedValue(Response.json({ name: 'old', available: false, fileManager: null }))
   vi.stubGlobal('fetch', fetcher)
@@ -144,7 +132,6 @@ it('invalidates cached desktop metadata without eagerly fetching an unused Host'
   expect(controller.host.getSnapshot()).toMatchObject({ name: 'new', available: true })
   await controller.dispose()
 })
-
 it('discards a replaced Host response and keeps the new metadata request coalesced', async () => {
   const oldReply = Promise.withResolvers<Response>()
   const newReply = Promise.withResolvers<Response>()
@@ -165,8 +152,6 @@ it('discards a replaced Host response and keeps the new metadata request coalesc
   expect(controller.host.getSnapshot()).toMatchObject({ name: 'new' })
   await controller.dispose()
 })
-
-
 it.each(['open', 'reveal'] as const)('reports an unavailable Host path for %s while retaining the declaration', async (action) => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 422 })))
   const controller = new PresentedOpenController()
@@ -174,32 +159,6 @@ it.each(['open', 'reveal'] as const)('reports an unavailable Host path for %s wh
   expect(controller.state.getSnapshot()[url]).toBe('nativeUnavailable')
   await controller.dispose()
 })
-
-it('keeps the remote host a refused 409 names and leaves every other failure retryable', async () => {
-  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ hostId: 'remote-1' }, { status: 409 }))
-  vi.stubGlobal('fetch', fetcher)
-  const controller = new PresentedOpenController()
-  await controller.open(id, 2, 1)
-  expect(controller.state.getSnapshot()[url]).toEqual({ phase: 'remoteUnavailable', hostId: 'remote-1' })
-  fetcher.mockResolvedValueOnce(new Response('not JSON', { status: 409 }))
-  await controller.open(id, 2, 1)
-  expect(controller.state.getSnapshot()[url]).toBe('error')
-  fetcher.mockResolvedValueOnce(Response.json({ message: 'desktop unavailable' }, { status: 409 }))
-  await controller.open(id, 2, 1, 'reveal')
-  expect(controller.state.getSnapshot()[url]).toBe('revealError')
-  await controller.dispose()
-})
-
-it('reads the phase and the remote host out of both state forms', () => {
-  const remote = { phase: 'remoteUnavailable', hostId: 'remote-1' } as const
-  expect(presentedOpenPhase(undefined)).toBeUndefined()
-  expect(presentedOpenPhase('opened')).toBe('opened')
-  expect(presentedOpenPhase(remote)).toBe('remoteUnavailable')
-  expect(presentedOpenRemoteHost(undefined)).toBeUndefined()
-  expect(presentedOpenRemoteHost('opened')).toBeUndefined()
-  expect(presentedOpenRemoteHost(remote)).toEqual({ phase: 'remoteUnavailable', hostId: 'remote-1' })
-})
-
 it('encodes an explicit application identifier without changing the file coordinates', async () => {
   const fetcher = vi.fn(async () => new Response(null, { status: 204 }))
   vi.stubGlobal('fetch', fetcher)
@@ -208,8 +167,6 @@ it('encodes an explicit application identifier without changing the file coordin
   expect(fetcher).toHaveBeenCalledWith(`${url}&application=%2FApps%2FA%26B.app`, { method: 'POST', signal: expect.any(AbortSignal) as AbortSignal })
   await controller.dispose()
 })
-
-
 it.each(['open', 'reveal'] as const)('expires successful %s feedback after five seconds and its fade', async (action) => {
   vi.useFakeTimers()
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))
@@ -221,7 +178,6 @@ it.each(['open', 'reveal'] as const)('expires successful %s feedback after five 
   expect(controller.state.getSnapshot()[url]).toBeUndefined()
   await controller.dispose()
 })
-
 it('cancels an earlier success expiry when the next action fails', async () => {
   vi.useFakeTimers()
   const fetcher = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }))
@@ -235,7 +191,6 @@ it('cancels an earlier success expiry when the next action fails', async () => {
   expect(controller.state.getSnapshot()[url]).toBe('error')
   await controller.dispose()
 })
-
 it('cancels success expiry when its controller is disposed', async () => {
   vi.useFakeTimers()
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))
@@ -246,8 +201,6 @@ it('cancels success expiry when its controller is disposed', async () => {
   await vi.advanceTimersByTimeAsync(6000)
   expect(controller.state.getSnapshot()).toBe(state)
 })
-
-
 it('owns the expiry before notifying subscribers that can dispose the controller', async () => {
   vi.useFakeTimers()
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))

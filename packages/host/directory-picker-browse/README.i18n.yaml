@@ -9,22 +9,22 @@
   en: 6fbc8d553ca1d797
   zh: 6503d8fa5542b0f2
 /deepseek-ai-dsh-host-directory-picker-browse/summary:
-  en: 317ac05dd26528e5
-  zh: cb1fffd558079368
+  en: 6554acdee87dc921
+  zh: 3d1e55231383825b
 /deepseek-ai-dsh-host-directory-picker-browse/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-host-directory-picker-browse/use-this-package:
-  en: ecc042adb0fa9954
-  zh: 4c2cb9a160a637e2
+  en: 2d913770c0491f4e
+  zh: 64380eaa7cc1fb1e
 /deepseek-ai-dsh-host-directory-picker-browse/use-this-package/listing-a-directory:
-  en: aa97da3e2bcebd45
-  zh: 7c38514ffdd5ffe8
+  en: fc4fc8e16e37df02
+  zh: 5a4e8025aae6ccf4
 /deepseek-ai-dsh-host-directory-picker-browse/use-this-package/creating-a-directory:
-  en: 5ced52a023706af0
-  zh: fe863e576ce91f44
+  en: e89611c496b60459
+  zh: b40f7dacd4bd3d16
 /deepseek-ai-dsh-host-directory-picker-browse/use-this-package/observable-failures:
-  en: 9764c307e565e741
+  en: 3f136f768deaab29
   zh: e1a606a963ab5047
 /deepseek-ai-dsh-host-directory-picker-browse/use-this-package/configuration:
   en: a9137892248ac644
@@ -33,17 +33,14 @@
   en: 42b15ac6321706aa
   zh: 4ed0861911abaf5d
 /deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation/design-concept:
-  en: 0fcd89e621933ee0
-  zh: 589213ddb7fd1b95
-/deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation/the-addressed-world:
-  en: 451bf062ae1780ef
-  zh: 3d841f825527f5be
+  en: 2e6e411764f5ffff
+  zh: f42c3ec99bcdfa6f
 /deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation/the-fully-qualified-fence:
-  en: c5835a3ebe2ec9da
-  zh: eedf5a198f68f329
+  en: b547791a9cd9d9f0
+  zh: fd62beb4b2cac303
 /deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation/abort-and-probing:
-  en: 26eeb79c971c6e2a
-  zh: 836a24f9ac003f35
+  en: 6210605045992205
+  zh: 77d1c37e9b968395
 /deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation/source-map:
   en: 014babc8e5a26317
   zh: b1a1039dd3dd48a9
@@ -57,8 +54,8 @@
   en: ca75c51c89c2c9b0
   zh: de54f3467ef3b9be
 /deepseek-ai-dsh-host-directory-picker-browse/known-limitations-and-deferred-work:
-  en: a8dadbd663b03263
-  zh: 4933390ab81d7ffc
+  en: e08f1fb4527863d9
+  zh: 6ef2b6354f9e8a86
 /deepseek-ai-dsh-host-directory-picker-browse/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

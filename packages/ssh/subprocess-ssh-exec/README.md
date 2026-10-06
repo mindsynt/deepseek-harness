@@ -25,7 +25,7 @@ Run commands and interactive terminal sessions on a remote POSIX host through th
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the service class with `ctx.plugin(SshExecSubprocessRuntime)`, or let the Loader mount it by the package name. It registers `ctx.subprocess` for the context it mounts into and injects `sshNative`, so activation waits for the [ssh-native](../ssh-native/README.md) connection. The [host registry](../host-registry/README.md) mounts it into each native host realm, beside the SFTP filesystem provider that shares the same connection.
+Mount the service class with `ctx.plugin(SshExecSubprocessRuntime)`, or let the Loader mount it by the package name. It registers `ctx.subprocess` for the context it mounts into and injects `sshNative`, so activation waits for the [ssh-native](../ssh-native/README.md) connection. Mount it beside the SFTP filesystem provider that shares the same connection.
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
@@ -85,7 +85,6 @@ One-shot execution flows one way: the spec becomes a quoted command, the channel
 
 - [SSH subsystem](../../../docs/subsystems/ssh.md) — shared execution coordinates and transport ownership.
 - [subprocess](../../subprocess/subprocess/README.md) — the seam contract this provider implements.
-- [host registry](../host-registry/README.md) — the composition that mounts this provider per host.
 - [ssh-native](../ssh-native/README.md) — the OpenSSH connection and exec channels it drives.
 - [fs-sftp](../fs-sftp/README.md) — the paired SFTP filesystem provider in the same realm.
 - [configuration catalog](../../../docs/config-catalog.md) — every service this package injects.

@@ -17,7 +17,7 @@
  */
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ClientRemote, RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
+import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   IWorkspaces, SessionActivity, WorkspaceArchiveError, WorkspaceSnapshot, WorkspaceView,
@@ -31,7 +31,6 @@ import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the workspace-creation host selection this package reads.
-import type {} from '@deepseek-ai/dsh-client-ui-remote-hosts/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -45,8 +44,6 @@ import {
 } from './contract/slots.ts'
 import { createWorkspaceShortcutControls, installWorkspaceShortcuts } from './shortcuts.ts'
 import { UiWorkspaceService } from './navigation.ts'
-import { createWorkspaceHostSelection } from './host-selection.ts'
-import { createSelectedHostWorldProbe } from './selected-host-world.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './rows/WorkspaceBrowser.tsx'
 import { ArchiveSessionMenuItem, ArchiveSessionRowButton, SessionArchiveConfirmDialog } from './session-actions/ArchiveSession.tsx'
@@ -96,9 +93,6 @@ const NS = 'workspace'
  * (loading/prefetch metadata, never apply sequencing) and neither owner
  * provides a waitable service. apply therefore depends on each slot
  * declaration through `slots.inject()` instead of assuming order.
- * `remoteHostSelection` is deliberately absent: ui-remote-hosts owns it, and a
- * composition that drops that row still browses and creates Workspaces on the
- * Harness host (./host-selection.ts).
  */
 export const inject = [
   'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts',
@@ -122,25 +116,8 @@ export function apply(ctx: Context): void {
   const rowToast = createSnapshotStore<RowToastState | null>(null)
   let toastSeq = 0
   const notify = (toast: RowToast): void => { rowToast.set({ ...toast, seq: ++toastSeq }) }
-  // The workspace-creation host choice is owned by ui-remote-hosts and read
-  // optionally here: with no provider registered, listing and creation address
-  // the Harness host, exactly as with no remote host selected.
-  const hostSelection = createWorkspaceHostSelection(ctx)
-  // A remote execution world never reconnects, so every browse and creation
-  // entry samples the selected world before it addresses it. The `hosts`
-  // namespace is read strictly at each sample: a composition that mounts no
-  // remote-host capability must keep browsing and creating on this machine,
-  // and the declared-injection proxy would suspend this fiber for it.
-  const checkSelectedHostWorld = createSelectedHostWorldProbe(
-    // A Remote namespace service key is assembled from the wire namespace
-    // (`remote.<ns>`), so the strict read is untyped at the Context boundary;
-    // the cast names the namespace the generated Client Remote declares.
-    () => ctx.get('remote.hosts') as ClientRemote['hosts'] | undefined,
-    () => hostSelection.source.getSnapshot().hostId,
-  )
   const uiWorkspace = new UiWorkspaceService(
-    ctx, ctx.remote.directoryPicker, workspaces, sessions,
-    () => hostSelection.hostId(), viewInstance.actions, notify,
+    ctx, ctx.remote.directoryPicker, workspaces, sessions, viewInstance.actions, notify,
   )
   ctx.slots.provideRoot({ hooks: { workspaces: workspaces.list } })
   // A checkout changes no Workspace state the feed could announce, so the
@@ -171,12 +148,7 @@ export function apply(ctx: Context): void {
   const openSession: WorkspaceBrowserInjected['open'] = (sessionId) => {
     uiWorkspace.openSession(sessionId)
   }
-  // The creation world is resolved per call from the shared selection, so a
-  // host chosen after this registration activates still reaches the request.
-  const createWorkspace = (input: { path: string }): Promise<WorkspaceView> => {
-    const hostId = hostSelection.source.getSnapshot().hostId
-    return workspaces.create({ path: input.path, ...hostId === undefined ? {} : { hostId } })
-  }
+  const createWorkspace = (input: { path: string }): Promise<WorkspaceView> => workspaces.create(input)
   // Registry-global sets as Sets, rebuilt only when the Workspace snapshot changes.
   const pinnedSet = derive(workspaces.list, snapshot => new Set<SessionId>(snapshot.pinnedSessionIds))
   const archivedSet = derive(workspaces.list, snapshot => new Set<SessionId>(snapshot.archivedSessionIds))
@@ -278,7 +250,6 @@ export function apply(ctx: Context): void {
     },
     unarchiveSession: async (sessionId) => { await uiWorkspace.unarchiveSession(sessionId) },
     createWorkspace,
-    checkSelectedHostWorld,
     requestSearch: shortcutControls.search,
     requestAddWorkspace: shortcutControls.add,
     closeAddWorkspace: shortcutControls.closeAdd,
@@ -287,15 +258,13 @@ export function apply(ctx: Context): void {
     hooks: {
       directoryFlow: browserFlowSource,
       hostInfo,
-      selectedHost: hostSelection.source,
       workspaceShortcuts: shortcutControls.state,
       shortcuts: ctx.shortcuts.catalog,
     },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace,
-    checkSelectedHostWorld,
-    hooks: { directoryFlow: pickerFlowSource, selectedHost: hostSelection.source },
+    hooks: { directoryFlow: pickerFlowSource },
   })
   // Each registration declares its owned children in the same call; slot
   // injection follows both the owner and declaration HMR lifetimes.

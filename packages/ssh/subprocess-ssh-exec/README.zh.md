@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-用 `ctx.plugin(SshExecSubprocessRuntime)` 挂载该服务类，或让加载器按包名直接挂载。它在被挂载的 context 中注册 `ctx.subprocess`，并注入 `sshNative`，因此激活会等待 [ssh-native](../ssh-native/README.zh.md) 连接就绪。[host registry](../host-registry/README.zh.md) 把它挂载到每个 native 主机领域中，与共享同一条连接的 SFTP 文件系统提供方相邻。
+用 `ctx.plugin(SshExecSubprocessRuntime)` 挂载该服务类，或让加载器按包名直接挂载。它在被挂载的 context 中注册 `ctx.subprocess`，并注入 `sshNative`，因此激活会等待 [ssh-native](../ssh-native/README.zh.md) 连接就绪。把它挂载到与共享同一条连接的 SFTP 文件系统提供方相邻的位置。
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
@@ -85,7 +85,6 @@ function shellQuote(value: string): string {
 
 - [SSH 子系统](../../../docs/subsystems/ssh.zh.md) — 共享的执行坐标与传输所有权。
 - [subprocess](../../subprocess/subprocess/README.zh.md) — 本提供方实现的 seam 契约。
-- [host registry](../host-registry/README.zh.md) — 按主机挂载本提供方的组合。
 - [ssh-native](../ssh-native/README.zh.md) — 它所驱动的 OpenSSH 连接与 exec 通道。
 - [fs-sftp](../fs-sftp/README.zh.md) — 同一领域中配套的 SFTP 文件系统提供方。
 - [配置目录](../../../docs/config-catalog.zh.md) — 本包注入的全部服务。

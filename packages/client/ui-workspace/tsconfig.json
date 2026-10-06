@@ -27,9 +27,6 @@
       "path": "../ui-primitives"
     },
     {
-      "path": "../ui-remote-hosts"
-    },
-    {
       "path": "../connection/tsconfig.client.json"
     },
     {

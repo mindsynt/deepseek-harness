@@ -39,7 +39,6 @@ async function createRuntime(): Promise<SlotTestRuntime> {
   const runtime = await SlotTestRuntime.create()
   runtime.ctx.provide('layout', { selectPanel: vi.fn(), beginNavigation: () => new AbortController().signal })
   runtime.ctx.provide('shortcuts', { register: () => () => {}, catalog: createSnapshotStore([]) })
-  runtime.ctx.provide('remoteHostSelection', { source: createSnapshotStore({}) })
   runtime.releaseWorkspaceSource()
   // The rename flow never picks a directory; the namespace only has to be there
   // for ui-workspace's inject to settle.
@@ -77,7 +76,7 @@ async function declareFrame(runtime: SlotTestRuntime): Promise<void> {
 async function seedWorkspace(runtime: SlotTestRuntime): Promise<void> {
   await runtime.workspaces.update((draft) => {
     draft.items = [{
-      workspaceId: 'w1' as WorkspaceId, hostId: 'local', title: 'alpha', path: '/w/alpha',
+      workspaceId: 'w1' as WorkspaceId, title: 'alpha', path: '/w/alpha',
       sessionIds: [SID], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     }] as never
   })

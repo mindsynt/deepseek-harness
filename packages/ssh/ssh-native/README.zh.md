@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-用 `await realm.plugin(SshNativeConnection, config)` 在组合中挂载该服务，这是其打包形态：[主机注册表的原生组合](../host-registry/README.zh.md) 正是如此，并在其旁挂载文件系统与子进程提供方。本包 default-export 服务类，将其注册为 `ctx.sshNative`，且不声明 `static inject`，因此激活时无需任何其他服务在场。调用 `validateConfig()` 可在不建立连接的情况下检查配置。
+用 `await realm.plugin(SshNativeConnection, config)` 在组合中挂载该服务，并在同一领域中在其旁挂载文件系统与子进程提供方。本包 default-export 服务类，将其注册为 `ctx.sshNative`，且不声明 `static inject`，因此激活时无需任何其他服务在场。调用 `validateConfig()` 可在不建立连接的情况下检查配置。
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
@@ -98,8 +98,6 @@ SFTP 操作包括 `sftpStat`、`sftpLstat`、`sftpRead`、`sftpReadRange`、`sft
 ## 进一步探索
 
 - [SSH 子系统](../../../docs/subsystems/ssh.zh.md) — 连接归属、执行坐标与生成式的 `ctx.sshNative` API。
-- [主机注册表](../host-registry/README.zh.md) — 在其旁挂载执行提供方的每主机 realm。
-- [主机凭证](../host-credentials/README.zh.md) — 连接所认证所用的 OpenSSH 配置、身份与 known_hosts。
 - [fs-sftp](../fs-sftp/README.zh.md) — 基于此处 SFTP 操作的文件系统提供方。
 - [subprocess-ssh-exec](../subprocess-ssh-exec/README.zh.md) — 基于 `exec` 的子进程提供方。
 
@@ -127,7 +125,7 @@ SFTP 操作包括 `sftpStat`、`sftpLstat`、`sftpRead`、`sftpReadRange`、`sft
 <a id="known-limitations-and-deferred-work"></a>
 
 - `knownHostsFile`、`compression` 与 `proxy` 被解析却从不进入 ssh2 连接配置，因此设置了它们的调用方既得不到自定义校验路径，也得不到压缩或跳板主机；真正生效的主机密钥控制只有 `strictHostKeyChecking`。
-- 除非 `reconnect.enabled` 为 `true`，连接丢失会析构该实例，因此对该 realm 而言 `ctx.sshNative` 会以 `ssh-native: connection is disposed` 永久拒绝；[主机注册表](../host-registry/README.zh.md) 重新打开主机，而不是恢复该 realm。
+- 除非 `reconnect.enabled` 为 `true`，连接丢失会析构该实例，因此对该 realm 而言 `ctx.sshNative` 会以 `ssh-native: connection is disposed` 永久拒绝；重新激活该 realm 会用新实例替换已析构的实例，而不是恢复它。
 - 重连只重试 `close` 事件；就绪前的 `error`、被拒绝的连接或认证失败会拒绝 `ready` 并使激活失败，且不重试。
 - `healthStatus` 只返回 `'healthy'` 或 `'disconnected'`，因此已声明的 `'degraded'` 值不可达。
 - `metrics` 只报告 `connectionTime`；由于 ssh2 不暴露计数器，`requestsSent`、`requestsReceived`、`bytesSent`、`bytesReceived` 与 `avgLatency` 保持为 `0`。

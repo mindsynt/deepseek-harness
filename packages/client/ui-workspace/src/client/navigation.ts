@@ -144,8 +144,6 @@ class UiWorkspaceService extends Service implements UiWorkspace {
    * @param directoryPicker - the directory-picking Remote namespace.
    * @param workspaces - pure Workspace Controller.
    * @param sessions - pure Session Controller.
-   * @param selectedHostId - reads the host every listing addresses; undefined
-   *   is the local Harness host, including while ui-remote-hosts is absent.
    * @param view - the browser's viewing-store write set (one instance shared with its registration).
    * @param notify - show one notice through the Workspace notice channel.
    */
@@ -154,7 +152,6 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     private readonly directoryPicker: ClientRemote['directoryPicker'],
     private readonly workspaces: IWorkspaces,
     private readonly sessions: ISessions,
-    private readonly selectedHostId: () => string | undefined,
     private readonly view: Pick<WorkspaceViewStoreActions, 'pinSessionOrder'>,
     private readonly notify: (toast: RowToast) => void,
   ) {
@@ -303,19 +300,13 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   }
 
   async listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
-    // The selected host is read per call, not captured: the settings section
-    // can move the selection while this surface stays mounted, and a provider
-    // that registers after this service still reaches the next listing.
-    const result = await this.directoryPicker.list(path, this.selectedHostId(), signal)
+    const result = await this.directoryPicker.list(path, signal)
     if (!result.ok) throw new DirectoryBrowseError(result.error)
     return result.value
   }
 
   async createDirectory(path: string, name: string): Promise<string> {
-    // The selected host is read per call exactly as the listing reads it: a
-    // directory created from the browser must land in the world the browser is
-    // showing, not on the Harness host the dialog happens to run on.
-    const result = await this.directoryPicker.createDirectory(path, name, this.selectedHostId())
+    const result = await this.directoryPicker.createDirectory(path, name)
     if (!result.ok) throw new DirectoryBrowseError(result.error)
     return result.value
   }

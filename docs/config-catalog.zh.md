@@ -224,7 +224,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-session-controller`
 
 - `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:80`](../packages/api/session-controller/src/index.ts)
+- `source`: [`packages/api/session-controller/src/index.ts:79`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -326,7 +326,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-workspace-files`
 
 - `inject`: `fs` · `sandboxPolicy` · `sessions` · `typert`
-- `source`: [`packages/api/workspace-files/src/index.ts:84`](../packages/api/workspace-files/src/index.ts)
+- `source`: [`packages/api/workspace-files/src/index.ts:75`](../packages/api/workspace-files/src/index.ts)
 
 ```ts config-catalog
 /** Deployment caps on one page or one listing. */
@@ -1419,35 +1419,12 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-hooks-codex -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-credentials -->
-<a id="deepseek-aidsh-host-credentials"></a>
-
-## `@deepseek-ai/dsh-host-credentials`
-
-- `inject`: `credentials`
-- `source`: [`packages/ssh/host-credentials/src/index.ts:74`](../packages/ssh/host-credentials/src/index.ts)
-
-```ts config-catalog
-/** Plugin config: the local directory every generated file lives under. */
-export interface Config {
-  /**
-   * Absolute local directory holding one generated directory per host; omit it
-   * for `<DSH home>/ssh-hosts`, where the harness home is `$DSH_HOME` or
-   * `~/.dsh`.
-   */
-  readonly stateDir?: string
-  /** Deadline for one `ssh-keyscan` invocation, in milliseconds; defaults to 10000. */
-  readonly scanTimeoutMs?: number
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-credentials -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-directory-picker-browse -->
 <a id="deepseek-aidsh-host-directory-picker-browse"></a>
 
 ## `@deepseek-ai/dsh-host-directory-picker-browse`
 
-- `source`: [`packages/host/directory-picker-browse/src/index.ts:210`](../packages/host/directory-picker-browse/src/index.ts)
+- `source`: [`packages/host/directory-picker-browse/src/index.ts:181`](../packages/host/directory-picker-browse/src/index.ts)
 
 ```ts config-catalog
 /** Validated plugin configuration. */
@@ -3000,44 +2977,6 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-spill-policy -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-ssh-host-registry -->
-<a id="deepseek-aidsh-ssh-host-registry"></a>
-
-## `@deepseek-ai/dsh-ssh-host-registry`
-
-- `inject`: `sshHostCredentials` · `storageDomain`
-- `source`: [`packages/ssh/host-registry/src/index.ts:77`](../packages/ssh/host-registry/src/index.ts)
-
-```ts config-catalog
-/**
- * Plugin config. `hosts` is refused at activation: the native SSH composition
- * installs no helper artifact, so no configured entry can be opened.
- */
-export interface Config {
-  /** Host entries, every one of them refused at activation; omission opens none. */
-  readonly hosts?: readonly RemoteHostEntryConfig[]
-  /** Absolute local path of an artifact manifest, from the helper-provisioned layout. */
-  readonly manifest?: string
-}
-
-/** One `config.hosts` entry; every entry is refused, so only its `id` is read. */
-export interface RemoteHostEntryConfig {
-  /** Registry identity; a non-empty token, never a path. */
-  readonly id: string
-  /** Caller-facing label. */
-  readonly label?: string
-  /** OpenSSH host alias. */
-  readonly host: string
-  /** Absolute remote directory, from the helper-provisioned layout. */
-  readonly root: string
-  /** Absolute remote default workspace, from the helper-provisioned layout. */
-  readonly workspace: string
-  /** Absolute local path of an artifact manifest, from the helper-provisioned layout. */
-  readonly manifest?: string
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-ssh-host-registry -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-ssh-native -->
 <a id="deepseek-aidsh-ssh-native"></a>
 
@@ -4485,7 +4424,6 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-permission-presets` | — | [`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plan` | — | [`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-reference` | — | [`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-remote-hosts` | — | [`packages/client/ui-remote-hosts/src/index.ts`](../packages/client/ui-remote-hosts/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-renderer` | — | [`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-session` | — | [`packages/client/ui-session/src/index.ts`](../packages/client/ui-session/src/index.ts) |
@@ -4532,7 +4470,6 @@ export interface Config {
 | `@deepseek-ai/dsh-host-directory-picker-auto` | `webServer` · `loader` | [`packages/host/directory-picker-auto/src/index.ts`](../packages/host/directory-picker-auto/src/index.ts) |
 | `@deepseek-ai/dsh-host-directory-picker-native` | — | [`packages/host/directory-picker-native/src/index.ts`](../packages/host/directory-picker-native/src/index.ts) |
 | `@deepseek-ai/dsh-host-plugin-inventory` | `loader` | [`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts) |
-| `@deepseek-ai/dsh-hosts-controller` | `remoteHosts` · `sshHostCredentials` | [`packages/api/hosts-controller/src/index.ts`](../packages/api/hosts-controller/src/index.ts) |
 | `@deepseek-ai/dsh-llm` | — | [`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts) |
 | `@deepseek-ai/dsh-lsp` | — | [`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts) |
 | `@deepseek-ai/dsh-mcp-resources` | `tools` | [`packages/mcp/mcp-resources/src/index.ts`](../packages/mcp/mcp-resources/src/index.ts) |
@@ -4636,7 +4573,6 @@ export interface Config {
 | `@deepseek-ai/dsh-session-snapshot` | — | [`packages/test-support/session-snapshot/src/index.ts`](../packages/test-support/session-snapshot/src/index.ts) |
 | `@deepseek-ai/dsh-session-telemetry` | — | [`packages/session/session-telemetry/src/index.ts`](../packages/session/session-telemetry/src/index.ts) |
 | `@deepseek-ai/dsh-session-title-llm` | — | [`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts) |
-| `@deepseek-ai/dsh-ssh-hosts` | — | [`packages/bundle/ssh-hosts/src/index.ts`](../packages/bundle/ssh-hosts/src/index.ts) |
 | `@deepseek-ai/dsh-subagent-in-process-driver` | — | [`packages/subagent/subagent-in-process-driver/src/index.ts`](../packages/subagent/subagent-in-process-driver/src/index.ts) |
 | `@deepseek-ai/dsh-timeout` | — | [`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts) |
 | `@deepseek-ai/dsh-typert-generator` | — | [`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts) |

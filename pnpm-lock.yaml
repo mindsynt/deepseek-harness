@@ -344,9 +344,6 @@ importers:
       '@deepseek-ai/dsh-skill-office':
         specifier: workspace:*
         version: link:../../packages/skill/skill-office
-      '@deepseek-ai/dsh-ssh-hosts':
-        specifier: workspace:*
-        version: link:../../packages/bundle/ssh-hosts
       '@deepseek-ai/dsh-terminal':
         specifier: workspace:*
         version: link:../../packages/terminal/terminal
@@ -1166,37 +1163,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  packages/api/hosts-controller:
-    dependencies:
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-brand':
-        specifier: workspace:^
-        version: link:../../util/brand
-      '@deepseek-ai/dsh-credentials':
-        specifier: workspace:^
-        version: link:../../credentials/credentials
-      '@deepseek-ai/dsh-host-credentials':
-        specifier: workspace:^
-        version: link:../../ssh/host-credentials
-      '@deepseek-ai/dsh-ssh-host-registry':
-        specifier: workspace:^
-        version: link:../../ssh/host-registry
-      '@deepseek-ai/dsh-storage':
-        specifier: workspace:^
-        version: link:../../storage/storage
-      '@deepseek-ai/dsh-storage-domain':
-        specifier: workspace:^
-        version: link:../../storage/storage-domain
-      '@deepseek-ai/dsh-typert-protocol':
-        specifier: workspace:^
-        version: link:../../typert/protocol
-
   packages/api/job-controller:
     dependencies:
       '@deepseek-ai/dsh-typert-protocol':
@@ -1315,9 +1281,6 @@ importers:
       '@deepseek-ai/dsh-host-plugin-inventory':
         specifier: workspace:*
         version: link:../../host/plugin-inventory
-      '@deepseek-ai/dsh-hosts-controller':
-        specifier: workspace:*
-        version: link:../hosts-controller
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm
@@ -1475,9 +1438,6 @@ importers:
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../skill/skill
-      '@deepseek-ai/dsh-ssh-host-registry':
-        specifier: workspace:*
-        version: link:../../ssh/host-registry
       '@deepseek-ai/dsh-storage':
         specifier: workspace:*
         version: link:../../storage/storage
@@ -1664,9 +1624,6 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
-      '@deepseek-ai/dsh-ssh-host-registry':
-        specifier: workspace:*
-        version: link:../../ssh/host-registry
       '@deepseek-ai/dsh-storage-domain':
         specifier: workspace:*
         version: link:../../storage/storage-domain
@@ -1725,9 +1682,6 @@ importers:
       '@deepseek-ai/dsh-session-persistence':
         specifier: workspace:*
         version: link:../../session/session-persistence
-      '@deepseek-ai/dsh-ssh-host-registry':
-        specifier: workspace:*
-        version: link:../../ssh/host-registry
       '@deepseek-ai/dsh-util-workspace-path':
         specifier: workspace:*
         version: link:../../util/workspace-path
@@ -2477,31 +2431,6 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/cordis
 
-  packages/bundle/ssh-hosts:
-    dependencies:
-      '@deepseek-ai/dsh-fs-sftp':
-        specifier: workspace:^
-        version: link:../../ssh/fs-sftp
-      '@deepseek-ai/dsh-host-credentials':
-        specifier: workspace:^
-        version: link:../../ssh/host-credentials
-      '@deepseek-ai/dsh-hosts-controller':
-        specifier: workspace:^
-        version: link:../../api/hosts-controller
-      '@deepseek-ai/dsh-ssh-host-registry':
-        specifier: workspace:^
-        version: link:../../ssh/host-registry
-      '@deepseek-ai/dsh-ssh-native':
-        specifier: workspace:^
-        version: link:../../ssh/ssh-native
-      '@deepseek-ai/dsh-subprocess-ssh-exec':
-        specifier: workspace:^
-        version: link:../../ssh/subprocess-ssh-exec
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/cordis
-
   packages/bundle/web-app:
     dependencies:
       '@deepseek-ai/dsh-agent-instructions':
@@ -2633,9 +2562,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-reference':
         specifier: workspace:*
         version: link:../../client/ui-reference
-      '@deepseek-ai/dsh-client-ui-remote-hosts':
-        specifier: workspace:*
-        version: link:../../client/ui-remote-hosts
       '@deepseek-ai/dsh-client-ui-renderer':
         specifier: workspace:*
         version: link:../../client/ui-renderer
@@ -4676,48 +4602,6 @@ importers:
         specifier: workspace:*
         version: link:../../util/workspace-path
 
-  packages/client/ui-remote-hosts:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-api-remotes':
-        specifier: workspace:^
-        version: link:../../api/remotes
-      '@deepseek-ai/dsh-client-locale':
-        specifier: workspace:^
-        version: link:../locale
-      '@deepseek-ai/dsh-client-store':
-        specifier: workspace:^
-        version: link:../store
-      '@deepseek-ai/dsh-client-test-runtime':
-        specifier: workspace:^
-        version: link:../../test-support/client-runtime
-      '@deepseek-ai/dsh-client-ui-primitives':
-        specifier: workspace:^
-        version: link:../ui-primitives
-      '@deepseek-ai/dsh-client-ui-renderer':
-        specifier: workspace:^
-        version: link:../ui-renderer
-      '@deepseek-ai/dsh-client-ui-settings':
-        specifier: workspace:^
-        version: link:../ui-settings
-      '@deepseek-ai/dsh-client-ui-slots':
-        specifier: workspace:^
-        version: link:../ui-slots
-      '@testing-library/react':
-        specifier: ^16.1.0
-        version: 16.3.2(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@types/react':
-        specifier: ~18.3.1
-        version: 18.3.31
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
-
   packages/client/ui-renderer:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -6424,9 +6308,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../ui-primitives
-      '@deepseek-ai/dsh-client-ui-remote-hosts':
-        specifier: workspace:*
-        version: link:../ui-remote-hosts
       '@deepseek-ai/dsh-client-ui-renderer':
         specifier: workspace:*
         version: link:../ui-renderer
@@ -8258,7 +8139,7 @@ importers:
         version: 2.2.0
       '@types/ws':
         specifier: ^8.18.1
-        version: 8.18.1
+        version: 8.18.2
       chrome-devtools-frontend:
         specifier: 1.0.1638082
         version: 1.0.1638082
@@ -9487,9 +9368,6 @@ importers:
       '@deepseek-ai/dsh-fs-local':
         specifier: workspace:*
         version: link:../../fs/fs-local
-      '@deepseek-ai/dsh-ssh-host-registry':
-        specifier: workspace:*
-        version: link:../../ssh/host-registry
 
   packages/host/directory-picker-native:
     dependencies:
@@ -12474,65 +12352,6 @@ importers:
       '@deepseek-ai/dsh-ssh-native':
         specifier: workspace:*
         version: link:../ssh-native
-
-  packages/ssh/host-credentials:
-    dependencies:
-      '@deepseek-ai/schemastery':
-        specifier: link:../../../vendor/schemastery
-        version: link:../../../vendor/schemastery
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-credentials':
-        specifier: workspace:^
-        version: link:../../credentials/credentials
-      '@deepseek-ai/dsh-home-paths':
-        specifier: workspace:^
-        version: link:../../util/home-paths
-
-  packages/ssh/host-registry:
-    dependencies:
-      '@deepseek-ai/schemastery':
-        specifier: link:../../../vendor/schemastery
-        version: link:../../../vendor/schemastery
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-brand':
-        specifier: workspace:^
-        version: link:../../util/brand
-      '@deepseek-ai/dsh-fs':
-        specifier: workspace:^
-        version: link:../../fs/fs
-      '@deepseek-ai/dsh-fs-sftp':
-        specifier: workspace:^
-        version: link:../fs-sftp
-      '@deepseek-ai/dsh-host-credentials':
-        specifier: workspace:^
-        version: link:../host-credentials
-      '@deepseek-ai/dsh-sandbox':
-        specifier: workspace:^
-        version: link:../../sandbox/sandbox
-      '@deepseek-ai/dsh-ssh-native':
-        specifier: workspace:^
-        version: link:../ssh-native
-      '@deepseek-ai/dsh-storage':
-        specifier: workspace:^
-        version: link:../../storage/storage
-      '@deepseek-ai/dsh-storage-domain':
-        specifier: workspace:^
-        version: link:../../storage/storage-domain
-      '@deepseek-ai/dsh-subprocess':
-        specifier: workspace:^
-        version: link:../../subprocess/subprocess
-      '@deepseek-ai/dsh-subprocess-ssh-exec':
-        specifier: workspace:^
-        version: link:../subprocess-ssh-exec
 
   packages/ssh/ssh-native:
     dependencies:

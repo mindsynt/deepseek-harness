@@ -400,7 +400,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Workspace Controller\'s Client service face.',
     methods: [
       {
-        signature: 'create(input: { path: string; hostId?: string }): Promise<WorkspaceView>',
+        signature: 'create(input: { path: string }): Promise<WorkspaceView>',
         description: 'Register an existing path as a Workspace.',
         parameters: [{ name: 'input', description: 'Host create payload: the path and the host that interprets it.' }],
         returns: 'the created or idempotently resolved Workspace.',
@@ -1041,7 +1041,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkspaceView',
-    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly hostId: string;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
   },
 ]
 
