@@ -19,6 +19,7 @@ import {
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
+import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 import { ActivityPill, UsagePill, type StatPillProps } from '../src/client/chat/StatsPills.tsx'
 import type { ModelPricingSnapshot } from '../src/client/model-pricing.ts'
 import { zh } from '../src/client/locale.ts'
@@ -1047,7 +1048,7 @@ describe('useCalendarDay boundary refresh', () => {
 describe('small branch tails', () => {
   it('AssistantMarkdown single-line reasoning summary skips the newline cut', () => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: 'one-liner' }]}

@@ -24,7 +24,7 @@ export interface GlobalUsageSessionBlock {
     usageByRoute?: UsageByRouteProjection
     usageByDay?: UsageByDayProjection
   }>
-  readonly state: 'idle' | 'loading' | 'ready' | 'error'
+  readonly state: 'idle' | 'loading' | 'ready' | 'migration-required' | 'error'
 }
 
 /** The session list read face this policy needs. */

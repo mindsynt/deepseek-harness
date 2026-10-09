@@ -261,10 +261,10 @@ async function resolveSearchExecutable(ctx: Context, toolName: string, signal: A
  * Run the resolved ripgrep binary with a plain argv vector and return its
  * complete raw stdout. The executable is resolved through the subprocess seam
  * in the spawn's own execution world ({@link resolveSearchExecutable}), so the
- * working directory is the calling agent's session cwd
- * (`exec.agent.session.header.cwd`) when available, else `process.cwd()`. That
- * session cwd is already an execution-world path — a deployment derives it from
- * its filesystem provider, not from a host spelling — and `process.cwd()`
+ * working directory is the calling agent's session current directory when
+ * available, else `process.cwd()`. That current directory is already an
+ * execution-world path — a deployment derives it from its filesystem provider,
+ * not from a host spelling — and `process.cwd()`
  * remains only for a direct call with no session. `exec.signal` is forwarded so
  * the cooperative tool timeout
  * (`@deepseek-ai/dsh-tool-call-timeout-policy`) and caller cancellation terminate the
@@ -292,7 +292,7 @@ async function resolveSearchExecutable(ctx: Context, toolName: string, signal: A
  * `SEARCH_ABORTED` instead.
  *
  * @param ctx - the plugin context; execution uses its `subprocess` service.
- * @param exec - the tool-execution context; supplies the session cwd and the abort signal.
+ * @param exec - the tool-execution context; supplies the owning Agent and the abort signal.
  * @param toolName - `glob` or `grep`, used in error messages.
  * @param argv - the ripgrep arguments (every model value an unquoted argv element; no shell layer exists).
  * @param rawOutputMaxBytes - cap on the complete raw stdout the tool will parse.
@@ -312,8 +312,9 @@ export async function runRipgrep(
   if (exec.signal.aborted) {
     throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
   }
-  const cwd = exec.agent?.session.header.cwd
-  const workdir = cwd ?? process.cwd()
+  const workdir = exec.agent === undefined
+    ? process.cwd()
+    : await ctx.workingDirectory.ensure(exec.agent, exec.signal)
   let handle: SubprocessHandle
   try {
     handle = ctx.subprocess.spawn({
