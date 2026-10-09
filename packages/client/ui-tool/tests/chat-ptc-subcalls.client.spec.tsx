@@ -7,7 +7,7 @@ import type {
   ChatSnapshot, StartedToolCall, ToolCallBlock, ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { SlotTestRuntime, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotTestRuntime, stubConfigForm, stubSettingsDescribe } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import {
@@ -108,7 +108,12 @@ async function bench(snapshot: ChatSnapshot) {
   const conversation = createSnapshotStore(EMPTY_CONVERSATION_SNAPSHOT)
   const events = new ConversationEventRegistry(ctx)
   const views = new ConversationViewRegistry(ctx)
-  ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
+  const describeFace = stubSettingsDescribe()
+  ctx.provide('configForms', {
+    developerTools: { enabled: createSnapshotStore(true) },
+    describe: () => describeFace.face,
+    get: () => stubConfigForm().scope,
+  } as never)
   ctx.provide('uiConversation', {
     events,
     views,
@@ -132,7 +137,10 @@ async function bench(snapshot: ChatSnapshot) {
   const sidebarRight = { openResource: vi.fn<(address: string) => void>() }
   ctx.provide('sidebarRight', sidebarRight as never)
   ctx.provide('uiWorkspace', {} as never)
-  runtime.remote.provideNamespaces({ session: { openWorkspacePath } })
+  runtime.remote.provideNamespaces({
+    session: { openWorkspacePath },
+    llm: { listConfigurableProviders: async () => ({ ok: true as const, value: [] }) },
+  })
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   locale.register(CONVERSATION_NS, { zh: conversationZh, en: conversationEn })

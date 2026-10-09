@@ -7,25 +7,23 @@
  * ToggleButton) shows both: model name + effort in the caption tone.
  * Model catalogs above four entries show search, which retains focus while
  * ↑/↓ cycle the highlighted result; Enter and Tab accept it. Smaller model
- * catalogs and root panes move focus between rows. Escape and Shift+Tab leave a drilled pane first and otherwise close
- * back to the trigger. A drilled pane focuses the effort slider or model
+ * catalogs, root panes, and effort panes move focus between rows. Escape and Shift+Tab leave a drilled pane first and otherwise close
+ * back to the trigger. A drilled pane focuses the current effort or model
  * search field. Provider headings paint their background only while pinned
  * by scrolling. Clearing a query restores the full list and search focus.
  * Selecting restores trigger focus without a ring until the trigger loses focus
  * or the menu reopens. Model names match a case-insensitive ordered subsequence
  * within each provider group, ranked by
- * prefix, alignment score, then catalog order. The effort pane is a discrete
- * slider: pointer and arrow movement previews a level, and releasing or
- * settling commits through the same selection verb a row click used. Returning
- * to the root pane hands focus back to the cell that opened it. Data and
- * submission ride the same per-session ModelDirectory as the /model popup;
- * exact-model reasoning metadata and the selected effort come from the Host
- * rather than a client-owned vocabulary. A rejected selection announces
- * through the shared transient Toast anchored to the composer card; the
- * in-menu strip with Retry remains the catalog-load surface. While the
- * directory's pending selection is unsettled, the trigger shows a spinner in
- * place of its chevron, and each row whose value that selection carries shows
- * one in place of its check mark.
+ * prefix, alignment score, then catalog order. Returning to the root pane
+ * hands focus back to the cell that opened it. Data and submission ride the
+ * same per-session ModelDirectory as the /model popup; exact-model reasoning
+ * metadata and the selected effort come from the Host rather than a
+ * client-owned vocabulary. A rejected selection announces through the shared
+ * transient Toast anchored to the composer card; the in-menu strip with
+ * Retry remains the catalog-load surface. While the directory's pending
+ * selection is unsettled, the trigger shows a spinner in place of its
+ * chevron, and each row whose value that selection carries shows one in place
+ * of its check mark.
  */
 import { MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -34,19 +32,25 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
-import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseFillRegular,
   IconDataOutlineRegular, IconWarningOutlineRegular, Input, rankByName, StateDot, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
-import { EffortSlider } from './EffortSlider.tsx'
 import css from './ModelSelect.module.css'
 import { orderModelProviders } from './provider-order.ts'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
 type Pane = 'root' | 'model' | 'effort'
+
+/** One dynamic effort row; undefined means preserve the provider default. */
+interface EffortChoice {
+  key: string
+  effort: string | undefined
+  label: string
+}
 
 /** Unplaced portal card: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real (Menu primitive's measure pass). */
 const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
@@ -70,9 +74,6 @@ export function ModelSelect(
   const [query, setQuery] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null)
   const [selectionFocus, setSelectionFocus] = useState(false)
-  // Slider preview: pointer/arrow movement shows a level before anything is
-  // committed through the same selection verb a row click used.
-  const [effortPreview, setEffortPreview] = useState<number | null>(null)
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -118,23 +119,25 @@ export function ModelSelect(
   const currentChoice = choices[selectedIndex]
   const reasoning = currentChoice?.model.reasoning
   const effectiveEffort = state.current?.reasoningEffort ?? reasoning?.defaultEffort
-  const effortLabel = reasoning === undefined
-    ? state.retainedEffort
-    : effectiveEffort === undefined
-      ? t('effort.providerDefault')
-      : reasoning.efforts.find(level => level.id === effectiveEffort)?.name ?? effectiveEffort
-  const effortLevels = reasoning?.efforts ?? []
-  const committedEffortIndex = effortLevels.findIndex(level => level.id === effectiveEffort)
-  // A provider default has no stop of its own; the slider shows the first
-  // level until the user previews or commits one, while the header names the
-  // default that is actually in use. A pointer drag previews a fractional
-  // position so the handle follows the pointer; the nearest stop is what the
-  // aria value and the committed selection use.
-  const effortPosition = effortPreview ?? (committedEffortIndex < 0 ? 0 : committedEffortIndex)
-  const effortIndex = Math.min(effortLevels.length - 1, Math.max(0, Math.round(effortPosition)))
-  const effortCurrent = effortPreview === null && committedEffortIndex < 0
-    ? t('effort.providerDefault')
-    : effortLevels[effortIndex]?.name
+  const effortLabel = currentChoice === undefined
+    ? undefined
+    : reasoning === undefined
+      ? state.retainedEffort
+      : effectiveEffort === undefined
+        ? t('effort.providerDefault')
+        : reasoning.efforts.find(level => level.id === effectiveEffort)?.name ?? effectiveEffort
+  const effortChoices = useMemo<readonly EffortChoice[]>(() => reasoning === undefined
+    ? []
+    : [
+      ...reasoning.defaultEffort === undefined
+        ? [{ key: 'provider-default', effort: undefined, label: t('effort.providerDefault') }]
+        : [],
+      ...reasoning.efforts.map((effort: ModelReasoningEffort) => ({
+        key: `effort:${effort.id}`,
+        effort: effort.id,
+        label: effort.name,
+      })),
+    ], [reasoning, t])
   const { pending } = state
   const busy = pending !== null
 
@@ -175,12 +178,6 @@ export function ModelSelect(
     if (intent === 'drill') {
       if (pane === 'model' && showSearch) {
         searchRef.current?.focus()
-        return
-      }
-      // The effort pane's one control is the slider; the row panes open on
-      // the value in use (or their first row when nothing is checked).
-      if (pane === 'effort') {
-        focusEffortSlider()
         return
       }
       // The checked row is the value in use; a pane without one opens on its
@@ -249,9 +246,8 @@ export function ModelSelect(
     triggerRef.current?.focus()
     setQuery('')
     setHighlightedIndex(null)
-    setEffortPreview(null)
-    if (state.current === null) paneFocus.current = 'drill'
-    setPane(state.current === null ? 'model' : 'root')
+    if (currentChoice === undefined) paneFocus.current = 'drill'
+    setPane(currentChoice === undefined ? 'model' : 'root')
     setOpen(true)
     reload()
   }
@@ -264,7 +260,6 @@ export function ModelSelect(
   const close = (restoreFocus = false): void => {
     setOpen(false)
     setPane('root')
-    setEffortPreview(null)
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
   }
 
@@ -276,7 +271,6 @@ export function ModelSelect(
   const drill = (next: Pane): void => {
     setQuery('')
     setHighlightedIndex(null)
-    setEffortPreview(null)
     paneFocus.current = 'drill'
     setPane(next)
   }
@@ -285,12 +279,6 @@ export function ModelSelect(
   const back = (from: Exclude<Pane, 'root'>): void => {
     paneFocus.current = from
     setPane('root')
-  }
-
-  /** The slider a drilled effort pane hands the keyboard to, else the trigger. */
-  const focusEffortSlider = (): void => {
-    const slider = menuRef.current?.querySelector<HTMLElement>('[role="slider"]')
-    ;(slider ?? triggerRef.current)?.focus()
   }
 
   const moveFocus = (offset: number): void => {
@@ -356,10 +344,6 @@ export function ModelSelect(
       }
       if (focused !== triggerRef.current) return
       event.preventDefault()
-      if (pane === 'effort') {
-        focusEffortSlider()
-        return
-      }
       if (pane === 'model' && showSearch) {
         setHighlightedIndex(null)
         searchRef.current?.focus()
@@ -502,17 +486,6 @@ export function ModelSelect(
           role={pane === 'model' ? 'group' : 'menu'}
           aria-label={t('menu.aria')}
           aria-busy={state.status === 'loading' || busy}
-          onMouseDown={(event) => {
-            // Pressing a non-focusable decoration (header, caption, track
-            // padding) must not hand focus to the body: the pane's keys would
-            // stop reaching the card. Focusable controls keep their normal
-            // focus handoff.
-            const target = event.target
-            if (target instanceof Element
-              && target.closest('button, input, select, textarea, a[href], [tabindex]') === null) {
-              event.preventDefault()
-            }
-          }}
         >
           {pane === 'root' && (
             <>
@@ -642,62 +615,30 @@ export function ModelSelect(
                   <button type="button" className={css.retry} onClick={reload}>{t('action.reload')}</button>
                 </div>
               )}
-              <div className={css.effortPane}>
-                <div className={css.effortHead}>
-                  <span className={css.effortHeadLabel}>{t('menu.effort')}</span>
-                  <span className={css.effortHeadValue}>{effortCurrent}</span>
-                </div>
-                {effortLevels.length === 0
-                  ? <div className={css.empty}>{t('empty.efforts')}</div>
-                  : (
-                    <EffortSlider
-                      levels={effortLevels}
-                      index={effortIndex}
-                      position={effortPosition}
-                      disabled={busy}
-                      ariaLabel={t('menu.effort')}
-                      fasterLabel={t('effort.faster')}
-                      smarterLabel={t('effort.smarter')}
-                      onPreview={setEffortPreview}
-                      onCommit={(at, source) => {
-                        // Tab/Enter without moving settles the value already in
-                        // use (the provider default included), exactly as the
-                        // checked row used to.
-                        if (effortPreview === null) {
-                          closeAfterSelection()
-                          return
-                        }
-                        const level = effortLevels[at]
-                        // A pointer release on the stop already in use keeps
-                        // the card open; a key still settles and closes.
-                        if (level === undefined || (source === 'pointer' && level.id === effectiveEffort)) return
-                        chooseEffort(level.id)
-                      }}
-                      onExit={() => { back('effort') }}
-                    />
-                  )}
-                {reasoning !== undefined && reasoning.defaultEffort === undefined && (
+              {effortChoices.length === 0
+                ? <div className={css.empty}>{t('empty.efforts')}</div>
+                : effortChoices.map(level => (
                   <button
                     ref={itemRef()}
                     type="button"
                     role="menuitemradio"
-                    aria-checked={effectiveEffort === undefined}
-                    className={clsx(css.option, effectiveEffort === undefined && css.selected)}
+                    aria-checked={effectiveEffort === level.effort}
+                    className={clsx(css.option, effectiveEffort === level.effort && css.selected)}
+                    key={level.key}
                     disabled={busy}
-                    onClick={() => { chooseEffort(undefined) }}
+                    onClick={() => { chooseEffort(level.effort) }}
                   >
                     <span className={css.optionCopy}>
-                      <span className={css.modelName}>{t('effort.providerDefault')}</span>
+                      <span className={css.modelName}>{level.label}</span>
                     </span>
                     <span className={css.check}>
                       {pending !== null && pending.provider === state.current?.provider
-                        && pending.model === state.current?.model && pending.reasoningEffort === undefined
+                        && pending.model === state.current.model && pending.reasoningEffort === level.effort
                         ? <StateDot state="ongoing" />
-                        : effectiveEffort === undefined ? <IconCheckOutlineRegular /> : null}
+                        : effectiveEffort === level.effort ? <IconCheckOutlineRegular /> : null}
                     </span>
                   </button>
-                )}
-              </div>
+                ))}
             </>
           )}
         </MenuSurface>,

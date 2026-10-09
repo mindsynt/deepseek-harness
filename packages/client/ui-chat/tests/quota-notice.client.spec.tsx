@@ -6,7 +6,7 @@
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, describe, expect, it } from 'vitest'
 import { act, screen } from '@testing-library/react'
-import { SlotTestRuntime, stubConfigForm, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotTestRuntime, stubConfigForm, stubSettingsDescribe, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { SessionLiveEventEntry, SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
@@ -48,8 +48,10 @@ async function bench() {
   const runtime = await SlotTestRuntime.create()
   disposers.push(() => runtime.dispose())
   const chatSettings = stubConfigForm<ChatSettings>()
+  const describeFace = stubSettingsDescribe()
   runtime.ctx.provide('configForms', {
     developerTools: { enabled: createSnapshotStore(true) },
+    describe: () => describeFace.face,
     get: (namespace: string) => namespace === CHAT_SETTINGS_NAMESPACE ? chatSettings.scope : stubConfigForm().scope,
   } as never)
   runtime.ctx.provide('layout', { openRightbar: () => {}, closeRightbar: () => {} } as never)
@@ -62,7 +64,10 @@ async function bench() {
     openWorkspace: async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => { beforeOpen(SID) },
     openSession: () => {},
   } as never)
-  runtime.remote.provideNamespaces({ session: { openWorkspacePath: async () => ({ ok: true, value: { opened: true } }) } })
+  runtime.remote.provideNamespaces({
+    session: { openWorkspacePath: async () => ({ ok: true, value: { opened: true } }) },
+    llm: { listConfigurableProviders: async () => ({ ok: true as const, value: [] }) },
+  })
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)

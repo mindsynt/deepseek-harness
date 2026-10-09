@@ -1,7 +1,7 @@
 /** Test doubles for settings transport. */
 import { vi } from 'vitest'
 import type {
-  ConfigForm, ConfigFormSnapshot,
+  ConfigForm, ConfigFormSnapshot, SettingsDescribeFace, SettingsMirrorSnapshot,
 } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 /** Handle over one stubbed scope: the scope, its write spy, and publication controls. */
@@ -52,6 +52,54 @@ export function stubConfigForm<T>(): StubConfigForm<T> {
     set,
     mutate,
     unset,
+    listenerCount: () => listeners.size,
+    publish: (next) => {
+      snapshot = { ...snapshot, ...next }
+      for (const listener of [...listeners]) listener()
+    },
+  }
+}
+
+/** Handle over one stubbed settings describe mirror. */
+export interface StubSettingsDescribe {
+  /** The describe face handed to a config-form consumer. */
+  face: SettingsDescribeFace
+  /** Spy behind `face.ensure`; resolves immediately. */
+  ensure: ReturnType<typeof vi.fn>
+  /** Spy behind `face.acceptView`. */
+  acceptView: ReturnType<typeof vi.fn>
+  /** @returns how many listeners are currently subscribed (disposal assertions). */
+  listenerCount(): number
+  /**
+   * Replace part of the mirror snapshot and notify subscribers, as a Host
+   * answer would.
+   * @param next - snapshot fields to replace.
+   */
+  publish(next: Partial<SettingsMirrorSnapshot>): void
+}
+
+/**
+ * Build an idle settings describe mirror: no Host answer is held, so a consumer
+ * reading `view` stays unloaded until a spec publishes one.
+ * @returns the stub handle.
+ */
+export function stubSettingsDescribe(): StubSettingsDescribe {
+  let snapshot: SettingsMirrorSnapshot = { status: 'idle', view: undefined, error: null }
+  const listeners = new Set<() => void>()
+  const ensure = vi.fn(async () => undefined)
+  const acceptView = vi.fn()
+  return {
+    face: {
+      getSnapshot: () => snapshot,
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+      ensure,
+      acceptView,
+    },
+    ensure,
+    acceptView,
     listenerCount: () => listeners.size,
     publish: (next) => {
       snapshot = { ...snapshot, ...next }

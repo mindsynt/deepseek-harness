@@ -28,6 +28,7 @@ import type { QuotaNoticeInjected } from '@deepseek-ai/dsh-client-ui-chat/client
 import type { PerformanceUsageRowInjected } from '../src/client/settings/PerformanceUsageRow.tsx'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
 import { ActivityPill, UsagePill } from '../src/client/chat/StatsPills.tsx'
+import { ComposerCostPill } from '../src/client/chat/ComposerCostPill.tsx'
 import { createFlowMotion } from '../src/client/chat/flow-motion.ts'
 import { CHAT_FLOW_INJECT, CHAT_NODE_INJECT } from '../src/client/apply.ts'
 
@@ -234,9 +235,9 @@ describe('Chat apply wiring', () => {
       b.runtime.slots.entriesOfSlot('conversation.composer.dock')
         .map((entry): [string, unknown] => [entry.options.id ?? '', entry.component]),
     )
-    expect(winners()).toEqual({ activity: PluginActivity, usage: UsagePill })
+    expect(winners()).toEqual({ activity: PluginActivity, cost: ComposerCostPill, usage: UsagePill })
     dispose()
-    expect(winners()).toEqual({ activity: ActivityPill, usage: UsagePill })
+    expect(winners()).toEqual({ activity: ActivityPill, cost: ComposerCostPill, usage: UsagePill })
   })
 
   it.each([
